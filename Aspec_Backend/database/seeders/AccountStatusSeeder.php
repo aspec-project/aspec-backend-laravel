@@ -2,10 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\AccountStatus;
-use Illuminate\Support\Str;
 
 class AccountStatusSeeder extends Seeder
 {
@@ -18,8 +16,7 @@ class AccountStatusSeeder extends Seeder
 
         foreach ($statuses as $status) {
             AccountStatus::firstOrCreate(
-                ['name' => $status],
-                ['id' => Str::uuid()]
+                ['name' => $status]
             );
         }
     }

@@ -1,3 +1,5 @@
+<?php
+
 namespace App\Traits;
 
 trait ApiResponse
@@ -7,7 +9,7 @@ trait ApiResponse
      *
      * @return \Illuminate\Http\Response
      */
-    public function successResponse($data, string $message = null, int $code = 200)
+    public function successResponse($data, ?string $message = null, int $code = 200)
     {
         return response()->json([
             'success' => true,

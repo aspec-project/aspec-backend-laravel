@@ -2,10 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\Location;
-use Illuminate\Support\Str;
 
 class LocationSeeder extends Seeder
 {
@@ -39,8 +37,7 @@ class LocationSeeder extends Seeder
 
         foreach ($districts as $district) {
             Location::firstOrCreate(
-                ['name' => $district],
-                ['id' => Str::uuid()]
+                ['name' => $district]
             );
         }
     }

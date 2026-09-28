@@ -2,10 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\Role;
-use Illuminate\Support\Str;
 
 class RoleSeeder extends Seeder
 {
@@ -18,8 +16,7 @@ class RoleSeeder extends Seeder
 
         foreach ($roles as $role) {
             Role::firstOrCreate(
-                ['name' => $role],
-                ['id' => Str::uuid()]
+                ['name' => $role]
             );
         }
     }
