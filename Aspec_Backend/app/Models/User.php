@@ -4,23 +4,20 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Support\Str;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, softDeletes, HasUuids, HasApiTokens;
+    use HasFactory, Notifiable, SoftDeletes, HasUuids, HasApiTokens;
 
     /**
      * Get the attributes that should be cast.
@@ -44,6 +41,11 @@ class User extends Authenticatable
         'trial_ends_at',
     ];
 
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
     public function role()
     {
         return $this->belongsTo(Role::class);
@@ -54,7 +56,7 @@ class User extends Authenticatable
         return $this->belongsTo(AccountStatus::class);
     }
 
-    public function member_profile()
+    public function memberProfile()
     {
         return $this->hasOne(MemberProfile::class);
     }
@@ -66,21 +68,20 @@ class User extends Authenticatable
 
         DB::transaction(function () {
 
-            if ($this->memberProfile) {
-                $this->memberProfile->update([
-                    'name'                 => 'Utilizador Anónimo',
-                    'business_name'        => 'Empresa Removida',
-                    'congregation'         => 'N/A',
-                    'role_in_congregation' => 'N/A',
-                    'logo_path'            => null,
-                    'description'          => null,
-                    'website_url'          => null,
-                    'commercial_contacts'  => null,
-                    'address'              => null,
-                ]);
-                
-                $this->memberProfile->delete(); 
-            }
+            
+            $this->memberProfile->update([
+                'name'                 => 'Utilizador Anónimo',
+                'business_name'        => 'Empresa Removida',
+                'congregation'         => 'N/A',
+                'role_in_congregation' => 'N/A',
+                'logo_path'            => null,
+                'description'          => null,
+                'website_url'          => null,
+                'commercial_contacts'  => null,
+                'address'              => null,
+            ]);
+            
+            $this->memberProfile->delete();
 
             $this->update([
                 'email'    => 'deleted_' . Str::uuid() . '@aspec.local',
