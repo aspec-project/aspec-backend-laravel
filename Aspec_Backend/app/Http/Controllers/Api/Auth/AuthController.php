@@ -17,6 +17,19 @@ use Symfony\Component\HttpFoundation\Response;
 class AuthController extends Controller
 {
     use ApiResponse;
+
+
+    /**
+     * Regista um novo membro no sistema através de submissão de candidatura.
+     * 
+     * Atribui automaticamente o papel de 'Member' e o estado 'Pending' à nova conta.
+     * Envolve a criação do utilizador e do respetivo perfil numa transação de base de dados
+     * para garantir a integridade dos dados.
+     *
+     * @param RegisterMemberRequest $request Dados validados do formulário de registo.
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com o utilizador e perfil criados (HTTP 201).
+     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException Se o papel 'Member' ou o estado 'Pending' não forem encontrados.
+     */
     public function register(RegisterMemberRequest $request)
     {
         $memberRole = Role::where('name', 'Member')->firstOrFail();
@@ -54,4 +67,62 @@ class AuthController extends Controller
             Response::HTTP_CREATED
         );
     }
+
+
+
+
+    /**
+     * Autentica um utilizador existente no sistema e emite um token de acesso via Laravel Sanctum.
+     *
+     * Valida as credenciais enviadas pelo frontend, verifica a autenticação,
+     * carrega as relações essenciais (role, accountStatus, memberProfile) e gera o token Bearer.
+     *
+     * @param Request $request Pedido HTTP contendo 'email' e 'password'.
+     * @return \Illuminate\Http\JsonResponse Token de acesso e dados do utilizador em caso de sucesso (HTTP 200),
+     *                                      ou mensagem de erro de credenciais inválidas (HTTP 401).
+     * @throws \Illuminate\Validation\ValidationException Se a validação básica dos campos falhar.
+     */
+    public function login(Request $request)
+    {
+        $credentials = $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required|string',
+        ]);
+
+        if (!Auth::attempt($credentials)) {
+            return $this->errorResponse('Credenciais inválidas. Verifique o seu email e password.', Response::HTTP_UNAUTHORIZED);
+        }
+
+        /** @var User $user */ 
+        $user = Auth::user();
+        $user->load(['role', 'accountStatus', 'memberProfile']);    
+        $token = $user->createToken('aspec_auth_token')->plainTextToken;
+
+        return $this->successResponse([
+            'token' => $token,
+            'user'  => $user
+        ], 'Autenticação efetuada com sucesso.');
+    }
+
+
+
+    /**
+     * Termina a sessão de um utilizador autenticado.
+     *
+     * Revoga o token de acesso atual, invalidando a autenticação do utilizador.
+     *
+     * @param Request $request Pedido HTTP contendo o utilizador autenticado.
+     * @return \Illuminate\Http\JsonResponse Mensagem de sucesso (HTTP 200).
+     */
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+        return $this->successResponse(
+            null, 
+            'Sessão terminada com sucesso.'
+        );
+    }
+
+
+
 }
