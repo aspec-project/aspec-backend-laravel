@@ -28,6 +28,3 @@ Homestead.json
 .env.production
 .phpactor.json
 auth.json
-
-# Claude Code local project memory
-CLAUDE.md
