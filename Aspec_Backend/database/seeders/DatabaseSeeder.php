@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             AccountStatusSeeder::class,
             SectorSeeder::class,
             LocationSeeder::class,
+            WeekDaySeeder::class,
+            SocialPlatformSeeder::class,
         ]);
     }
 }
