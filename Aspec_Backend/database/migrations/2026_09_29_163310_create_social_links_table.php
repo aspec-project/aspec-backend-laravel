@@ -12,8 +12,13 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('social_links', function (Blueprint $table) {
-            $table->id();
+            $table->uuid('id')->primary();
+            $table->foreignUuid('profile_id')->constrained('member_profiles')->cascadeOnDelete();
+            $table->foreignUuid('platform_id')->constrained('social_platforms');
+            $table->string('url');
             $table->timestamps();
+
+            $table->unique(['profile_id', 'platform_id']);
         });
     }
 

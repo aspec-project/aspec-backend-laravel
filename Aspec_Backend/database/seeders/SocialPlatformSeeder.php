@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use App\Models\SocialPlatform;
 use Illuminate\Database\Seeder;
 
 class SocialPlatformSeeder extends Seeder
@@ -12,6 +12,17 @@ class SocialPlatformSeeder extends Seeder
      */
     public function run(): void
     {
-        //
+        $platforms = [
+            'LinkedIn',
+            'Instagram',
+            'Facebook',
+            'YouTube',
+        ];
+
+        foreach ($platforms as $platform) {
+            SocialPlatform::firstOrCreate(
+                ['name' => $platform]
+            );
+        }
     }
 }

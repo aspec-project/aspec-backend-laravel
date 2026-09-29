@@ -3,7 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Factories\HasUuids;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 
 class SocialPlatform extends Model
 {
