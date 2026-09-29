@@ -81,6 +81,14 @@ class User extends Authenticatable
                 'address'              => null,
             ]);
             
+            $profile = $this->memberProfile;
+
+            $profile->socialPlatforms()->detach();
+            $profile->weekDays()->detach();
+
+            Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
+            $profile->portfolios()->delete();
+
             $this->memberProfile->delete();
 
             $this->update([
