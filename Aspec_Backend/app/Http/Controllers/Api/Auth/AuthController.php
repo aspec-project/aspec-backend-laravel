@@ -12,6 +12,8 @@ use App\Traits\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 
 class AuthController extends Controller
@@ -95,7 +97,13 @@ class AuthController extends Controller
 
         /** @var User $user */ 
         $user = Auth::user();
-        $user->load(['role', 'accountStatus', 'memberProfile']);    
+        $user->load(['role', 'accountStatus', 'member_Profile']);
+        if ($user->accountStatus?->name === 'inactive') {
+            return $this->errorResponse(
+            'A sua conta está inativa.',        
+            Response::HTTP_FORBIDDEN
+    );
+} 
         $token = $user->createToken('aspec_auth_token')->plainTextToken;
 
         return $this->successResponse([
