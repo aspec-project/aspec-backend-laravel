@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
 
@@ -81,6 +82,13 @@ class User extends Authenticatable
                 'address'              => null,
             ]);
             
+            $profile = $this->memberProfile;
+
+            $profile->socialPlatforms()->detach();
+            $profile->weekDays()->detach();
+
+            $profile->portfolios()->delete();
+
             $this->memberProfile->delete();
 
             $this->update([
@@ -91,5 +99,9 @@ class User extends Authenticatable
 
             $this->delete();
         });
+
+        // Os ficheiros só são apagados depois de a transação ter sucesso,
+        // para não se perderem imagens se a base de dados fizer rollback.
+        Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
     }
 }
