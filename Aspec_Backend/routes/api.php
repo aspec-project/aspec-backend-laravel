@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Member\MemberProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -19,3 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     });
 
+// TODO: acrescentar o middleware 'active' (CheckAccountActive, colega da auth) quando estiver em dev.
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/member-profile', [MemberProfileController::class, 'show']);
+});
