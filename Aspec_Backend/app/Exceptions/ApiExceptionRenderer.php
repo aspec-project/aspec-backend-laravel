@@ -104,7 +104,7 @@ class ApiExceptionRenderer
     }
 
     /**
-     * Escolhe a mensagem de uma HttpException segundo a regra da decisão 19: só preserva
+     * Escolhe a mensagem de uma HttpException segundo a regra: só preserva
      * mensagens de um abort() da equipa; nos restantes casos usa a genérica do código.
      */
     private function httpMessage(HttpExceptionInterface $e, Request $request): string
