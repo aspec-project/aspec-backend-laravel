@@ -18,9 +18,6 @@ use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
-    use ApiResponse;
-
-
     /**
      * Regista um novo membro no sistema através de submissão de candidatura.
      * 
