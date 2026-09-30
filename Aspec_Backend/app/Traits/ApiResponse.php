@@ -2,12 +2,14 @@
 
 namespace App\Traits;
 
+use Illuminate\Http\JsonResponse;
+
 trait ApiResponse
 {
     /**
-     * success response method.
+     * Resposta de sucesso no formato {success, message, data}.
      *
-     * @return \Illuminate\Http\Response
+     * @return JsonResponse
      */
     public function successResponse($data, ?string $message = null, int $code = 200)
     {
@@ -19,15 +21,23 @@ trait ApiResponse
     }
 
     /**
-     * error response method.
+     * Resposta de erro no formato {success, message}.
+     * A chave `errors` (erros por campo, usada nos 422) só é incluída quando não é null.
      *
-     * @return \Illuminate\Http\Response
+     * @param  array<string, array<int, string>>|null  $errors
+     * @return JsonResponse
      */
-    public function errorResponse(string $message, int $code)
+    public function errorResponse(string $message, int $code, ?array $errors = null)
     {
-        return response()->json([
+        $body = [
             'success' => false,
             'message' => $message,
-        ], $code);
+        ];
+
+        if ($errors !== null) {
+            $body['errors'] = $errors;
+        }
+
+        return response()->json($body, $code);
     }
 }
