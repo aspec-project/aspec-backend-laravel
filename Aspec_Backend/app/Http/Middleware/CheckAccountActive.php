@@ -5,9 +5,11 @@ namespace App\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use App\Traits\ApiResponse;
 
 class CheckAccountActive
 {
+    use ApiResponse;
     /**
      * Handle an incoming request.
      *
@@ -18,17 +20,17 @@ class CheckAccountActive
         $user = $request->user();
 
         if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Utilizador não autenticado.',
-            ], 401);
+            return $this->errorResponse(
+                'Utilizador não autenticado.',
+                Response::HTTP_UNAUTHORIZED
+            );
         }
 
-        if ($user->accountStatus?->name === 'pending') {
-            return response()->json([
-                'success' => false,
-                'message' => 'A conta está pendente e não pode editar dados.',
-            ], 403);
+        if ($user->accountStatus?->name === 'Pending') {
+            return $this->errorResponse(
+                'A conta está pendente e não pode editar dados.',
+                Response::HTTP_FORBIDDEN
+            );
         }
 
         return $next($request);

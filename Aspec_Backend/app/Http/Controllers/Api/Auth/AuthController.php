@@ -97,8 +97,8 @@ class AuthController extends Controller
 
         /** @var User $user */ 
         $user = Auth::user();
-        $user->load(['role', 'accountStatus', 'member_Profile']);
-        if ($user->accountStatus?->name === 'inactive') {
+        $user->load(['role', 'accountStatus', 'member_profile']);
+        if ($user->accountStatus?->name === 'Inactive') {
             return $this->errorResponse(
             'A sua conta está inativa.',        
             Response::HTTP_FORBIDDEN

@@ -21,7 +21,8 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
 
-Route::middleware(['auth', 'account.active'])->group(function () {
+
+Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::put('/member-profile', [MemberProfileController::class, 'update']);
     Route::patch('/member-profile', [MemberProfileController::class, 'update']);
 });
