@@ -12,13 +12,12 @@ use App\Traits\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 
 class AuthController extends Controller
 {
-    use ApiResponse;
-
-
     /**
      * Regista um novo membro no sistema através de submissão de candidatura.
      * 
@@ -95,7 +94,13 @@ class AuthController extends Controller
 
         /** @var User $user */ 
         $user = Auth::user();
-        $user->load(['role', 'accountStatus', 'memberProfile']);    
+        $user->load(['role', 'accountStatus', 'member_profile']);
+        if ($user->accountStatus?->name === 'Inactive') {
+            return $this->errorResponse(
+            'A sua conta está inativa.',        
+            Response::HTTP_FORBIDDEN
+    );
+} 
         $token = $user->createToken('aspec_auth_token')->plainTextToken;
 
         return $this->successResponse([

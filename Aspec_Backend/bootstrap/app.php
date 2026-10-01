@@ -5,6 +5,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use App\Http\Middleware\CheckAccountActive;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+        'account.active' => CheckAccountActive::class,
+    ]);
+        //
         // Sem isto, um 401 em api/* sem header Accept tenta gerar route('login'), que não existe (500).
         $middleware->redirectGuestsTo(
             fn (Request $request) => $request->is('api/*') ? null : route('login')
