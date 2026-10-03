@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Account\AccountPasswordController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -26,5 +27,6 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/member-profile', [MemberProfileController::class, 'show']);
     Route::put('/member-profile', [MemberProfileController::class, 'update'])->middleware('throttle:10,1');
+    Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:10,1');
 });
 
