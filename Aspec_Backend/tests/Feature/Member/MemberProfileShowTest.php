@@ -218,13 +218,12 @@ class MemberProfileShowTest extends TestCase
     #[Test]
     public function pending_member_cannot_get_profile(): void
     {
-        $this->markTestSkipped('Depende do middleware CheckAccountActive (colega da auth).');
-
         Sanctum::actingAs($this->memberWithProfile('Pending'));
 
         $this->getJson(self::URL)
             ->assertForbidden()
             ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'A conta está pendente e não pode editar dados.')
             ->assertJsonMissingPath('data.id');
     }
 
