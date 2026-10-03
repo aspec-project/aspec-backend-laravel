@@ -30,13 +30,9 @@ class PortfolioTest extends TestCase
         Storage::fake('public');
     }
 
-    // User::create em vez de User::factory(): o UserFactory (da auth) ainda define `name` e não define role/status.
     private function makeUser(string $role, string $status): User
     {
-        return User::create([
-            'email' => fake()->unique()->safeEmail(),
-            'password' => 'password',
-            'phone' => '912345678',
+        return User::factory()->create([
             'role_id' => Role::where('name', $role)->value('id'),
             'account_status_id' => AccountStatus::where('name', $status)->value('id'),
         ]);
@@ -302,7 +298,7 @@ class PortfolioTest extends TestCase
         $this->postJson(self::URL, ['image' => UploadedFile::fake()->image('foto.jpg')])
             ->assertForbidden()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'A conta está pendente e não pode editar dados.');
+            ->assertJsonPath('message', 'A conta não está ativa e não pode editar dados.');
 
         $this->assertDatabaseCount('portfolios', 0);
         $this->assertNothingStored($user);
@@ -311,8 +307,6 @@ class PortfolioTest extends TestCase
     #[Test]
     public function inactive_member_cannot_upload(): void
     {
-        $this->markTestSkipped('Depende do middleware CheckAccountActive (colega da auth).');
-
         $user = $this->memberWithProfile('Inactive');
         Sanctum::actingAs($user);
 
@@ -467,7 +461,7 @@ class PortfolioTest extends TestCase
         $this->deleteJson(self::URL."/{$image->id}")
             ->assertForbidden()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'A conta está pendente e não pode editar dados.');
+            ->assertJsonPath('message', 'A conta não está ativa e não pode editar dados.');
 
         $this->assertDatabaseHas('portfolios', ['id' => $image->id]);
         Storage::disk('public')->assertExists($image->image_path);
@@ -476,8 +470,6 @@ class PortfolioTest extends TestCase
     #[Test]
     public function inactive_member_cannot_delete(): void
     {
-        $this->markTestSkipped('Depende do middleware CheckAccountActive (colega da auth).');
-
         $user = $this->memberWithProfile('Inactive');
         $image = $this->addStoredImage($user);
         Sanctum::actingAs($user);

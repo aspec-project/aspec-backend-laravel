@@ -2,10 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Models\AccountStatus;
 use App\Models\Location;
 use App\Models\MemberProfile;
-use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -20,14 +18,7 @@ class MemberProfileFactory extends Factory
     public function definition(): array
     {
         return [
-            // User::create em vez de User::factory(): o UserFactory ainda define `name` e não define role/status.
-            'user_id' => fn () => User::create([
-                'email' => fake()->unique()->safeEmail(),
-                'password' => 'password',
-                'phone' => fake()->numerify('9########'),
-                'role_id' => Role::where('name', 'Member')->value('id'),
-                'account_status_id' => AccountStatus::where('name', 'Active')->value('id'),
-            ])->id,
+            'user_id' => User::factory(),
             'sector_id' => fn () => Sector::inRandomOrder()->value('id'),
             'location_id' => fn () => Location::inRandomOrder()->value('id'),
             'name' => fake()->name(),

@@ -27,13 +27,10 @@ class UpdatePasswordTest extends TestCase
     private const OLD = 'OldSecret123';
     private const NEW = 'NewSecret456';
 
-    // User::create em vez de User::factory(): o UserFactory (da auth) ainda define `name` e não define role/status.
     private function makeUser(string $role = 'Member', string $status = 'Active', bool $withProfile = true): User
     {
-        $user = User::create([
-            'email' => fake()->unique()->safeEmail(),
+        $user = User::factory()->create([
             'password' => self::OLD,
-            'phone' => '912345678',
             'role_id' => Role::where('name', $role)->value('id'),
             'account_status_id' => AccountStatus::where('name', $status)->value('id'),
         ]);
@@ -239,7 +236,7 @@ class UpdatePasswordTest extends TestCase
         $this->putJson(self::URL, $this->validPayload())
             ->assertForbidden()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'A conta está pendente e não pode editar dados.');
+            ->assertJsonPath('message', 'A conta não está ativa e não pode editar dados.');
 
         $this->assertSame($hashBefore, $this->storedHash($user));
     }
@@ -247,8 +244,6 @@ class UpdatePasswordTest extends TestCase
     #[Test]
     public function inactive_member_cannot_change_password(): void
     {
-        $this->markTestSkipped('Depende do middleware CheckAccountActive rejeitar Inactive (colega da auth).');
-
         $user = $this->makeUser('Member', 'Inactive');
         $hashBefore = $this->storedHash($user);
         Sanctum::actingAs($user);
