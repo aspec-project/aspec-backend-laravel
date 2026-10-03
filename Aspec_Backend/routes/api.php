@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\PortfolioController;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/member-profile', [MemberProfileController::class, 'show']);
     Route::put('/member-profile', [MemberProfileController::class, 'update'])->middleware('throttle:10,1');
+    Route::post('/member-profile/logo', [MemberLogoController::class, 'store'])->middleware('throttle:10,1');
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:10,1');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:10,1');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:10,1');
