@@ -26,9 +26,9 @@ class CheckAccountActive
             );
         }
 
-        if ($user->accountStatus?->name === 'Pending') {
+        if ($user->accountStatus?->name !== 'Active') {
             return $this->errorResponse(
-                'A conta está pendente e não pode editar dados.',
+                'A conta está ativa e não pode editar dados.',
                 Response::HTTP_FORBIDDEN
             );
         }

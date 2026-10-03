@@ -104,4 +104,22 @@ class User extends Authenticatable
         // para não se perderem imagens se a base de dados fizer rollback.
         Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
     }
+
+        /**
+     * Passa a conta a Inactive e termina todas as sessões (revoga os tokens).
+     */
+    public function deactivate(): void
+    {
+        DB::transaction(function () {
+            $this->update([
+                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+            ]);
+            $this->tokens()->delete();
+        });
+    }
+    
+
+
+
+
 }
