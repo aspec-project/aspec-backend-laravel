@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -564,6 +565,171 @@ class MemberProfileUpdateTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['social_links.0.platform_id', 'social_links.1.platform_id']);
+    }
+
+    // Bloqueio de falhas do current_password (decisão 26), partilhado com PUT /api/account/password
+
+    private function failEmailChange(int $times): void
+    {
+        for ($i = 0; $i < $times; $i++) {
+            $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => "errada{$i}xx"])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['current_password']);
+        }
+    }
+
+    #[Test]
+    public function email_change_is_blocked_after_five_wrong_current_passwords(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->failEmailChange(5);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertTooManyRequests()
+            ->assertHeader('Retry-After')
+            ->assertExactJson(['success' => false, 'message' => 'Demasiados pedidos. Tente novamente mais tarde.']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
+    }
+
+    #[Test]
+    public function four_wrong_current_passwords_do_not_block_email_change(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->failEmailChange(4);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])->assertOk();
+    }
+
+    #[Test]
+    public function successful_email_change_clears_the_failure_counter(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->failEmailChange(4);
+        $this->putJson(self::URL, ['email' => 'primeiro@exemplo.pt', 'current_password' => 'password'])->assertOk();
+
+        $this->travel(61)->seconds();
+        $this->failEmailChange(4);
+
+        $this->putJson(self::URL, ['email' => 'segundo@exemplo.pt', 'current_password' => 'password'])->assertOk();
+    }
+
+    #[Test]
+    public function email_change_errors_other_than_current_password_do_not_count(): void
+    {
+        $other = $this->makeUser('Member', 'Active');
+        Sanctum::actingAs($this->memberWithProfile());
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->putJson(self::URL, ['email' => $other->email, 'current_password' => 'password'])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['email'])
+                ->assertJsonMissingValidationErrors(['current_password']);
+        }
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])->assertOk();
+    }
+
+    #[Test]
+    public function failure_counter_is_shared_with_password_change(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->putJson('/api/account/password', [
+                'current_password' => "errada{$i}xx",
+                'password' => 'NewSecret456',
+                'password_confirmation' => 'NewSecret456',
+            ])->assertUnprocessable()->assertJsonValidationErrors(['current_password']);
+        }
+        $this->failEmailChange(2);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertTooManyRequests();
+        $this->putJson('/api/account/password', [
+            'current_password' => 'password',
+            'password' => 'NewSecret456',
+            'password_confirmation' => 'NewSecret456',
+        ])->assertTooManyRequests();
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
+        $this->assertTrue(Hash::check('password', User::whereKey($user->id)->value('password')));
+    }
+
+    #[Test]
+    public function email_change_block_expires_after_fifteen_minutes(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->failEmailChange(5);
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])->assertTooManyRequests();
+
+        $this->travel(16)->minutes();
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])->assertOk();
+    }
+
+    #[Test]
+    public function array_current_password_on_email_change_is_rejected_and_not_counted(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => ["errada{$i}xx"]])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['current_password']);
+        }
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])->assertOk();
+    }
+
+    public static function emptyCurrentPasswords(): array
+    {
+        return [
+            'empty string' => [''],
+            'null' => [null],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('emptyCurrentPasswords')]
+    public function empty_current_password_without_email_does_not_clear_the_counter(?string $empty): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->failEmailChange(4);
+
+        $this->assertLessThan(500, $this->putJson(self::URL, ['current_password' => $empty])->status());
+
+        // Se o pedido vazio contar como falha, este já vem bloqueado; o que não pode é o contador ter sido limpo.
+        $this->assertContains(
+            $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'errada9xx'])->status(),
+            [422, 429]
+        );
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertTooManyRequests();
+    }
+
+    // Assunção (release.md ambíguo): o bloqueio só se aplica a pedidos que tentam mudar o email.
+    #[Test]
+    public function profile_update_without_email_is_not_affected_by_block(): void
+    {
+        $user = $this->memberWithProfile(profile: ['business_name' => 'Antiga Lda']);
+        Sanctum::actingAs($user);
+
+        $this->failEmailChange(5);
+
+        $this->putJson(self::URL, ['business_name' => 'Nova Lda'])
+            ->assertOk()
+            ->assertJsonPath('data.business_name', 'Nova Lda');
     }
 
     #[Test]
