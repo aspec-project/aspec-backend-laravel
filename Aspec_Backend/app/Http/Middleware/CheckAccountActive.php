@@ -28,7 +28,7 @@ class CheckAccountActive
 
         if ($user->accountStatus?->name !== 'Active') {
             return $this->errorResponse(
-                'A conta está ativa e não pode editar dados.',
+                'A conta não está ativa e não pode editar dados.',
                 Response::HTTP_FORBIDDEN
             );
         }

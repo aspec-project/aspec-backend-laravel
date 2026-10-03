@@ -94,13 +94,23 @@ class AuthController extends Controller
 
         /** @var User $user */ 
         $user = Auth::user();
-        $user->load(['role', 'accountStatus', 'member_profile']);
-        if ($user->accountStatus?->name !== 'Active') {
+        $user->load(['role', 'accountStatus', 'memberProfile']);
+
+
+        if ($user->accountStatus?->name === 'Inactive') {
             return $this->errorResponse(
             'A sua conta está inativa.',        
             Response::HTTP_FORBIDDEN
-    );
-} 
+        );
+        }
+
+        if ($user->accountStatus?->name === 'Pending') {
+            return $this->errorResponse(
+                'A sua conta está pendente de aprovação pelo administrador.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+        
         $token = $user->createToken('aspec_auth_token')->plainTextToken;
 
         return $this->successResponse([
