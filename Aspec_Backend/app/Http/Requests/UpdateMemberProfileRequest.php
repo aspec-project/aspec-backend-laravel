@@ -2,12 +2,15 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateMemberProfileRequest extends FormRequest
 {
+    use LimitsCurrentPasswordAttempts;
+
     /**
      * A autorização (conta Active) é feita pelo middleware account.active da rota.
      */
@@ -38,7 +41,7 @@ class UpdateMemberProfileRequest extends FormRequest
                 'max:255',
                 Rule::unique('users')->ignore($this->user()->id),
             ],
-            'current_password' => 'required_with:email|current_password:sanctum',
+            'current_password' => 'bail|required_with:email|string|current_password:sanctum',
             'phone' => 'sometimes|required|string|max:20',
             'description' => 'nullable|string|max:1000',
             'website_url' => 'nullable|url:http,https|max:255',
