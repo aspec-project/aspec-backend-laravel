@@ -62,47 +62,60 @@ class User extends Authenticatable
         return $this->hasOne(MemberProfile::class);
     }
 
-    public function anonymizeAndDelete()
+    /**
+     * Anonimiza e apaga (soft delete) o utilizador e, se existir, o perfil de membro.
+     * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
+     * pastas de logótipo e portfólio no disco público. Os tokens são revogados e a conta fica Inactive.
+     * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
+     */
+    public function anonymizeAndDelete(): void
     {
-        if (!$this->memberProfile) {
-            throw new \Exception('O utilizador não tem um perfil de membro associado.');}
-
         DB::transaction(function () {
+            // withTrashed: um perfil já apagado (soft delete) também tem de ser anonimizado.
+            $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
 
-            
-            $this->memberProfile->update([
-                'name'                 => 'Utilizador Anónimo',
-                'business_name'        => 'Empresa Removida',
-                'congregation'         => 'N/A',
-                'role_in_congregation' => 'N/A',
-                'logo_path'            => null,
-                'description'          => null,
-                'website_url'          => null,
-                'commercial_contacts'  => null,
-                'address'              => null,
-            ]);
-            
-            $profile = $this->memberProfile;
+            if ($profile) {
+                $profile->update([
+                    'name'                 => 'Utilizador Anónimo',
+                    'business_name'        => 'Empresa Removida',
+                    'congregation'         => 'N/A',
+                    'role_in_congregation' => 'N/A',
+                    'logo_path'            => null,
+                    'description'          => null,
+                    'website_url'          => null,
+                    'commercial_contacts'  => null,
+                    'address'              => null,
+                ]);
 
-            $profile->socialPlatforms()->detach();
-            $profile->weekDays()->detach();
+                $profile->socialPlatforms()->detach();
+                $profile->weekDays()->detach();
+                $profile->portfolios()->delete();
 
-            $profile->portfolios()->delete();
+                $profile->delete();
+            }
 
-            $this->memberProfile->delete();
+            // forceFill: remember_token e email_verified_at não estão no $fillable.
+            $this->forceFill([
+                'email'             => 'deleted_' . Str::uuid() . '@aspec.local',
+                'phone'             => '000000000',
+                'password'          => Hash::make(Str::random(32)),
+                'remember_token'    => null,
+                'email_verified_at' => null,
+                'trial_ends_at'     => null,
+                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+            ])->save();
 
-            $this->update([
-                'email'    => 'deleted_' . Str::uuid() . '@aspec.local',
-                'phone'    => '000000000',
-                'password' => Hash::make(Str::random(32)), 
-            ]);
+            $this->tokens()->delete();
 
             $this->delete();
         });
 
-        // Os ficheiros só são apagados depois de a transação ter sucesso,
+        // Os ficheiros só são apagados depois do commit (também de uma transação exterior),
         // para não se perderem imagens se a base de dados fizer rollback.
-        Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
+        DB::afterCommit(function () {
+            Storage::disk('public')->deleteDirectory("logos/{$this->id}");
+            Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
+        });
     }
 
         /**
