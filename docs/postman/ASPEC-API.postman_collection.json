@@ -361,7 +361,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua candidatura ainda aguarda aprovação.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta está pendente de aprovação pelo administrador.\"\n}"
             },
             {
               "name": "403 Conta inativa",
@@ -1347,7 +1347,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             },
             {
               "name": "404 Sem perfil",
@@ -1540,7 +1540,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"website_url\": [\n      \"O campo website url tem de ser um URL válido (http ou https).\"\n    ],\n    \"business_hours.0.close_time\": [\n      \"A hora de fecho tem de ser posterior à hora de abertura.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"website_url\": [\n      \"O campo website tem de ser um URL válido.\"\n    ],\n    \"business_hours.0.close_time\": [\n      \"O campo hora de fecho tem de ser posterior a hora de abertura.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Password atual incorreta",
@@ -1583,6 +1583,98 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"business_name\": \"Silva Consultoria Unipessoal, Lda.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"commercial_contacts\": null,\n  \"business_hours\": [\n    {\n      \"week_day_id\": 1,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"18:00\"\n    },\n    {\n      \"week_day_id\": 5,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"17:00\"\n    }\n  ],\n  \"social_links\": [\n    {\n      \"platform_id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"url\": \"https://www.linkedin.com/company/silva-consultoria\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
+              "name": "429 Bloqueio por tentativas falhadas",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Bloqueio por tentativas falhadas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"business_name\": \"Silva Consultoria Unipessoal, Lda.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"commercial_contacts\": null,\n  \"business_hours\": [\n    {\n      \"week_day_id\": 1,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"18:00\"\n    },\n    {\n      \"week_day_id\": 5,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"17:00\"\n    }\n  ],\n  \"social_links\": [\n    {\n      \"platform_id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"url\": \"https://www.linkedin.com/company/silva-consultoria\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "900"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -1666,7 +1758,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             },
             {
               "name": "404 Sem perfil",
@@ -1827,7 +1919,55 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"logo\": [\n      \"O logótipo tem de ser uma imagem jpg, png ou webp com o máximo de 5 MB.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"logo\": [\n      \"O campo logótipo tem de ser uma imagem.\",\n      \"O ficheiro logótipo tem de ser do tipo: jpg, jpeg, png, webp.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile/logo",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile",
+                    "logo"
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "logo",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -1915,7 +2055,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             },
             {
               "name": "404 Sem perfil",
@@ -2118,7 +2258,54 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"image\": [\n      \"A imagem tem de ser jpg, png ou webp com o máximo de 5 MB.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"image\": [\n      \"O campo imagem tem de ser uma imagem.\",\n      \"O ficheiro imagem tem de ser do tipo: jpg, jpeg, png, webp.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-portfolio",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-portfolio"
+                  ]
+                },
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -2204,7 +2391,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             },
             {
               "name": "404 Sem perfil",
@@ -2345,6 +2532,44 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Imagem não encontrada.\"\n}"
             },
             {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-portfolio/c1d2e3f4-1111-4a11-8111-111111111111",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-portfolio",
+                    "c1d2e3f4-1111-4a11-8111-111111111111"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
               "name": "401 Não autenticado",
               "originalRequest": {
                 "method": "DELETE",
@@ -2410,7 +2635,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         }
@@ -2537,7 +2762,101 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ],\n    \"password\": [\n      \"A confirmação da password não corresponde.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ],\n    \"password\": [\n      \"A confirmação do campo password não corresponde.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/password",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
+              "name": "429 Bloqueio por tentativas falhadas",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Bloqueio por tentativas falhadas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/password",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "900"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -2623,7 +2942,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         }
@@ -3242,7 +3561,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         }
@@ -3699,7 +4018,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
@@ -3902,7 +4221,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
@@ -4021,7 +4340,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta não está ativa.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         }
