@@ -27,13 +27,9 @@ class MemberProfileShowTest extends TestCase
         Storage::fake('public');
     }
 
-    // User::create em vez de User::factory(): o UserFactory (da auth) ainda define `name` e não define role/status.
     private function makeUser(string $role, string $status): User
     {
-        return User::create([
-            'email' => fake()->unique()->safeEmail(),
-            'password' => 'password',
-            'phone' => '912345678',
+        return User::factory()->create([
             'role_id' => Role::where('name', $role)->value('id'),
             'account_status_id' => AccountStatus::where('name', $status)->value('id'),
         ]);
@@ -223,15 +219,13 @@ class MemberProfileShowTest extends TestCase
         $this->getJson(self::URL)
             ->assertForbidden()
             ->assertJsonPath('success', false)
-            ->assertJsonPath('message', 'A conta está pendente e não pode editar dados.')
+            ->assertJsonPath('message', 'A conta não está ativa e não pode editar dados.')
             ->assertJsonMissingPath('data.id');
     }
 
     #[Test]
     public function inactive_member_cannot_get_profile(): void
     {
-        $this->markTestSkipped('Depende do middleware CheckAccountActive (colega da auth).');
-
         Sanctum::actingAs($this->memberWithProfile('Inactive'));
 
         $this->getJson(self::URL)
