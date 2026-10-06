@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
+use App\Http\Middleware\EnsureAdmin;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -22,15 +23,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
 
     $middleware->alias([
-        'account.active' => CheckAccountActive::class,
+    'account.active' => CheckAccountActive::class,
+    'admin' => EnsureAdmin::class,
     ]);
-
     $middleware->redirectGuestsTo(
         fn (Request $request) => $request->is('api/*')
             ? null
             : route('login')
     );
-})
+    })
     
     ->withExceptions(function (Exceptions $exceptions): void {
         // Pedidos api/* respondem sempre em JSON, mesmo sem o header Accept.
