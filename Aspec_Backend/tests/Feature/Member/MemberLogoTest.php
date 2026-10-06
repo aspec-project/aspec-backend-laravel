@@ -269,7 +269,7 @@ class MemberLogoTest extends TestCase
         $this->assertSame([$oldPath], Storage::disk('public')->allFiles("logos/{$user->id}"));
     }
 
-    // ---- Throttle: throttle:10,1, como no portfólio ----
+    // ---- Throttle: 10 pedidos/min (logo-upload), como no portfólio ----
 
     #[Test]
     public function eleventh_upload_in_the_same_minute_is_throttled(): void
