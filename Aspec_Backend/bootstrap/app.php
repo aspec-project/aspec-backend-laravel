@@ -20,15 +20,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias([
+
+    $middleware->alias([
         'account.active' => CheckAccountActive::class,
     ]);
-        //
-        // Sem isto, um 401 em api/* sem header Accept tenta gerar route('login'), que não existe (500).
-        $middleware->redirectGuestsTo(
-            fn (Request $request) => $request->is('api/*') ? null : route('login')
-        );
-    })
+
+    $middleware->redirectGuestsTo(
+        fn (Request $request) => $request->is('api/*')
+            ? null
+            : route('login')
+    );
+})
+    
     ->withExceptions(function (Exceptions $exceptions): void {
         // Pedidos api/* respondem sempre em JSON, mesmo sem o header Accept.
         $exceptions->shouldRenderJsonWhen(
