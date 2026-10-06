@@ -13,7 +13,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 
 class AuthController extends Controller
@@ -81,27 +80,30 @@ class AuthController extends Controller
      *                                      ou mensagem de erro de credenciais inválidas (HTTP 401).
      * @throws \Illuminate\Validation\ValidationException Se a validação básica dos campos falhar.
      */
+
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email'    => 'required|email',
+            'email' => 'required|email',
             'password' => 'required|string',
         ]);
 
-        if (!Auth::attempt($credentials)) {
-            return $this->errorResponse('Credenciais inválidas. Verifique o seu email e password.', Response::HTTP_UNAUTHORIZED);
+        $user = User::with(['role', 'accountStatus', 'memberProfile'])
+            ->where('email', $credentials['email'])
+            ->first();
+
+        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+            return $this->errorResponse(
+                'Credenciais inválidas. Verifique o seu email e password.',
+                Response::HTTP_UNAUTHORIZED
+            );
         }
-
-        /** @var User $user */ 
-        $user = Auth::user();
-        $user->load(['role', 'accountStatus', 'memberProfile']);
-
 
         if ($user->accountStatus?->name === 'Inactive') {
             return $this->errorResponse(
-            'A sua conta está inativa.',        
-            Response::HTTP_FORBIDDEN
-        );
+                'A sua conta está inativa.',
+                Response::HTTP_FORBIDDEN
+            );
         }
 
         if ($user->accountStatus?->name === 'Pending') {
@@ -110,12 +112,12 @@ class AuthController extends Controller
                 Response::HTTP_FORBIDDEN
             );
         }
-        
+
         $token = $user->createToken('aspec_auth_token')->plainTextToken;
 
         return $this->successResponse([
             'token' => $token,
-            'user'  => $user
+            'user' => $user,
         ], 'Autenticação efetuada com sucesso.');
     }
 
@@ -131,9 +133,14 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+
+        if ($token) {
+            $token->delete();
+        }
+
         return $this->successResponse(
-            null, 
+            null,
             'Sessão terminada com sucesso.'
         );
     }
