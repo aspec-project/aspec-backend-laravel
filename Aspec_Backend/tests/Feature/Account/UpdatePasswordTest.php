@@ -289,7 +289,7 @@ class UpdatePasswordTest extends TestCase
 
         $this->failCurrentPassword(5);
 
-        // 6.º pedido: abaixo do throttle:10,1, por isso o 429 vem do bloqueio de falhas.
+        // 6.º pedido: abaixo do limite de 10/min (password-update), por isso o 429 vem do bloqueio de falhas.
         $this->putJson(self::URL, $this->validPayload())
             ->assertTooManyRequests()
             ->assertHeader('Retry-After')
