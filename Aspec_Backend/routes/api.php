@@ -28,7 +28,7 @@ Route::get('/week-days', [WeekDayController::class, 'index']);
 
 
 Route::prefix('admin')
-    ->middleware(['auth:sanctum', 'admin'])
+    ->middleware(['auth:sanctum','account.active', 'admin'])
     ->group(function () {
         Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
         Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
