@@ -99,7 +99,6 @@ class MemberProfileUpdateTest extends TestCase
             'description' => 'Texto',
             'website_url' => 'https://silva.pt',
             'commercial_contacts' => 'geral@silva.pt',
-            'address' => 'Rua Direita 1',
         ]);
         Sanctum::actingAs($user);
 
@@ -107,7 +106,6 @@ class MemberProfileUpdateTest extends TestCase
             'description' => null,
             'website_url' => '',
             'commercial_contacts' => null,
-            'address' => '',
         ])
             ->assertOk()
             ->assertJsonPath('data.description', null)
@@ -118,7 +116,6 @@ class MemberProfileUpdateTest extends TestCase
             'description' => null,
             'website_url' => null,
             'commercial_contacts' => null,
-            'address' => null,
         ]);
     }
 
@@ -136,13 +133,14 @@ class MemberProfileUpdateTest extends TestCase
             'sector_id' => null,
             'location_id' => '',
             'phone' => '',
+            'address' => '',
         ])
             ->assertUnprocessable()
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Os dados enviados são inválidos.')
             ->assertJsonValidationErrors([
                 'name', 'business_name', 'congregation', 'role_in_congregation',
-                'sector_id', 'location_id', 'phone',
+                'sector_id', 'location_id', 'phone', 'address',
             ]);
 
         $this->assertDatabaseHas('member_profiles', [
@@ -150,6 +148,55 @@ class MemberProfileUpdateTest extends TestCase
             'name' => 'Ana',
             'business_name' => 'Silva Lda',
         ]);
+    }
+
+    #[Test]
+    public function address_sent_as_null_is_rejected_and_kept(): void
+    {
+        $user = $this->memberWithProfile(profile: ['address' => 'Rua Direita 1']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['address' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['address' => 'O campo morada é obrigatório.']);
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'address' => 'Rua Direita 1']);
+    }
+
+    public static function nonPortuguesePhones(): array
+    {
+        return [
+            'prefixo inválido' => ['941234567'],
+            'estrangeiro' => ['+447911123456'],
+            'curto' => ['12345'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('nonPortuguesePhones')]
+    public function non_portuguese_phone_is_rejected_and_kept(string $phone): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => $phone])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone' => 'O campo telefone tem de ser um número de telefone português válido.']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
+    }
+
+    #[Test]
+    public function phone_is_stored_normalised(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => '+351 912-345 678'])
+            ->assertOk()
+            ->assertJsonPath('data.phone', '912345678');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => '912345678']);
     }
 
     #[Test]
@@ -639,8 +686,8 @@ class MemberProfileUpdateTest extends TestCase
         for ($i = 0; $i < 3; $i++) {
             $this->putJson('/api/account/password', [
                 'current_password' => "errada{$i}xx",
-                'password' => 'NewSecret456',
-                'password_confirmation' => 'NewSecret456',
+                'password' => 'NewSecret456!',
+                'password_confirmation' => 'NewSecret456!',
             ])->assertUnprocessable()->assertJsonValidationErrors(['current_password']);
         }
         $this->failEmailChange(2);
@@ -649,8 +696,8 @@ class MemberProfileUpdateTest extends TestCase
             ->assertTooManyRequests();
         $this->putJson('/api/account/password', [
             'current_password' => 'password',
-            'password' => 'NewSecret456',
-            'password_confirmation' => 'NewSecret456',
+            'password' => 'NewSecret456!',
+            'password_confirmation' => 'NewSecret456!',
         ])->assertTooManyRequests();
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);

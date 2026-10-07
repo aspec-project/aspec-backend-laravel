@@ -52,10 +52,10 @@
                 "register"
               ]
             },
-            "description": "Candidatura de novo membro. A conta fica **Pending** até aprovação do admin.\n\nObrigatórios: `email`, `password` (mín. 8), `phone`, `name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`. Opcionais: `description`, `website_url`, `address`.\n\nResponsável: colega da auth.",
+            "description": "Candidatura de novo membro. A conta fica **Pending** até aprovação do admin.\n\nObrigatórios: `email`, `password`, `phone`, `name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `address`. Opcionais: `description`, `website_url`.\n\n- `password`: mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo.\n- `phone`: só números portugueses, `+351` opcional; guardado com 9 dígitos (como em *Atualizar o meu perfil*).\n\nResponsável: colega da auth.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"password123\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
+              "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -90,7 +90,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"password123\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
+                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -133,7 +133,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"password123\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
+                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1404,7 +1404,7 @@
                 "member-profile"
               ]
             },
-            "description": "Atualização **parcial** do perfil e dos dados de conta.\n\n- Campo não enviado → fica igual.\n- Campo opcional com `null` ou `\"\"` → fica vazio.\n- Campos obrigatórios (`name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `email`, `phone`) não podem vir vazios.\n- `business_hours` / `social_links`: se enviados, **substituem** a lista atual (`[]` apaga tudo). Um intervalo por dia; dia sem registo = fechado; `close_time` > `open_time`; formato `HH:MM`.\n- Mudar o `email` exige `current_password`. Enviar `email` só quando muda.\n- `password` não se altera aqui (ver *Alterar password*).\n\nRequer conta **Active**.",
+            "description": "Atualização **parcial** do perfil e dos dados de conta.\n\n- Campo não enviado → fica igual.\n- Campo opcional com `null` ou `\"\"` → fica vazio.\n- Campos obrigatórios (`name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `email`, `phone`, `address`) não podem vir vazios.\n- `phone`: só números portugueses (91/92/93/96, fixo 2x, 30), `+351` opcional. Espaços, `-` e `()` são aceites; guarda-se e devolve-se sempre com 9 dígitos (`+351 912 345 678` → `912345678`).\n- `business_hours` / `social_links`: se enviados, **substituem** a lista atual (`[]` apaga tudo). Um intervalo por dia; dia sem registo = fechado; `close_time` > `open_time`; formato `HH:MM`.\n- Mudar o `email` exige `current_password`. Enviar `email` só quando muda.\n- `password` não se altera aqui (ver *Alterar password*).\n\nRequer conta **Active**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"business_name\": \"Silva Consultoria Unipessoal, Lda.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"commercial_contacts\": null,\n  \"business_hours\": [\n    {\n      \"week_day_id\": 1,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"18:00\"\n    },\n    {\n      \"week_day_id\": 5,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"17:00\"\n    }\n  ],\n  \"social_links\": [\n    {\n      \"platform_id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"url\": \"https://www.linkedin.com/company/silva-consultoria\"\n    }\n  ]\n}",
@@ -1583,6 +1583,90 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Telefone não português",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"+44 7911 123456\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"phone\": [\n      \"O campo telefone tem de ser um número de telefone português válido.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Morada vazia",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"address\": \"\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"address\": [\n      \"O campo morada é obrigatório.\"\n    ]\n  }\n}"
             },
             {
               "name": "429 Demasiados pedidos",
@@ -2666,10 +2750,10 @@
                 "password"
               ]
             },
-            "description": "Pede a password atual e a nova duas vezes (mín. 8). **Revoga todos os tokens**, incluindo o atual: o frontend tem de pedir login outra vez.\n\nRequer conta **Active**.",
+            "description": "Pede a password atual e a nova duas vezes (mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo; a mesma regra do registo). **Revoga todos os tokens**, incluindo o atual: o frontend tem de pedir login outra vez.\n\nRequer conta **Active**.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+              "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2701,7 +2785,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2744,7 +2828,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2763,6 +2847,49 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ],\n    \"password\": [\n      \"A confirmação do campo password não corresponde.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Password fraca",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/password",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novapassword\",\n  \"password_confirmation\": \"novapassword\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"password\": [\n      \"O campo password tem de conter pelo menos uma letra maiúscula e uma minúscula.\",\n      \"O campo password tem de conter pelo menos um símbolo.\",\n      \"O campo password tem de conter pelo menos um número.\"\n    ]\n  }\n}"
             },
             {
               "name": "429 Demasiados pedidos",
@@ -2787,7 +2914,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2834,7 +2961,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2881,7 +3008,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2924,7 +3051,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"novaPassword123\",\n  \"password_confirmation\": \"novaPassword123\"\n}",
+                  "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
