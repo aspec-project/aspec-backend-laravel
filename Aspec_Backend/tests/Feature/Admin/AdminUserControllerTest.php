@@ -136,7 +136,7 @@ class AdminUserControllerTest extends TestCase
 
 
     #[Test]
-    public function admin_can_reject_pending_user(): void
+    public function admin_can_reject_pending_user_and_revoke_tokens(): void
     {
         $admin = User::factory()
             ->admin()
@@ -145,6 +145,10 @@ class AdminUserControllerTest extends TestCase
         $pendingUser = User::factory()
             ->pending()
             ->create();
+
+        $pendingUserToken = $pendingUser
+            ->createToken('pending-user-token')
+            ->plainTextToken;
 
         Sanctum::actingAs($admin);
 
@@ -175,6 +179,18 @@ class AdminUserControllerTest extends TestCase
                 'Inactive'
             )->value('id'),
         ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $pendingUser->id,
+            'name' => 'pending-user-token',
+        ]);
+
+        \Illuminate\Support\Facades\Auth::forgetGuards();
+
+        $this
+            ->withHeader('Authorization', 'Bearer '.$pendingUserToken)
+            ->getJson('/api/auth/me')
+            ->assertUnauthorized();
     }
 
 
@@ -226,6 +242,216 @@ class AdminUserControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'Não autenticado.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $pendingUser->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Pending'
+            )->value('id'),
+        ]);
+    }
+
+
+    #[Test]
+    public function admin_cannot_approve_active_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $activeUser = User::factory()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$activeUser->id}/approve"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores pendentes podem ser aprovados.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $activeUser->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Active'
+            )->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_reject_inactive_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $inactiveUser = User::factory()
+            ->inactive()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$inactiveUser->id}/reject"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores pendentes podem ser rejeitados.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $inactiveUser->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Inactive'
+            )->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_approve_another_admin(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $otherAdmin = User::factory()
+            ->admin()
+            ->pending()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$otherAdmin->id}/approve"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado de um administrador.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $otherAdmin->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Pending'
+            )->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_reject_another_admin(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $otherAdmin = User::factory()
+            ->admin()
+            ->pending()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$otherAdmin->id}/reject"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado de um administrador.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $otherAdmin->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Pending'
+            )->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_approve_themselves(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$admin->id}/approve"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado da própria conta.',
+            ]);
+    }
+
+    #[Test]
+    public function admin_cannot_reject_themselves(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$admin->id}/reject"
+        );
+
+        $response
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado da própria conta.',
+            ]);
+    }
+
+    #[Test]
+    public function inactive_admin_cannot_approve_pending_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->inactive()
+            ->create();
+
+        $pendingUser = User::factory()
+            ->pending()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$pendingUser->id}/approve"
+        );
+
+        $response
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A conta não está ativa e não pode editar dados.',
             ]);
 
         $this->assertDatabaseHas('users', [
