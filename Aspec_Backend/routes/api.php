@@ -4,6 +4,10 @@ use App\Http\Controllers\Api\Account\AccountPasswordController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\PortfolioController;
+use App\Http\Controllers\Api\Lists\SectorController;
+use App\Http\Controllers\Api\Lists\LocationController;
+use App\Http\Controllers\Api\Lists\SocialplatformController;
+use App\Http\Controllers\Api\Lists\WeekdayController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\AuthController;
@@ -18,6 +22,12 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
     Route::post('/login', [AuthController::class, 'login']);
 });
+
+Route::get('/sectors', [SectorController::class, 'index']);
+Route::get('/locations', [LocationController::class, 'index']);
+Route::get('/social-platforms', [SocialplatformController::class, 'index']);
+Route::get('/week-days', [WeekdayController::class, 'index']);
+
 
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'admin'])
