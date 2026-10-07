@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Member\PortfolioController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\AuthController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
 
 
 Route::post('/auth/token', [AuthController::class, 'token']);
@@ -19,6 +20,7 @@ Route::prefix('auth')->group(function () {
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'admin'])
     ->group(function () {
+        Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
         // rotas administrativas
     });
 
