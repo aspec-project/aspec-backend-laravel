@@ -9,6 +9,7 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 use Illuminate\Support\Facades\Auth;
+use App\Enums\InactiveReason;
 use Illuminate\Support\Facades\DB;
 
 class AdminUserControllerTest extends TestCase
@@ -655,6 +656,34 @@ public function regular_user_cannot_unblock_user(): void
         'Inactive'
     )->value('id'),
 ]);
+}
+
+#[Test]
+public function blocking_user_clears_grace_period_and_sets_blocked_reason(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $user = User::factory()->create([
+        'grace_ends_at' => now()->addDays(5),
+    ]);
+
+    Sanctum::actingAs($admin);
+
+    $this
+        ->patchJson("/api/admin/users/{$user->id}/block")
+        ->assertOk();
+
+    $this->assertDatabaseHas('users', [
+        'id' => $user->id,
+        'inactive_reason' => InactiveReason::Blocked->value,
+        'grace_ends_at' => null,
+        'account_status_id' => AccountStatus::where(
+            'name',
+            'Inactive'
+        )->value('id'),
+    ]);
 }
 
 
