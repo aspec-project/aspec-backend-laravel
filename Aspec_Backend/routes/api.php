@@ -25,8 +25,8 @@ Route::prefix('auth')->group(function () {
 
 Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
-Route::get('/social-platforms', [SocialplatformController::class, 'index']);
-Route::get('/week-days', [WeekdayController::class, 'index']);
+Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
+Route::get('/week-days', [WeekDayController::class, 'index']);
 
 
 Route::prefix('admin')
