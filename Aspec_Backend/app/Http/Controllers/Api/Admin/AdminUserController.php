@@ -11,6 +11,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminUserController extends Controller
 {
+
+    /**
+     * Approve a user by setting their account status to "Active".
+     *
+     * @param string $id The ID of the user to approve.
+     * @return JsonResponse A JSON response containing the approved user's data and a success message.
+     */
     public function approve(string $id): JsonResponse
     {
         $user = User::findOrFail($id);
@@ -23,5 +30,28 @@ class AdminUserController extends Controller
             Response::HTTP_OK
         );
     }
+
+
+    /**
+     * Reject a user by setting their account status to "Inactive".
+     *
+     * @param string $id The ID of the user to reject.
+     * @return JsonResponse A JSON response containing the rejected user's data and a success message.
+     */
+    public function reject(string $id): JsonResponse
+    {
+        $user = User::findOrFail($id);
+        $inactiveStatus = AccountStatus::where('name', 'Inactive')->firstOrFail();
+        $user->update(['account_status_id' => $inactiveStatus->id]);
+
+        return $this->successResponse(
+            new UserResource(
+                $user->load(['role', 'accountStatus', 'memberProfile'])),
+            'Utilizador rejeitado com sucesso.',
+            Response::HTTP_OK
+        );
+    }
+
+    
     //
 }

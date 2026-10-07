@@ -21,6 +21,7 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'admin'])
     ->group(function () {
         Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
+        Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
         // rotas administrativas
     });
 
