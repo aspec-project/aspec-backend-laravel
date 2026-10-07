@@ -17,10 +17,14 @@ use Illuminate\Http\Request;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Laravel\Sanctum\PersonalAccessToken;
+use App\Enums\InactiveReason;
 
 
 class AuthController extends Controller
 {
+    /**
+     * Trait para respostas de API padronizadas.
+     */
     private function loadUserRelations(User $user): User
     {
         return $user->load([
@@ -33,6 +37,40 @@ class AuthController extends Controller
             'memberProfile.socialPlatforms',
             'memberProfile.portfolios',
         ]);
+    }
+
+
+    /**
+     * Verifica se o utilizador tem uma conta ativa.
+     *
+     * @param User $user O utilizador a verificar.
+     * @return JsonResponse|null Retorna uma resposta de erro se a conta não estiver ativa, caso contrário retorna null.
+     */
+    private function accountStatusError(User $user): ?JsonResponse
+    {
+        if ($user->accountStatus?->name !== 'Active') {
+            $message = match (true) {
+                $user->accountStatus?->name === 'Approved' =>
+                    'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+
+                $user->accountStatus?->name === 'Inactive'
+                    && $user->inactive_reason === InactiveReason::Unpaid =>
+                    'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+
+                $user->accountStatus?->name === 'Pending' =>
+                    'A sua conta está pendente de aprovação pelo administrador.',
+
+                default =>
+                    'A sua conta não está ativa.',
+            };
+
+            return $this->errorResponse(
+                $message,
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        return null;
     }
 
 
@@ -118,21 +156,10 @@ class AuthController extends Controller
             );
         }
 
-        if ($user->accountStatus?->name === 'Inactive') {
-            return $this->errorResponse(
-                'A sua conta está inativa.',
-                Response::HTTP_FORBIDDEN
-            );
-        }
-
-        if ($user->accountStatus?->name === 'Pending') {
-            return $this->errorResponse(
-                'A sua conta está pendente de aprovação pelo administrador.',
-                Response::HTTP_FORBIDDEN
-            );
-        }
-
         $user = $this->loadUserRelations($user);
+        if ($response = $this->accountStatusError($user)) {
+            return $response;
+        }
 
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
@@ -212,21 +239,10 @@ class AuthController extends Controller
             );
         }
 
-        if ($user->accountStatus?->name === 'Inactive') {
-            return $this->errorResponse(
-                'A sua conta está inativa.',
-                Response::HTTP_FORBIDDEN
-            );
-        }
-
-        if ($user->accountStatus?->name === 'Pending') {
-            return $this->errorResponse(
-                'A sua conta está pendente de aprovação pelo administrador.',
-                Response::HTTP_FORBIDDEN
-            );
-        }
-
         $user = $this->loadUserRelations($user);
+        if ($response = $this->accountStatusError($user)) {
+            return $response;
+        }
 
         $token = $user->createToken('postman')->plainTextToken;
 
