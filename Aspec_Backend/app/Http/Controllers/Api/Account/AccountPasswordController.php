@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdatePasswordRequest;
 use App\Notifications\PasswordChangedNotification;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,7 +14,9 @@ class AccountPasswordController extends Controller
 {
     /**
      * Altera a password do utilizador autenticado (membro ou admin, com ou sem perfil)
-     * e revoga todos os seus tokens, incluindo o atual: tem de iniciar sessão novamente.
+     * e revoga todos os seus tokens e sessões, incluindo a atual: tem de iniciar sessão novamente.
+     * As outras sessões do browser terminam no pedido seguinte (AuthenticateSession do Sanctum
+     * compara o hash da password); a sessão atual termina aqui.
      * Envia um email de aviso ao próprio utilizador; o limite de falhas está no Form Request.
      */
     public function update(UpdatePasswordRequest $request): JsonResponse
@@ -25,6 +28,14 @@ class AccountPasswordController extends Controller
             $user->update(['password' => $request->validated('password')]);
             $user->tokens()->delete();
         });
+
+        // Pedidos SPA: termina a sessão atual. Sem isto, o AuthenticateSession guardava o hash
+        // novo nesta sessão no fim do pedido e o utilizador continuava autenticado.
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         // Só depois do commit: nunca avisar de uma alteração que foi revertida.
         // Uma falha no email não pode virar 500: a password já mudou e os tokens já foram revogados.
