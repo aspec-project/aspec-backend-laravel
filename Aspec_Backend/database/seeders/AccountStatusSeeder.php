@@ -12,7 +12,7 @@ class AccountStatusSeeder extends Seeder
      */
     public function run(): void
     {
-        $statuses = ['Pending', 'Active', 'Inactive'];
+        $statuses = ['Pending', 'Approved', 'Active', 'Inactive'];
 
         foreach ($statuses as $status) {
             AccountStatus::firstOrCreate(

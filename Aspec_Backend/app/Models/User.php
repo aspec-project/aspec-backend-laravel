@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\InactiveReason;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -30,6 +31,9 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'trial_ends_at' => 'datetime',
+            'grace_ends_at' => 'datetime',
+            'inactive_reason' => InactiveReason::class,
         ];
     }
 
@@ -39,12 +43,27 @@ class User extends Authenticatable
         'phone',
         'role_id',
         'account_status_id',
-        'trial_ends_at',
+        // Dados de faturação: só gravados a partir de um Form Request validado.
+        'billing_name',
+        'nif',
+        'billing_address',
+        'billing_postal_code',
+        'billing_city',
     ];
 
     protected $hidden = [
         'password',
         'remember_token',
+        // Rede de segurança: os Resources já escolhem os campos, mas um toArray() ou log
+        // do modelo esquecido não pode expor o NIF, a morada nem o estado da subscrição.
+        'grace_ends_at',
+        'inactive_reason',
+        'stripe_checkout_session_id',
+        'nif',
+        'billing_name',
+        'billing_address',
+        'billing_postal_code',
+        'billing_city',
     ];
 
     public function role()
@@ -66,6 +85,8 @@ class User extends Authenticatable
      * Anonimiza e apaga (soft delete) o utilizador e, se existir, o perfil de membro.
      * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
      * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
+     * Limpa os dados de faturação e o estado da subscrição; o motivo passa a Deleted (substitui
+     * qualquer outro, mesmo Blocked, porque a conta deixa de existir). O cliente Stripe é tratado à parte.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      */
     public function anonymizeAndDelete(): void
@@ -94,15 +115,23 @@ class User extends Authenticatable
                 $profile->delete();
             }
 
-            // forceFill: remember_token e email_verified_at não estão no $fillable.
+            // forceFill: remember_token, email_verified_at e os campos de estado da subscrição não estão no $fillable.
             $this->forceFill([
-                'email'             => 'deleted_' . Str::uuid() . '@aspec.local',
-                'phone'             => '000000000',
-                'password'          => Hash::make(Str::random(32)),
-                'remember_token'    => null,
-                'email_verified_at' => null,
-                'trial_ends_at'     => null,
-                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+                'email'                      => 'deleted_' . Str::uuid() . '@aspec.local',
+                'phone'                      => '000000000',
+                'password'                   => Hash::make(Str::random(32)),
+                'remember_token'             => null,
+                'email_verified_at'          => null,
+                'trial_ends_at'              => null,
+                'grace_ends_at'              => null,
+                'stripe_checkout_session_id' => null,
+                'billing_name'               => null,
+                'nif'                        => null,
+                'billing_address'            => null,
+                'billing_postal_code'        => null,
+                'billing_city'               => null,
+                'account_status_id'          => AccountStatus::where('name', 'Inactive')->value('id'),
+                'inactive_reason'            => InactiveReason::Deleted,
             ])->save();
 
             $this->tokens()->delete();

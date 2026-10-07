@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Member;
 
+use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
@@ -187,6 +188,35 @@ class AnonymizeAndDeleteTest extends TestCase
         $this->assertNull($fresh->email_verified_at);
         $this->assertNull($fresh->trial_ends_at);
         $this->assertSame(AccountStatus::where('name', 'Inactive')->value('id'), $fresh->account_status_id);
+    }
+
+    #[Test]
+    public function billing_and_payment_state_are_cleared_and_reason_is_deleted(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $user->forceFill([
+            'billing_name' => 'Silva Contabilidade Lda',
+            'nif' => '245678901',
+            'billing_address' => 'Rua da Faturação 10',
+            'billing_postal_code' => '1000-001',
+            'billing_city' => 'Lisboa',
+            'grace_ends_at' => now()->addDays(7),
+            'stripe_checkout_session_id' => 'cs_test_open_session',
+            'inactive_reason' => InactiveReason::Blocked,
+        ])->save();
+
+        $user->anonymizeAndDelete();
+
+        $fresh = User::withTrashed()->find($user->id);
+        $this->assertNull($fresh->billing_name);
+        $this->assertNull($fresh->nif);
+        $this->assertNull($fresh->billing_address);
+        $this->assertNull($fresh->billing_postal_code);
+        $this->assertNull($fresh->billing_city);
+        $this->assertNull($fresh->grace_ends_at);
+        $this->assertNull($fresh->stripe_checkout_session_id);
+        // "deleted" substitui qualquer motivo anterior, incluindo "blocked": a conta deixou de existir.
+        $this->assertSame(InactiveReason::Deleted, $fresh->inactive_reason);
     }
 
     #[Test]
