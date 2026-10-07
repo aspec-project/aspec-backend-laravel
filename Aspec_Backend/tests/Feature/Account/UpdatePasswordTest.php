@@ -156,6 +156,33 @@ class UpdatePasswordTest extends TestCase
     }
 
     #[Test]
+    public function other_spa_session_that_only_logged_in_is_ended_after_password_change(): void
+    {
+        $user = $this->makeUser();
+        $origin = ['Origin' => 'http://localhost:5173'];
+        $cookie = config('session.cookie');
+        $login = fn () => $this->withHeaders($origin)
+            ->postJson('/api/auth/login', ['email' => $user->email, 'password' => self::OLD])
+            ->assertOk()
+            ->getCookie($cookie)
+            ->getValue();
+
+        $sessionA = $login();
+        $this->app['auth']->forgetGuards();
+        $sessionB = $login();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($origin)->withCookie($cookie, $sessionA)
+            ->putJson(self::URL, $this->validPayload())
+            ->assertOk();
+
+        $this->app['auth']->forgetGuards();
+        $this->withHeaders($origin)->withCookie($cookie, $sessionB)
+            ->getJson('/api/auth/me')
+            ->assertUnauthorized();
+    }
+
+    #[Test]
     public function revoked_token_cannot_be_used_again(): void
     {
         $user = $this->makeUser();
