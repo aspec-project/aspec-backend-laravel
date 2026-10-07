@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Api\Lists;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\WeekDay;
-use App\Traits\ApiResponse;
 
-class WeekdayController extends Controller
+class WeekDayController extends Controller
 {
-    use ApiResponse;
 
     /**
      * Display a listing of the resource.
