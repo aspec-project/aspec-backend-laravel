@@ -130,9 +130,17 @@ class User extends Authenticatable
     {
         DB::transaction(function () {
             $this->update([
-                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+                'account_status_id' => AccountStatus::where(
+                    'name',
+                    'Inactive'
+                )->value('id'),
             ]);
+
             $this->tokens()->delete();
+
+            DB::table('sessions')
+                ->where('user_id', $this->id)
+                ->delete();
         });
     }
     
