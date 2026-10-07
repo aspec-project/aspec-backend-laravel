@@ -32,6 +32,8 @@
         <env name="SESSION_DRIVER" value="array"/>
         <!-- Origens SPA aceites pelo Sanctum nos testes, para não dependerem do .env de cada máquina. -->
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:5173"/>
+        <!-- Faturação sempre com o driver log nos testes: nenhum teste depende de uma conta InvoiceExpress. -->
+        <env name="INVOICING_DRIVER" value="log"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
