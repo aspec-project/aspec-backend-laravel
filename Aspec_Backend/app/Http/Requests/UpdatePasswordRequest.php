@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rules\Password;
 
 class UpdatePasswordRequest extends FormRequest
 {
@@ -19,8 +20,8 @@ class UpdatePasswordRequest extends FormRequest
     }
 
     /**
-     * Exige a password atual correta e a nova duas vezes (mín. 8, como no registo),
-     * diferente da atual.
+     * Exige a password atual correta e a nova duas vezes, diferente da atual.
+     * A força da nova password vem de Password::default() (AppServiceProvider), a mesma do registo.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -28,7 +29,7 @@ class UpdatePasswordRequest extends FormRequest
     {
         return [
             'current_password' => 'bail|required|string|current_password:sanctum',
-            'password' => 'required|string|min:8|confirmed|different:current_password',
+            'password' => ['required', 'string', Password::default(), 'confirmed', 'different:current_password'],
         ];
     }
 }

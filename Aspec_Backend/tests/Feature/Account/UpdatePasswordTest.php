@@ -24,8 +24,8 @@ class UpdatePasswordTest extends TestCase
     use RefreshDatabase;
 
     private const URL = '/api/account/password';
-    private const OLD = 'OldSecret123';
-    private const NEW = 'NewSecret456';
+    private const OLD = 'OldSecret123!';
+    private const NEW = 'NewSecret456!';
 
     private function makeUser(string $role = 'Member', string $status = 'Active', bool $withProfile = true): User
     {
@@ -140,8 +140,8 @@ class UpdatePasswordTest extends TestCase
         $this->withToken($token)
             ->putJson(self::URL, [
                 'current_password' => self::NEW,
-                'password' => 'AnotherSecret789',
-                'password_confirmation' => 'AnotherSecret789',
+                'password' => 'AnotherSecret789!',
+                'password_confirmation' => 'AnotherSecret789!',
             ])
             ->assertUnauthorized();
 
@@ -180,7 +180,11 @@ class UpdatePasswordTest extends TestCase
             'missing new password' => [['password' => null, 'password_confirmation' => null], 'password'],
             'missing confirmation' => [['password_confirmation' => null], 'password'],
             'confirmation mismatch' => [['password_confirmation' => 'Mismatch789'], 'password'],
-            'shorter than 8 characters' => [['password' => 'Short1', 'password_confirmation' => 'Short1'], 'password'],
+            'shorter than 8 characters' => [['password' => 'Short1!', 'password_confirmation' => 'Short1!'], 'password'],
+            'without symbol' => [['password' => 'NoSymbol123', 'password_confirmation' => 'NoSymbol123'], 'password'],
+            'without uppercase' => [['password' => 'lowercase123!', 'password_confirmation' => 'lowercase123!'], 'password'],
+            'without lowercase' => [['password' => 'UPPERCASE123!', 'password_confirmation' => 'UPPERCASE123!'], 'password'],
+            'without number' => [['password' => 'NoNumbers!!', 'password_confirmation' => 'NoNumbers!!'], 'password'],
             'same as current' => [['password' => self::OLD, 'password_confirmation' => self::OLD], 'password'],
             'non string password' => [['password' => 12345678, 'password_confirmation' => 12345678], 'password'],
         ];
@@ -322,11 +326,11 @@ class UpdatePasswordTest extends TestCase
 
         $this->putJson(self::URL, [
             'current_password' => self::NEW,
-            'password' => 'AnotherSecret789',
-            'password_confirmation' => 'AnotherSecret789',
+            'password' => 'AnotherSecret789!',
+            'password_confirmation' => 'AnotherSecret789!',
         ])->assertOk();
 
-        $this->assertTrue(Hash::check('AnotherSecret789', $this->storedHash($user)));
+        $this->assertTrue(Hash::check('AnotherSecret789!', $this->storedHash($user)));
     }
 
     #[Test]
