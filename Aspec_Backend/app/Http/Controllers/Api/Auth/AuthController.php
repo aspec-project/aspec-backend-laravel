@@ -11,6 +11,7 @@ use App\Models\AccountStatus;
 use App\Traits\ApiResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
 use App\Http\Resources\UserResource;
@@ -145,12 +146,24 @@ class AuthController extends Controller
             if ($token) {
                 $token->delete();
             }
+
+            Auth::forgetGuards();
+
+            return $this->successResponse(
+                null,
+                'Sessão terminada com sucesso.',
+                Response::HTTP_OK
+            );
         }
 
         Auth::guard('web')->logout();
 
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        Auth::forgetGuards();
 
         return $this->successResponse(
             null,
