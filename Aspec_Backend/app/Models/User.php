@@ -65,7 +65,7 @@ class User extends Authenticatable
     /**
      * Anonimiza e apaga (soft delete) o utilizador e, se existir, o perfil de membro.
      * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
-     * pastas de logótipo e portfólio no disco público. Os tokens são revogados e a conta fica Inactive.
+     * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      */
     public function anonymizeAndDelete(): void
@@ -106,6 +106,11 @@ class User extends Authenticatable
             ])->save();
 
             $this->tokens()->delete();
+
+            // Nome da tabela vem da config (SESSION_TABLE é configurável); a ligação por omissão
+            // mantém o delete dentro desta transação, para entrar no rollback se algo falhar
+            // (por isso SESSION_CONNECTION tem de ficar vazio).
+            DB::table(config('session.table'))->where('user_id', $this->id)->delete();
 
             $this->delete();
         });

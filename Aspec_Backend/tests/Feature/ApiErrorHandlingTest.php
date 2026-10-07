@@ -7,6 +7,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Auth\Access\Response as GateResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
@@ -24,6 +25,7 @@ class ApiErrorHandlingTest extends TestCase
     private const MSG_403 = 'Não tem permissão para realizar esta ação.';
     private const MSG_404 = 'Recurso não encontrado.';
     private const MSG_405 = 'Método não permitido.';
+    private const MSG_419 = 'A sessão expirou. Atualize a página e tente novamente.';
     private const MSG_429 = 'Demasiados pedidos. Tente novamente mais tarde.';
     private const MSG_500 = 'Ocorreu um erro interno. Tente novamente mais tarde.';
 
@@ -75,6 +77,11 @@ class ApiErrorHandlingTest extends TestCase
 
             Route::get('/abort-409', fn () => abort(409, 'Já está inscrito neste evento.'));
             Route::get('/abort-409-empty', fn () => abort(409));
+
+            // O middleware CSRF não verifica o token em testes, por isso lança-se a exceção que ele lançaria.
+            Route::post('/csrf-mismatch', function () {
+                throw new TokenMismatchException('CSRF token mismatch.');
+            });
 
             Route::get('/get-only', fn () => response()->json(['ok' => true]));
 
@@ -256,6 +263,29 @@ class ApiErrorHandlingTest extends TestCase
         $this->get('/api/_test/does-not-exist')
             ->assertStatus(404)
             ->assertExactJson(['success' => false, 'message' => self::MSG_404]);
+    }
+
+    // 419
+
+    #[Test]
+    public function csrf_token_mismatch_returns_419_with_pt_pt_message(): void
+    {
+        $response = $this->postJson('/api/_test/csrf-mismatch');
+
+        $response->assertStatus(419)
+            ->assertExactJson(['success' => false, 'message' => self::MSG_419]);
+        $this->assertStringNotContainsString('CSRF token mismatch', $response->getContent());
+    }
+
+    #[Test]
+    public function csrf_token_mismatch_without_accept_header_returns_419_json(): void
+    {
+        $response = $this->post('/api/_test/csrf-mismatch');
+
+        $response->assertStatus(419);
+        $response->assertHeader('Content-Type', 'application/json');
+        $response->assertExactJson(['success' => false, 'message' => self::MSG_419]);
+        $this->assertStringNotContainsString('CSRF token mismatch', $response->getContent());
     }
 
     // 405 / 429

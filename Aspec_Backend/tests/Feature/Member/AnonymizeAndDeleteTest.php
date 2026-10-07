@@ -12,6 +12,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -42,6 +43,22 @@ class AnonymizeAndDeleteTest extends TestCase
         Storage::disk('public')->put("portfolios/{$user->id}/a.jpg", 'conteudo');
 
         return $user;
+    }
+
+    private function insertSession(?string $userId): string
+    {
+        $id = Str::random(40);
+
+        DB::table('sessions')->insert([
+            'id' => $id,
+            'user_id' => $userId,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'payload' => base64_encode('a:0:{}'),
+            'last_activity' => now()->getTimestamp(),
+        ]);
+
+        return $id;
     }
 
     #[Test]
@@ -215,5 +232,48 @@ class AnonymizeAndDeleteTest extends TestCase
         $this->assertSame(1, $otherProfile->weekDays()->count());
         $this->assertSame(1, $otherProfile->socialPlatforms()->count());
         $this->assertSame(1, $otherProfile->portfolios()->count());
+    }
+
+    #[Test]
+    public function all_sessions_of_the_user_are_deleted(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $this->insertSession($user->id);
+        $this->insertSession($user->id);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
+    }
+
+    #[Test]
+    public function other_users_sessions_are_kept(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $other = $this->memberWithFullProfile();
+        $this->insertSession($user->id);
+        $otherSessionId = $this->insertSession($other->id);
+        // Sessão de visitante (user_id null): não pode ser apanhada pelo delete.
+        $guestSessionId = $this->insertSession(null);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseMissing('sessions', ['user_id' => $user->id]);
+        $this->assertDatabaseHas('sessions', ['id' => $otherSessionId, 'user_id' => $other->id]);
+        $this->assertDatabaseHas('sessions', ['id' => $guestSessionId, 'user_id' => null]);
+    }
+
+    #[Test]
+    public function sessions_are_kept_when_an_outer_transaction_rolls_back(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $sessionId = $this->insertSession($user->id);
+
+        DB::beginTransaction();
+        $user->anonymizeAndDelete();
+        DB::rollBack();
+
+        $this->assertDatabaseHas('sessions', ['id' => $sessionId, 'user_id' => $user->id]);
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
     }
 }

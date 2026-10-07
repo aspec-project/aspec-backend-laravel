@@ -30,6 +30,9 @@ class ApiExceptionRenderer
         Response::HTTP_FORBIDDEN => 'Não tem permissão para realizar esta ação.',
         Response::HTTP_NOT_FOUND => 'Recurso não encontrado.',
         Response::HTTP_METHOD_NOT_ALLOWED => 'Método não permitido.',
+        // CSRF inválido / sessão expirada: o Laravel converte a TokenMismatchException numa
+        // HttpException 419, código sem constante no Symfony.
+        419 => 'A sessão expirou. Atualize a página e tente novamente.',
         Response::HTTP_UNPROCESSABLE_ENTITY => 'Os dados enviados são inválidos.',
         Response::HTTP_TOO_MANY_REQUESTS => 'Demasiados pedidos. Tente novamente mais tarde.',
         Response::HTTP_INTERNAL_SERVER_ERROR => 'Ocorreu um erro interno. Tente novamente mais tarde.',
