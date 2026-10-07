@@ -22,10 +22,14 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
 
+    $middleware->statefulApi();
+
     $middleware->alias([
     'account.active' => CheckAccountActive::class,
     'admin' => EnsureAdmin::class,
     ]);
+
+    // Redireciona pedidos web não autenticados para a página de login, mas pedidos api/* não são redirecionados.
     $middleware->redirectGuestsTo(
         fn (Request $request) => $request->is('api/*')
             ? null

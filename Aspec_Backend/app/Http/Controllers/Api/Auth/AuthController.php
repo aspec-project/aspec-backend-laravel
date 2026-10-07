@@ -70,29 +70,30 @@ class AuthController extends Controller
 
 
     /**
-     * Autentica um utilizador existente no sistema e emite um token de acesso via Laravel Sanctum.
+     * Autentica um utilizador com base nas credenciais fornecidas.
      *
-     * Valida as credenciais enviadas pelo frontend, verifica a autenticação,
-     * carrega as relações essenciais (role, accountStatus, memberProfile) e gera o token Bearer.
+     * Verifica se o email e password correspondem a um utilizador existente e se a conta está ativa.
+     * Se a autenticação for bem-sucedida, inicia uma sessão para o utilizador.
      *
-     * @param Request $request Pedido HTTP contendo 'email' e 'password'.
-     * @return \Illuminate\Http\JsonResponse Token de acesso e dados do utilizador em caso de sucesso (HTTP 200),
-     *                                      ou mensagem de erro de credenciais inválidas (HTTP 401).
-     * @throws \Illuminate\Validation\ValidationException Se a validação básica dos campos falhar.
+     * @param Request $request Pedido HTTP contendo as credenciais do utilizador.
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador autenticado (HTTP 200) ou mensagem de erro (HTTP 401/403).
      */
 
-    public function login(Request $request)
+    public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
         ]);
 
         $user = User::with(['role', 'accountStatus', 'memberProfile'])
             ->where('email', $credentials['email'])
             ->first();
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        if (
+            ! $user ||
+            ! Hash::check($credentials['password'], $user->password)
+        ) {
             return $this->errorResponse(
                 'Credenciais inválidas. Verifique o seu email e password.',
                 Response::HTTP_UNAUTHORIZED
@@ -113,13 +114,16 @@ class AuthController extends Controller
             );
         }
 
-        $token = $user->createToken('aspec_auth_token')->plainTextToken;
+        Auth::guard('web')->login($user);
+        $request->session()->regenerate();
 
-        return $this->successResponse([
-            'token' => $token,
-            'user' => $user,
-        ], 'Autenticação efetuada com sucesso.');
+        return $this->successResponse(
+            new UserResource($user),
+            'Autenticação efetuada com sucesso.',
+            Response::HTTP_OK
+        );
     }
+
 
 
 
@@ -131,19 +135,103 @@ class AuthController extends Controller
      * @param Request $request Pedido HTTP contendo o utilizador autenticado.
      * @return \Illuminate\Http\JsonResponse Mensagem de sucesso (HTTP 200).
      */
-    public function logout(Request $request)
+    public function logout(Request $request): JsonResponse
     {
-        $token = $request->user()->currentAccessToken();
+        if ($request->bearerToken()) {
+            $token = $request->user()->currentAccessToken();
 
-        if ($token) {
-            $token->delete();
+            if ($token) {
+                $token->delete();
+            }
         }
+
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return $this->successResponse(
             null,
-            'Sessão terminada com sucesso.'
+            'Sessão terminada com sucesso.',
+            Response::HTTP_OK
         );
     }
+
+
+
+
+    /**
+     * Cria um novo token de acesso para o utilizador autenticado.
+     * Usado mais propriamente para aplicações SPA que necessitam de renovar o token sem reautenticar.
+     *
+     * @param Request $request Pedido HTTP contendo as credenciais do utilizador.
+     * @return \Illuminate\Http\JsonResponse Mensagem de sucesso (HTTP 200).
+     */
+    public function token(Request $request): JsonResponse
+    {
+        $credentials = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
+        ]);
+
+        $user = User::with(['role', 'accountStatus', 'memberProfile'])
+            ->where('email', $credentials['email'])
+            ->first();
+
+        if (
+            ! $user ||
+            ! Hash::check($credentials['password'], $user->password)
+        ) {
+            return $this->errorResponse(
+                'Credenciais inválidas. Verifique o seu email e password.',
+                Response::HTTP_UNAUTHORIZED
+            );
+        }
+
+        if ($user->accountStatus?->name === 'Inactive') {
+            return $this->errorResponse(
+                'A sua conta está inativa.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        if ($user->accountStatus?->name === 'Pending') {
+            return $this->errorResponse(
+                'A sua conta está pendente de aprovação pelo administrador.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $token = $user->createToken('postman')->plainTextToken;
+
+        return $this->successResponse([
+            'token' => $token,
+            'user' => new UserResource($user),
+        ], 'Token criado com sucesso.');
+    }
+
+    /**
+     * Retorna os detalhes do utilizador autenticado.
+     *
+     * @param Request $request Pedido HTTP contendo o utilizador autenticado.
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador (HTTP 200).
+     */
+    public function me(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $user->load(['role', 'accountStatus', 'memberProfile']);
+
+        return $this->successResponse(
+            new UserResource($user),
+            'Utilizador autenticado obtido com sucesso.',
+            Response::HTTP_OK
+        );
+    }
+
+
+
+    
 
 
 
