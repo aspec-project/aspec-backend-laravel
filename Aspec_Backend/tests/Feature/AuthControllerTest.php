@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use App\Enums\InactiveReason;
 
 class AuthControllerTest extends TestCase
 {
@@ -213,7 +214,7 @@ class AuthControllerTest extends TestCase
             ->assertForbidden()
             ->assertJson([
                 'success' => false,
-                'message' => 'A sua conta está inativa.',
+                'message' => 'A sua conta não está ativa.',
             ]);
 
         $this->assertGuest('web');
@@ -363,7 +364,7 @@ class AuthControllerTest extends TestCase
             ->assertForbidden()
             ->assertJson([
                 'success' => false,
-                'message' => 'A sua conta está inativa.',
+                'message' => 'A sua conta não está ativa.',
             ]);
 
         $this->assertDatabaseMissing('personal_access_tokens', [
@@ -485,4 +486,86 @@ class AuthControllerTest extends TestCase
 
         $this->assertGuest('web');
     }
+
+
+
+    #[Test]
+    public function approved_user_cannot_login_before_activation(): void
+    {
+        $user = User::factory()
+            ->approved()
+            ->create();
+
+        $this
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function unpaid_user_cannot_login(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Unpaid)
+            ->create();
+
+        $this
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function approved_user_cannot_create_a_bearer_token_before_activation(): void
+    {
+        $user = User::factory()
+            ->approved()
+            ->create();
+
+        $this
+            ->postJson('/api/auth/token', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+            ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
+    }
+
+    #[Test]
+    public function unpaid_user_cannot_create_a_bearer_token(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Unpaid)
+            ->create();
+
+        $this
+            ->postJson('/api/auth/token', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+            ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
+    }
+
+
+
+
 }
