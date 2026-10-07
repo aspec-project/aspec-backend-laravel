@@ -9,6 +9,7 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class AdminUserControllerTest extends TestCase
 {
@@ -494,6 +495,15 @@ class AdminUserControllerTest extends TestCase
 
         $userToken = $user->createToken('user-token')->plainTextToken;
 
+        DB::table('sessions')->insert([
+            'id' => 'session-to-delete',
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ]);
+
         Sanctum::actingAs($admin);
 
         $response = $this->patchJson(
@@ -527,6 +537,10 @@ class AdminUserControllerTest extends TestCase
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
             'name' => 'user-token',
+        ]);
+
+        $this->assertDatabaseMissing('sessions', [
+            'id' => 'session-to-delete',
         ]);
 
         Auth::forgetGuards();

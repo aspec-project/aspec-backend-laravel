@@ -16,10 +16,27 @@ use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
+use Laravel\Sanctum\PersonalAccessToken;
 
 
 class AuthController extends Controller
 {
+    private function loadUserRelations(User $user): User
+    {
+        return $user->load([
+            'role',
+            'accountStatus',
+            'memberProfile.user',
+            'memberProfile.sector',
+            'memberProfile.location',
+            'memberProfile.weekDays',
+            'memberProfile.socialPlatforms',
+            'memberProfile.portfolios',
+        ]);
+    }
+
+
+
     /**
      * Regista um novo membro no sistema através de submissão de candidatura.
      * 
@@ -89,9 +106,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::with(['role', 'accountStatus', 'memberProfile'])
-            ->where('email', $credentials['email'])
-            ->first();
+        $user = User::where('email', $credentials['email'])->first();
 
         if (
             ! $user ||
@@ -117,6 +132,8 @@ class AuthController extends Controller
             );
         }
 
+        $user = $this->loadUserRelations($user);
+
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
@@ -141,19 +158,13 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         if ($request->bearerToken()) {
-            $token = $request->user()->currentAccessToken();
+            $token = PersonalAccessToken::findToken(
+                $request->bearerToken()
+            );
 
             if ($token) {
                 $token->delete();
             }
-
-            Auth::forgetGuards();
-
-            return $this->successResponse(
-                null,
-                'Sessão terminada com sucesso.',
-                Response::HTTP_OK
-            );
         }
 
         Auth::guard('web')->logout();
@@ -189,9 +200,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::with(['role', 'accountStatus', 'memberProfile'])
-            ->where('email', $credentials['email'])
-            ->first();
+        $user = User::where('email', $credentials['email'])->first();
 
         if (
             ! $user ||
@@ -217,6 +226,8 @@ class AuthController extends Controller
             );
         }
 
+        $user = $this->loadUserRelations($user);
+
         $token = $user->createToken('postman')->plainTextToken;
 
         return $this->successResponse([
@@ -235,7 +246,7 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        $user->load(['role', 'accountStatus', 'memberProfile']);
+        $user = $this->loadUserRelations($user);
 
         return $this->successResponse(
             new UserResource($user),

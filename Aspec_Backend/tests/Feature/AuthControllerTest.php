@@ -453,4 +453,36 @@ class AuthControllerTest extends TestCase
                 'message' => 'Não autenticado.',
             ]);
     }
+
+
+    #[Test]
+    public function logout_handles_bearer_token_and_spa_session_together(): void
+    {
+        $user = $this->activeUser();
+
+        $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertOk();
+
+        $token = $user->createToken('combined-auth')->plainTextToken;
+
+        $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/auth/logout')
+            ->assertOk()
+            ->assertJson([
+                'success' => true,
+                'message' => 'Sessão terminada com sucesso.',
+                'data' => null,
+            ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+            'name' => 'combined-auth',
+        ]);
+
+        $this->assertGuest('web');
+    }
 }
