@@ -6,6 +6,7 @@ use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +24,19 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureRateLimiting();
+        $this->configurePasswordRules();
+    }
+
+    /**
+     * Regra de password única para registo e alteração de password, igual à do frontend:
+     * mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo.
+     *
+     * Só se aplica onde a regra é Password::default(). Sem uncompromised(): faria um pedido
+     * à API do Have I Been Pwned em cada registo (melhoria futura, ver relatório).
+     */
+    private function configurePasswordRules(): void
+    {
+        Password::defaults(fn () => Password::min(8)->mixedCase()->numbers()->symbols());
     }
 
     /**
