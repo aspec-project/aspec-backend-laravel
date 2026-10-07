@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Http\Request;
+use App\Http\Resources\UserResource;
+use Illuminate\Http\JsonResponse;
 
 
 class AuthController extends Controller
