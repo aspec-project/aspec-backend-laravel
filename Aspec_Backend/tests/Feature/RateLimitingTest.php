@@ -95,4 +95,87 @@ class RateLimitingTest extends TestCase
 
         $this->postJson('/api/member-portfolio', [])->assertUnprocessable();
     }
+
+    #[Test]
+    public function login_is_rate_limited_after_five_attempts(): void
+    {
+        $user = User::factory()->create();
+
+        $payload = [
+            'email' => $user->email,
+            'password' => 'password-errada',
+        ];
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this
+                ->withHeader('Origin', 'http://localhost:5173')
+                ->postJson('/api/auth/login', $payload)
+                ->assertUnauthorized();
+        }
+
+        $this
+            ->withHeader('Origin', 'http://localhost:5173')
+            ->postJson('/api/auth/login', $payload)
+            ->assertTooManyRequests();
+    }
+
+
+    #[Test]
+    public function token_login_is_rate_limited_after_five_attempts(): void
+    {
+        $user = User::factory()->create();
+
+        $payload = [
+            'email' => $user->email,
+            'password' => 'password-errada',
+        ];
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this
+                ->postJson('/api/auth/token', $payload)
+                ->assertUnauthorized();
+        }
+
+        $this
+            ->postJson('/api/auth/token', $payload)
+            ->assertTooManyRequests();
+    }
+
+
+    #[Test]
+    public function registration_is_rate_limited_after_five_attempts(): void
+    {
+        $sector = \App\Models\Sector::firstOrFail();
+        $location = \App\Models\Location::firstOrFail();
+
+        $basePayload = [
+            'name' => 'Membro de Teste',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+        ];
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $payload = $basePayload;
+            $payload['email'] = "member{$attempt}@example.com";
+
+            $this
+                ->postJson('/api/auth/register', $payload)
+                ->assertCreated();
+        }
+
+        $payload = $basePayload;
+        $payload['email'] = 'member6@example.com';
+
+        $this
+            ->postJson('/api/auth/register', $payload)
+            ->assertTooManyRequests();
+    }
 }

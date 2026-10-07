@@ -14,11 +14,12 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 
 
-Route::post('/auth/token', [AuthController::class, 'token']);
+
+Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
 
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth-register');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:auth-login');
 });
 
 Route::get('/sectors', [SectorController::class, 'index']);
