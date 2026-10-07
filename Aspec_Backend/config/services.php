@@ -35,4 +35,23 @@ return [
         ],
     ],
 
+    // Faturação dos pagamentos: 'log' (sem serviço externo) ou 'invoiceexpress'.
+    'invoicing' => [
+        'driver' => env('INVOICING_DRIVER', 'log'),
+    ],
+
+    'invoiceexpress' => [
+        'account_name' => env('INVOICEEXPRESS_ACCOUNT_NAME'),
+        'api_key' => env('INVOICEEXPRESS_API_KEY'),
+        'document_type' => env('INVOICEEXPRESS_DOCUMENT_TYPE', 'invoice_receipts'),
+        'sequence_id' => env('INVOICEEXPRESS_SEQUENCE_ID'),
+        'item_name' => env('INVOICEEXPRESS_ITEM_NAME', 'Quota mensal ASPEC'),
+        'tax_name' => env('INVOICEEXPRESS_TAX_NAME', 'IVA23'),
+        'vat_rate' => (int) env('INVOICEEXPRESS_VAT_RATE', 23),
+        'tax_exemption' => env('INVOICEEXPRESS_TAX_EXEMPTION'),
+        'timeout' => (int) env('INVOICEEXPRESS_TIMEOUT', 10),
+        'retry_times' => (int) env('INVOICEEXPRESS_RETRY_TIMES', 3),
+        'retry_sleep_ms' => (int) env('INVOICEEXPRESS_RETRY_SLEEP_MS', 500),
+    ],
+
 ];
