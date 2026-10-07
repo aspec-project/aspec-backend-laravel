@@ -23,8 +23,8 @@ Route::prefix('auth')->group(function () {
 
 Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
-Route::get('/social-platforms', [SocialplatformController::class, 'index']);
-Route::get('/week-days', [WeekdayController::class, 'index']);
+Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
+Route::get('/week-days', [WeekDayController::class, 'index']);
 
 
 Route::prefix('admin')
@@ -32,6 +32,8 @@ Route::prefix('admin')
     ->group(function () {
         Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
         Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
+        Route::patch('/users/{id}/block',[AdminUserController::class, 'block']);
+        Route::patch('/users/{id}/unblock',[AdminUserController::class, 'unblock']);
         // rotas administrativas
     });
 

@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Api\Lists;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Location;
-use App\Traits\ApiResponse;
 
 class LocationController extends Controller
 {
-    use ApiResponse;
     /**
      * Display a listing of the resource.
      */

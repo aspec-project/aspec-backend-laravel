@@ -5,11 +5,9 @@ namespace App\Http\Controllers\Api\Lists;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SocialPlatform;
-use App\Traits\ApiResponse;
 
-class SocialplatformController extends Controller
+class SocialPlatformController extends Controller
 {
-    use ApiResponse;
     /**
      * Display a listing of the resource.
      */
