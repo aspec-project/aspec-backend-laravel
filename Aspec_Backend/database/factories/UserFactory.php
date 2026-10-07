@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\Role;
 use App\Models\User;
@@ -58,11 +59,25 @@ class UserFactory extends Factory
     }
 
     /**
-     * Conta inativa (recusada, bloqueada ou sem pagamento).
+     * Conta aprovada pelo administrador, à espera da ativação (cartão).
+     * O motivo de inatividade fica null, como em qualquer conta que não é Inactive.
      */
-    public function inactive(): static
+    public function approved(): static
     {
-        return $this->withStatus('Inactive');
+        return $this->withStatus('Approved')->state(fn () => [
+            'inactive_reason' => null,
+        ]);
+    }
+
+    /**
+     * Conta inativa (recusada, bloqueada ou sem pagamento), com motivo opcional.
+     * Sem motivo, o inactive_reason fica null (conta inativa antiga).
+     */
+    public function inactive(?InactiveReason $reason = null): static
+    {
+        return $this->withStatus('Inactive')->state(fn () => [
+            'inactive_reason' => $reason,
+        ]);
     }
 
     /**
