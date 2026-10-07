@@ -2750,7 +2750,7 @@
                 "password"
               ]
             },
-            "description": "Pede a password atual e a nova duas vezes (mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo; a mesma regra do registo). **Revoga todos os tokens**, incluindo o atual: o frontend tem de pedir login outra vez.\n\nRequer conta **Active**.",
+            "description": "Pede a password atual e a nova duas vezes (mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo; a mesma regra do registo). **Termina todas as sessões e revoga todos os tokens**, incluindo a sessão atual: o frontend tem de pedir login outra vez.\n\nRequer conta **Active**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"current_password\": \"password123\",\n  \"password\": \"NovaPassword123!\",\n  \"password_confirmation\": \"NovaPassword123!\"\n}",
