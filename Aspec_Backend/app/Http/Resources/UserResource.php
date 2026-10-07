@@ -21,9 +21,8 @@ class UserResource extends JsonResource
                 'id' => $this->accountStatus?->id,
                 'name' => $this->accountStatus?->name,
             ]),
-            'member_profile' => $this->whenLoaded(
-                'memberProfile',
-                fn () => $this->memberProfile
+            'member_profile' => MemberProfileResource::make(
+                $this->whenLoaded('memberProfile')
             ),
         ];
     }

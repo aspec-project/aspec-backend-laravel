@@ -12,6 +12,21 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminUserController extends Controller
 {
+    private function loadUserRelations(User $user): User
+    {
+        return $user->load([
+            'role',
+            'accountStatus',
+            'memberProfile.user',
+            'memberProfile.sector',
+            'memberProfile.location',
+            'memberProfile.weekDays',
+            'memberProfile.socialPlatforms',
+            'memberProfile.portfolios',
+        ]);
+    }
+
+
 
     /**
      * Approve a user by setting their account status to "Active".
@@ -51,6 +66,8 @@ class AdminUserController extends Controller
         $user->update([
             'account_status_id' => $activeStatus->id,
         ]);
+
+        $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
             new UserResource(
@@ -100,6 +117,8 @@ class AdminUserController extends Controller
 
         $user->deactivate();
 
+        $user = $this->loadUserRelations($user->fresh());
+
         return $this->successResponse(
             new UserResource(
                 $user->fresh()->load([
@@ -125,6 +144,8 @@ class AdminUserController extends Controller
         $user = User::findOrFail($id);
 
         $user->deactivate();
+
+        $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
             new UserResource(
@@ -156,6 +177,8 @@ class AdminUserController extends Controller
         $user->update([
             'account_status_id' => $activeStatus->id,
         ]);
+
+        $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
             new UserResource(
