@@ -30,7 +30,8 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
-            'phone' => fake()->numerify('9########'),
+            // Telemóvel português válido para a regra PortuguesePhone (91, 92, 93 ou 96 + 7 dígitos).
+            'phone' => fake()->randomElement(['91', '92', '93', '96']).fake()->numerify('#######'),
             'role_id' => fn () => Role::firstOrCreate(['name' => 'Member'])->id,
             'account_status_id' => fn () => AccountStatus::firstOrCreate(['name' => 'Active'])->id,
             'trial_ends_at' => null,
