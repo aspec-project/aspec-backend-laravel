@@ -52,6 +52,63 @@ class AdminUserController extends Controller
         );
     }
 
+
+    /**
+     * Block a user by deactivating their account.
+     *
+     * @param string $id The ID of the user to block.
+     * @return JsonResponse A JSON response containing the blocked user's data and a success message.
+     */
+    public function block(string $id): JsonResponse
+    {
+        $user = User::findOrFail($id);
+
+        $user->deactivate();
+
+        return $this->successResponse(
+            new UserResource(
+                $user->fresh()->load([
+                    'role',
+                    'accountStatus',
+                    'memberProfile',
+                ])
+            ),
+            'Utilizador bloqueado com sucesso.',
+            Response::HTTP_OK
+        );
+    }
+
+
+
+    /**
+     * Unblock a user by activating their account.
+     *
+     * @param string $id The ID of the user to unblock.
+     * @return JsonResponse A JSON response containing the unblocked user's data and a success message.
+     */
+    public function unblock(string $id): JsonResponse
+    {
+        $user = User::findOrFail($id);
+
+        $activeStatus = AccountStatus::where('name', 'Active')->firstOrFail();
+
+        $user->update([
+            'account_status_id' => $activeStatus->id,
+        ]);
+
+        return $this->successResponse(
+            new UserResource(
+                $user->fresh()->load([
+                    'role',
+                    'accountStatus',
+                    'memberProfile',
+                ])
+            ),
+            'Utilizador desbloqueado com sucesso.',
+            Response::HTTP_OK
+        );
+    }
+
     
     //
 }

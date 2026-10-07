@@ -32,6 +32,8 @@ Route::prefix('admin')
     ->group(function () {
         Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
         Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
+        Route::patch('/users/{id}/block',[AdminUserController::class, 'block']);
+        Route::patch('/users/{id}/unblock',[AdminUserController::class, 'unblock']);
         // rotas administrativas
     });
 
