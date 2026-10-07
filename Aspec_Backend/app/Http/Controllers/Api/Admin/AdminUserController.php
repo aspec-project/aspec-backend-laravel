@@ -115,7 +115,7 @@ class AdminUserController extends Controller
             );
         }
 
-        $user->deactivate();
+        $user->deactivate('rejected');
 
         $user = $this->loadUserRelations($user->fresh());
 
@@ -143,7 +143,7 @@ class AdminUserController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $user->deactivate();
+        $user->deactivate('blocked');
 
         $user = $this->loadUserRelations($user->fresh());
 

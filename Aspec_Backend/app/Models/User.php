@@ -155,19 +155,36 @@ class User extends Authenticatable
         /**
      * Passa a conta a Inactive e termina todas as sessões (revoga os tokens).
      */
-    public function deactivate(): void
+    public function deactivate(string $reason): void
     {
-        DB::transaction(function () {
-            $this->update([
+        $requestedReason = InactiveReason::from($reason);
+
+        DB::transaction(function () use ($requestedReason) {
+            $currentReason = $this->inactive_reason;
+
+            $reasonToStore = in_array(
+                $currentReason,
+                [
+                    InactiveReason::Blocked,
+                    InactiveReason::Deleted,
+                ],
+                true
+            )
+                ? $currentReason
+                : $requestedReason;
+
+            $this->forceFill([
                 'account_status_id' => AccountStatus::where(
                     'name',
                     'Inactive'
                 )->value('id'),
-            ]);
+                'inactive_reason' => $reasonToStore,
+                'grace_ends_at' => null,
+            ])->save();
 
             $this->tokens()->delete();
 
-            DB::table('sessions')
+            DB::table(config('session.table'))
                 ->where('user_id', $this->id)
                 ->delete();
         });

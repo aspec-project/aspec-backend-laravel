@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Illuminate\Support\Facades\DB;
 
 class UserModelTest extends TestCase
 {
@@ -245,5 +246,110 @@ class UserModelTest extends TestCase
         $this->assertSame(AccountStatus::where('name', 'Inactive')->value('id'), $fresh->account_status_id);
         $this->assertArrayHasKey('inactive_reason', $fresh->getAttributes());
         $this->assertNull($fresh->inactive_reason);
+    }
+
+
+    #[Test]
+    public function deactivate_sets_the_requested_reason_and_clears_grace_period(): void
+    {
+        $user = User::factory()
+            ->approved()
+            ->create([
+                'grace_ends_at' => now()->addDays(7),
+            ]);
+
+        $user->deactivate(InactiveReason::Unpaid->value);
+
+        $freshUser = $user->fresh();
+
+        $this->assertSame(
+            InactiveReason::Unpaid,
+            $freshUser->inactive_reason
+        );
+
+        $this->assertNull($freshUser->grace_ends_at);
+
+        $this->assertSame(
+            'Inactive',
+            $freshUser->accountStatus->name
+        );
+    }
+
+    #[Test]
+    public function deactivate_revokes_tokens_and_deletes_sessions(): void
+    {
+        $user = User::factory()->create();
+
+        $user->createToken('deactivate-test');
+
+        DB::table(config('session.table'))->insert([
+            'id' => 'deactivate-session',
+            'user_id' => $user->id,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'payload' => '',
+            'last_activity' => now()->timestamp,
+        ]);
+
+        $this->assertDatabaseHas('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+            'name' => 'deactivate-test',
+        ]);
+
+        $this->assertDatabaseHas(config('session.table'), [
+            'id' => 'deactivate-session',
+            'user_id' => $user->id,
+        ]);
+
+        $user->deactivate(InactiveReason::Blocked->value);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+            'name' => 'deactivate-test',
+        ]);
+
+        $this->assertDatabaseMissing(config('session.table'), [
+            'id' => 'deactivate-session',
+        ]);
+    }
+
+    #[Test]
+    public function deactivate_preserves_an_existing_blocked_reason(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Blocked)
+            ->create();
+
+        $user->deactivate(InactiveReason::Rejected->value);
+
+        $this->assertSame(
+            InactiveReason::Blocked,
+            $user->fresh()->inactive_reason
+        );
+    }
+
+    #[Test]
+    public function deactivate_preserves_an_existing_deleted_reason(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Deleted)
+            ->create();
+
+        $user->deactivate(InactiveReason::Rejected->value);
+
+        $this->assertSame(
+            InactiveReason::Deleted,
+            $user->fresh()->inactive_reason
+        );
+    }
+
+    #[Test]
+    public function deactivate_rejects_an_invalid_reason(): void
+    {
+        $user = User::factory()->create();
+
+        $this->expectException(\ValueError::class);
+
+        $user->deactivate('invalid-reason');
     }
 }
