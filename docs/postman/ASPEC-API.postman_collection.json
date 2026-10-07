@@ -405,6 +405,49 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"A sua conta está inativa.\"\n}"
+            },
+            {
+              "name": "419 Sessão expirada",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "419 Sessão expirada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/auth/login",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"password123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Page Expired",
+              "code": 419,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A sessão expirou. Atualize a página e tente novamente.\"\n}"
             }
           ],
           "event": [
