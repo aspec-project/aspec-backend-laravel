@@ -22,11 +22,19 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 
 - **Chaves:** criar uma conta Stripe e, em **modo de teste**, copiar a `pk_test_…` para `STRIPE_KEY` e a `sk_test_…` para `STRIPE_SECRET` no `.env`. Nunca usar chaves `live` e nunca commitar o `.env`. Depois de mudar o `.env`: `php artisan config:clear` (não usar `config:cache` em desenvolvimento).
 - **Preço:** no dashboard, criar o Product "Quota mensal ASPEC" com um Price mensal de 60 € e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor mostrado ao membro (`SUBSCRIPTION_PRICE_AMOUNT`) tem de bater certo com esse Price.
-- **Webhooks locais** (a partir da ASPEC-129, quando existir a rota): instalar a Stripe CLI, `stripe login` e depois
+- **Webhooks locais:** instalar a Stripe CLI, `stripe login` e depois
   ```
   stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed
   ```
   Copiar o `whsec_…` mostrado para `STRIPE_WEBHOOK_SECRET`. Mantém-se enquanto o login da CLI for válido; se mudar, atualizar o `.env` e `php artisan config:clear` (senão os webhooks locais dão 403). Para gerar eventos: `stripe trigger invoice.payment_failed`.
+- **`stripe trigger invoice.payment_succeeded`:** prova a assinatura e a idempotência (aparece uma linha em `processed_webhook_events`), mas o cliente é criado pela CLI e não é nosso, por isso não há fatura (só um aviso no log). É normal.
+- **Ver uma fatura** (com `stripe listen` e `php artisan queue:work` a correr), em `php artisan tinker`:
+  ```php
+  $u = App\Models\User::factory()->withBilling()->create();
+  $u->newSubscription('default', config('subscription.price_id'))->create('pm_card_visa');
+  ```
+  A linha em `invoices` passa a `issued` e o `storage/logs/laravel.log` tem "Fatura emitida (driver log)". Para limpar: `$u->subscription('default')->cancelNow(); $u->anonymizeAndDelete();` (a fatura fica: obrigação fiscal).
+- **Fila:** com `QUEUE_CONNECTION=database`, sem `php artisan queue:work` as faturas ficam `pending`.
 - **Pagamentos falhados (dashboard do Stripe → Billing → definições de pagamentos falhados):** depois das tentativas automáticas (Smart Retries, ≥ 7 dias), escolher **cancelar a subscrição**. Assim o Stripe deixa de cobrar e o webhook `customer.subscription.deleted` atualiza a subscrição local.
 - **Cartões de teste:** `4242 4242 4242 4242` (sucesso), `4000 0000 0000 0341` (é aceite mas a cobrança falha → período de carência); qualquer data futura e qualquer CVC.
 - **Test clocks** (dashboard do Stripe) para avançar o trial e a carência numa demonstração.
