@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Payments\StripeWebhookController;
 
 
 
@@ -26,6 +27,9 @@ Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
+
+// Público e sem throttle: protegido pela assinatura do Stripe, que envia eventos em rajada.
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])->name('stripe.webhook');
 
 
 Route::prefix('admin')
