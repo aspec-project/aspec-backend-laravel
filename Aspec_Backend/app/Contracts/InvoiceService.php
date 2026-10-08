@@ -19,7 +19,10 @@ interface InvoiceService
     /**
      * Emite a fatura do pagamento e envia-a ao cliente.
      *
+     * @param  string|null  $draftId  Id do rascunho criado numa tentativa anterior: retoma a partir
+     *                                dele em vez de criar outro (dois rascunhos seriam duas faturas).
+     *
      * @throws InvoiceIssuingFailed Se a fatura não chegar a ser emitida.
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice): IssuedInvoice;
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice;
 }

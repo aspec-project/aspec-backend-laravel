@@ -51,23 +51,27 @@ class InvoiceExpressInvoiceService implements InvoiceService
     /**
      * Emite a fatura-recibo na InvoiceExpress e envia-a por email ao cliente.
      *
+     * Só EUR: a conta InvoiceExpress fatura em euros e noutra moeda o valor sairia errado.
+     * Sem número fiscal depois de finalizar falha antes do email (não há fatura para enviar nem gravar).
      * Depois de finalizada nunca lança exceção: se o email falhar devolve ISSUED_NOT_SENT.
+     * Com $draftId não cria rascunho: finaliza o da tentativa anterior (se já estiver finalizado,
+     * a finalização confirma-o e segue para o email).
+     *
+     * @param  string|null  $draftId  Id do rascunho de uma tentativa anterior que falhou a finalizar.
      *
      * @throws InvoiceIssuingFailed Se a moeda não for EUR ou se a criação ou a finalização falharem.
      *                              Nas falhas a finalizar, a exceção traz o id do rascunho
      *                              (providerInvoiceId) para a nova tentativa não criar outro.
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice): IssuedInvoice
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice
     {
-        // A conta InvoiceExpress fatura em EUR: noutra moeda o valor da fatura sairia errado.
         if ($invoice->currency !== 'eur') {
             throw InvoiceIssuingFailed::unsupportedCurrency($invoice->currency);
         }
 
-        $documentId = $this->createDraft($customer, $invoice);
+        $documentId = $draftId ?? $this->createDraft($customer, $invoice);
         $document = $this->finalize($documentId);
 
-        // Sem número fiscal não há fatura para enviar nem para gravar: falha antes do email.
         $number = $document['sequence_number'] ?? null;
 
         if (blank($number)) {
@@ -87,13 +91,13 @@ class InvoiceExpressInvoiceService implements InvoiceService
 
     /**
      * Cria a fatura em rascunho e devolve o id do documento.
+     * Sem série ou sem isenção configuradas a chave não é enviada: a InvoiceExpress usa a série por
+     * omissão da conta e só aceita motivo de isenção em faturas sem IVA.
      */
     private function createDraft(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice): string
     {
         $date = $invoice->date->format('d/m/Y');
 
-        // Sem série ou sem isenção configuradas, a chave não vai: a InvoiceExpress usa a série
-        // por omissão da conta e só aceita motivo de isenção em faturas sem IVA.
         $payload = array_filter([
             'date' => $date,
             'due_date' => $date,
@@ -132,6 +136,8 @@ class InvoiceExpressInvoiceService implements InvoiceService
 
     /**
      * Finaliza o rascunho e devolve o documento (com sequence_number e permalink).
+     * Um 422 pode querer dizer que o documento já está finalizado (ex.: um pedido anterior deu
+     * timeout mas foi aplicado): confirma-se o estado em vez de falhar logo.
      */
     private function finalize(string $documentId): array
     {
@@ -144,8 +150,6 @@ class InvoiceExpressInvoiceService implements InvoiceService
             return $this->documentFrom($response);
         }
 
-        // Um 422 pode querer dizer que o documento já está finalizado (ex.: um pedido anterior
-        // deu timeout mas foi aplicado). Confirma-se o estado em vez de falhar logo.
         if ($response->status() === 422) {
             $document = $this->fetchDocument($documentId);
 
@@ -173,6 +177,9 @@ class InvoiceExpressInvoiceService implements InvoiceService
 
     /**
      * Pede à InvoiceExpress que envie a fatura ao email de faturação do cliente.
+     * Nunca lança exceção: a fatura já tem número fiscal e qualquer exceção faria o job repetir e
+     * emitir uma segunda. Uma falha fica no log só com ids e código HTTP (a mensagem da exceção pode
+     * ter o URL com a api_key), para reenviar à mão.
      */
     private function sendByEmail(IssuedInvoice $issued, #[\SensitiveParameter] InvoiceCustomerData $customer): IssuedInvoice
     {
@@ -195,9 +202,6 @@ class InvoiceExpressInvoiceService implements InvoiceService
             $httpStatus = null;
         }
 
-        // A fatura já tem número fiscal: qualquer exceção (não só a falta de ligação) faria o job
-        // repetir e emitir uma segunda fatura. Fica registado só com ids e código HTTP (a mensagem
-        // da exceção pode ter o URL com a api_key) para reenviar à mão.
         Log::warning('Fatura emitida mas não enviada por email (InvoiceExpress).', [
             'step' => 'email',
             'http_status' => $httpStatus,

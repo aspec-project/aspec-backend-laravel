@@ -19,8 +19,9 @@ class LogInvoiceService implements InvoiceService
      *
      * O log tem só o id da fatura do Stripe, o valor, a moeda e o número: nunca nome, NIF,
      * morada nem email, porque os logs não são sítio para dados pessoais.
+     * Ignora o $draftId: sem serviço externo não há rascunhos, e o número já é sempre o mesmo.
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice): IssuedInvoice
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice
     {
         $number = $this->numberFor($invoice);
 

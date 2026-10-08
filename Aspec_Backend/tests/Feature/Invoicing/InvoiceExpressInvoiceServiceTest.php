@@ -559,6 +559,66 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             ->atLeast()->once();
     }
 
+    // --- Retoma a partir de um rascunho existente ---
+
+    #[Test]
+    public function resuming_from_a_draft_finalizes_and_emails_without_creating_another(): void
+    {
+        Http::fake([
+            self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(), '987');
+
+        Http::assertSentCount(2);
+        $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+        $this->assertSame('987', $issued->providerInvoiceId);
+        $this->assertSame(self::NUMBER, $issued->number);
+        $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
+    }
+
+    #[Test]
+    public function resuming_a_draft_that_was_already_finalized_succeeds_without_creating_another(): void
+    {
+        Http::fake([
+            self::CHANGE_STATE_URL => Http::response(['errors' => [['error' => 'Estado inválido.']]], 422),
+            self::SHOW_URL => Http::response($this->document('settled'), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(), '987');
+
+        $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
+        $this->assertSame(1, $this->countRequests('GET', '/invoice_receipts/987.json'));
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+        $this->assertSame(self::NUMBER, $issued->number);
+        $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
+    }
+
+    #[Test]
+    public function resuming_a_missing_draft_fails_at_finalize_and_keeps_the_draft_id(): void
+    {
+        Http::fake([
+            self::CHANGE_STATE_URL => Http::response([], 404),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(), '987');
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('finalize', $e->step);
+            $this->assertSame(404, $e->httpStatus);
+            $this->assertSame('987', $e->providerInvoiceId);
+        }
+
+        $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+    }
+
     // --- Moeda ---
 
     #[Test]
