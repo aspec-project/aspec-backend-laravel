@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
+use App\Enums\InactiveReason;
 
 class AdminUserController extends Controller
 {
@@ -168,29 +169,43 @@ class AdminUserController extends Controller
      * @param string $id The ID of the user to unblock.
      * @return JsonResponse A JSON response containing the unblocked user's data and a success message.
      */
-    public function unblock(string $id): JsonResponse
+    public function unblock(Request $request, string $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        $user = User::with([
+            'role',
+            'accountStatus',
+        ])->findOrFail($id);
 
-        $activeStatus = AccountStatus::where('name', 'Active')->firstOrFail();
+        if ($user->id === $request->user()->id) {
+            return $this->errorResponse(
+                'Não pode alterar o estado da própria conta.',
+                Response::HTTP_CONFLICT
+            );
+        }
 
-        $user->update([
-            'account_status_id' => $activeStatus->id,
-        ]);
+        if ($user->role?->name === 'Admin') {
+            return $this->errorResponse(
+                'Não pode alterar o estado de um administrador.',
+                Response::HTTP_CONFLICT
+            );
+        }
 
-        $user = $this->loadUserRelations($user->fresh());
+        if (
+            $user->accountStatus?->name !== 'Inactive'
+            || $user->inactive_reason !== InactiveReason::Blocked
+        ) {
+            return $this->errorResponse(
+                'Apenas utilizadores bloqueados podem ser desbloqueados.',
+                Response::HTTP_CONFLICT
+            );
+        }
 
-        return $this->successResponse(
-            new UserResource(
-                $user->fresh()->load([
-                    'role',
-                    'accountStatus',
-                    'memberProfile',
-                ])
-            ),
-            'Utilizador desbloqueado com sucesso.',
-            Response::HTTP_OK
-        );
+        /*
+        * A transição final depende do fluxo de subscrição:
+        *
+        * - sem subscrição: Approved + link de ativação;
+        * - com subscrição: Inactive + unpaid + link de reativação.
+        */
     }
 
     
