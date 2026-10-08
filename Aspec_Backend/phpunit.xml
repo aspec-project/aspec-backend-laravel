@@ -34,6 +34,12 @@
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:5173"/>
         <!-- Faturação sempre com o driver log nos testes: nenhum teste depende de uma conta InvoiceExpress. -->
         <env name="INVOICING_DRIVER" value="log"/>
+        <!-- Chaves falsas: os testes nunca usam as chaves do .env nem chamam o Stripe. -->
+        <env name="STRIPE_KEY" value="pk_test_fake"/>
+        <env name="STRIPE_SECRET" value="sk_test_fake"/>
+        <env name="STRIPE_WEBHOOK_SECRET" value="whsec_test"/>
+        <env name="STRIPE_PRICE_ID" value="price_test"/>
+        <env name="CASHIER_CURRENCY" value="eur"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
