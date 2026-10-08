@@ -16,4 +16,6 @@ return [
     'grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 7),
     'activation_link_days' => (int) env('ACTIVATION_LINK_DAYS', 7),
     'reactivation_link_days' => (int) env('REACTIVATION_LINK_DAYS', 7),
+    // O job acrescenta o mês do pagamento (ex. "Quota mensal ASPEC — outubro 2026").
+    'invoice_description' => env('SUBSCRIPTION_INVOICE_DESCRIPTION', 'Quota mensal ASPEC'),
 ];

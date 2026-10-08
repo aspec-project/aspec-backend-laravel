@@ -6242,7 +6242,7 @@
                 "webhook"
               ]
             },
-            "description": "**Não usar no frontend.** Chamado apenas pelo Stripe; incluído só como documentação. Sem login e sem limite de pedidos.\n\n**Segurança:** o pedido só é aceite com o header `Stripe-Signature` válido (assinado com `STRIPE_WEBHOOK_SECRET`); assinatura inválida ou ausente → 403. Se o servidor não tiver `STRIPE_WEBHOOK_SECRET` configurado, recusa tudo com 500 sem processar (*fail closed*): sem segredo, qualquer pessoa podia ativar contas com um POST. Em desenvolvimento usar o Stripe CLI: `stripe listen --forward-to localhost:8000/api/stripe/webhook`.\n\n**Idempotente:** numa transação, o `id` do evento é registado **antes** de o processar. Um evento repetido (o Stripe pode entregar o mesmo evento mais de uma vez) encontra o `id` e responde 200 sem fazer nada. Se o processamento falhar, a transação é desfeita (o `id` não fica registado) e o Stripe volta a tentar. Os emails só saem depois de a transação ser confirmada. Eventos sem tratamento também respondem 200. O corpo do 200 é texto simples (o Stripe só lê o código HTTP).\n\n**Eventos tratados e mudanças de estado:**\n- `customer.subscription.created` (`trialing`/`active`): conta **Approved** → **Active** (com período experimental) ou **Inactive** por falta de pagamento → **Active** (reativação); email de boas-vindas. Se a conta não puder ser ativada (ex.: bloqueada) ou já tiver outra subscrição válida, a nova subscrição é cancelada no Stripe e a conta não muda;\n- `customer.subscription.updated`: sincroniza a subscrição; com `active` termina o período de carência;\n- `invoice.payment_failed` (ignorado se a fatura já estiver paga): 1.ª falha → início do período de carência (7 dias, configurável) + email para atualizar o cartão; a conta continua **Active**;\n- `invoice.payment_succeeded` (valor > 0): termina a carência e emite a fatura na InvoiceExpress (enviada por email);\n- `customer.subscription.deleted`: conta **Active** → **Inactive** por falta de pagamento + email de reativação.\n\nO fim da carência sem pagamento também é tratado por uma tarefa agendada diária (Active → Inactive por falta de pagamento). Contas de administrador são ignoradas.",
+            "description": "**Estado:** ASPEC-129 implementa assinatura, fail closed, idempotência, sincronização do Cashier e fatura no `invoice.payment_succeeded`; as mudanças de estado da conta listadas abaixo chegam no S7 (ASPEC-133).\n\n**Não usar no frontend.** Chamado apenas pelo Stripe; incluído só como documentação. Sem login e sem limite de pedidos.\n\n**Segurança:** o pedido só é aceite com o header `Stripe-Signature` válido (assinado com `STRIPE_WEBHOOK_SECRET`); assinatura inválida ou ausente → 403. Se o servidor não tiver `STRIPE_WEBHOOK_SECRET` configurado, recusa tudo com 500 sem processar (*fail closed*): sem segredo, qualquer pessoa podia ativar contas com um POST. Em desenvolvimento usar o Stripe CLI: `stripe listen --forward-to localhost:8000/api/stripe/webhook`.\n\n**Idempotente:** numa transação, o `id` do evento é registado **antes** de o processar. Um evento repetido (o Stripe pode entregar o mesmo evento mais de uma vez) encontra o `id` e responde 200 sem fazer nada. Se o processamento falhar, a transação é desfeita (o `id` não fica registado) e o Stripe volta a tentar. Os emails só saem depois de a transação ser confirmada. Eventos sem tratamento também respondem 200. O corpo do 200 é texto simples (o Stripe só lê o código HTTP).\n\n**Eventos tratados e mudanças de estado:**\n- `customer.subscription.created` (`trialing`/`active`): conta **Approved** → **Active** (com período experimental) ou **Inactive** por falta de pagamento → **Active** (reativação); email de boas-vindas. Se a conta não puder ser ativada (ex.: bloqueada) ou já tiver outra subscrição válida, a nova subscrição é cancelada no Stripe e a conta não muda;\n- `customer.subscription.updated`: sincroniza a subscrição; com `active` termina o período de carência;\n- `invoice.payment_failed` (ignorado se a fatura já estiver paga): 1.ª falha → início do período de carência (7 dias, configurável) + email para atualizar o cartão; a conta continua **Active**;\n- `invoice.payment_succeeded` (valor > 0): cria a fatura `pending` e emite-a em fila (driver log ou InvoiceExpress), enviada por email; termina a carência;\n- `customer.subscription.deleted`: conta **Active** → **Inactive** por falta de pagamento + email de reativação.\n\nO fim da carência sem pagamento também é tratado por uma tarefa agendada diária (Active → Inactive por falta de pagamento). Contas de administrador são ignoradas.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"id\": \"evt_1Q2w3E4r5T6y7U8i\",\n  \"type\": \"customer.subscription.created\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"sub_1Q2w3E4r5T6y7U8i\",\n      \"object\": \"subscription\",\n      \"customer\": \"cus_Q2w3E4r5T6y7U8\",\n      \"status\": \"trialing\",\n      \"trial_end\": 1794738900\n    }\n  }\n}",
@@ -6285,6 +6285,100 @@
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"id\": \"evt_1Q2w3E4r5T6y7U8i\",\n  \"type\": \"customer.subscription.created\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"sub_1Q2w3E4r5T6y7U8i\",\n      \"object\": \"subscription\",\n      \"customer\": \"cus_Q2w3E4r5T6y7U8\",\n      \"status\": \"trialing\",\n      \"trial_end\": 1794738900\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "text/html; charset=UTF-8"
+                }
+              ],
+              "cookie": [],
+              "body": "Webhook Handled"
+            },
+            {
+              "name": "200 Evento repetido",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Evento repetido"
+                  },
+                  {
+                    "key": "Stripe-Signature",
+                    "value": "t=1792022400,v1=9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/stripe/webhook",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stripe",
+                    "webhook"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"evt_1Q2w3E4r5T6y7U8i\",\n  \"type\": \"customer.subscription.created\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"sub_1Q2w3E4r5T6y7U8i\",\n      \"object\": \"subscription\",\n      \"customer\": \"cus_Q2w3E4r5T6y7U8\",\n      \"status\": \"trialing\",\n      \"trial_end\": 1794738900\n    }\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "text/html; charset=UTF-8"
+                }
+              ],
+              "cookie": [],
+              "body": "Webhook Handled"
+            },
+            {
+              "name": "200 Pagamento (fatura)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Pagamento (fatura)"
+                  },
+                  {
+                    "key": "Stripe-Signature",
+                    "value": "t=1792022400,v1=9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/stripe/webhook",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "stripe",
+                    "webhook"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"evt_1Q3e4R5t6Y7u8I9o\",\n  \"object\": \"event\",\n  \"api_version\": \"2025-06-30.basil\",\n  \"type\": \"invoice.payment_succeeded\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"in_1Q3e4R5t6Y7u8I9o\",\n      \"object\": \"invoice\",\n      \"customer\": \"cus_Q2w3E4r5T6y7U8\",\n      \"amount_paid\": 6000,\n      \"currency\": \"eur\",\n      \"status\": \"paid\",\n      \"billing_reason\": \"subscription_cycle\",\n      \"parent\": {\n        \"type\": \"subscription_details\",\n        \"subscription_details\": {\n          \"subscription\": \"sub_1Q2w3E4r5T6y7U8i\",\n          \"metadata\": {}\n        }\n      }\n    }\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"

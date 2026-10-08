@@ -81,6 +81,20 @@ class UserFactory extends Factory
     }
 
     /**
+     * Dados de faturação completos (empresa com NIF), como os recolhidos na ativação.
+     */
+    public function withBilling(): static
+    {
+        return $this->state(fn () => [
+            'billing_name' => fake()->company(),
+            'nif' => '123456789',
+            'billing_address' => fake()->streetAddress(),
+            'billing_postal_code' => '1000-001',
+            'billing_city' => 'Lisboa',
+        ]);
+    }
+
+    /**
      * Email por verificar.
      */
     public function unverified(): static

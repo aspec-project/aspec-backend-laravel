@@ -126,4 +126,14 @@ class LogInvoiceServiceTest extends TestCase
 
         Http::assertNothingSent();
     }
+
+    #[Test]
+    public function draft_id_is_ignored_and_gives_the_same_number(): void
+    {
+        $withoutDraft = $this->service()->issue($this->customer(), $this->invoice('in_test_123'));
+        $withDraft = $this->service()->issue($this->customer(), $this->invoice('in_test_123'), 'ie_1');
+
+        $this->assertSame($withoutDraft->number, $withDraft->number);
+        $this->assertNull($withDraft->providerInvoiceId);
+    }
 }

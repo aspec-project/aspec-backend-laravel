@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Services\Payments\StripeCustomerService;
@@ -11,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -43,13 +43,15 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Os dados de faturação só são gravados a partir de um Form Request validado.
+     */
     protected $fillable = [
         'email',
         'password',
         'phone',
         'role_id',
         'account_status_id',
-        // Dados de faturação: só gravados a partir de um Form Request validado.
         'billing_name',
         'nif',
         'billing_address',
@@ -57,11 +59,13 @@ class User extends Authenticatable
         'billing_city',
     ];
 
+    /**
+     * Rede de segurança: os Resources já escolhem os campos, mas um toArray() ou log esquecido não
+     * pode expor o NIF, a morada, o estado da subscrição nem o cliente Stripe e o cartão.
+     */
     protected $hidden = [
         'password',
         'remember_token',
-        // Rede de segurança: os Resources já escolhem os campos, mas um toArray() ou log
-        // do modelo esquecido não pode expor o NIF, a morada nem o estado da subscrição.
         'grace_ends_at',
         'inactive_reason',
         'stripe_checkout_session_id',
@@ -70,7 +74,6 @@ class User extends Authenticatable
         'billing_address',
         'billing_postal_code',
         'billing_city',
-        // Cliente Stripe e cartão: só o Cashier os grava (forceFill), nunca saem na API.
         'stripe_id',
         'pm_type',
         'pm_last_four',
@@ -89,6 +92,15 @@ class User extends Authenticatable
     public function memberProfile()
     {
         return $this->hasOne(MemberProfile::class);
+    }
+
+    /**
+     * Faturas emitidas pela plataforma (InvoiceExpress ou log) para os pagamentos do membro.
+     * Não se chama invoices() porque esse nome já é do Billable (faturas do Stripe).
+     */
+    public function issuedInvoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class);
     }
 
     /**
@@ -132,20 +144,20 @@ class User extends Authenticatable
      * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
      * Limpa os dados de faturação e o estado da subscrição; o motivo passa a Deleted (substitui
      * qualquer outro, mesmo Blocked, porque a conta deixa de existir).
-     * Apaga o cliente no Stripe; se falhar, agenda DeleteStripeCustomerJob e mantém o stripe_id
-     * até o job ter sucesso. As subscrições locais ficam canceladas.
+     * Apaga o cliente no Stripe antes da transação (sem a prender à espera da rede; se a transação
+     * falhar, uma nova tentativa recebe "cliente já apagado", que conta como sucesso). Se o Stripe
+     * falhar, agenda DeleteStripeCustomerJob depois do commit e mantém o stripe_id até o job ter sucesso.
+     * As subscrições locais ficam canceladas logo (senão subscribed() continuava true até ao webhook).
+     * As sessões são apagadas na ligação por omissão, dentro da transação (SESSION_CONNECTION tem de
+     * ficar vazio); os ficheiros só depois do commit, para não se perderem num rollback.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
-     * Não chamar dentro de outra transação: a chamada ao Stripe é feita antes da transação e não
-     * pode ser desfeita por um rollback exterior.
+     * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
      */
     public function anonymizeAndDelete(): void
     {
-        // Antes da transação: não prender a transação à espera da rede. Se a transação falhar
-        // depois, o stripe_id fica e uma nova tentativa recebe "cliente já apagado" (sucesso).
         $stripeCustomerDeleted = $this->deleteStripeCustomer();
 
         DB::transaction(function () use ($stripeCustomerDeleted) {
-            // withTrashed: um perfil já apagado (soft delete) também tem de ser anonimizado.
             $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
 
             if ($profile) {
@@ -168,7 +180,6 @@ class User extends Authenticatable
                 $profile->delete();
             }
 
-            // forceFill: remember_token, email_verified_at e os campos de estado da subscrição não estão no $fillable.
             $this->forceFill([
                 'email'                      => 'deleted_' . Str::uuid() . '@aspec.local',
                 'phone'                      => '000000000',
@@ -189,15 +200,12 @@ class User extends Authenticatable
                 'inactive_reason'            => InactiveReason::Deleted,
             ]);
 
-            // O job de recurso precisa do stripe_id para voltar a tentar.
             if ($stripeCustomerDeleted) {
                 $this->stripe_id = null;
             }
 
             $this->save();
 
-            // Sem isto, subscribed() continuava true para uma conta apagada até chegar o webhook do
-            // Stripe. Corre mesmo que o Stripe tenha falhado: a conta deixa de existir de qualquer forma.
             $this->subscriptions()
                 ->where('stripe_status', '!=', StripeSubscription::STATUS_CANCELED)
                 ->update([
@@ -207,21 +215,15 @@ class User extends Authenticatable
 
             $this->tokens()->delete();
 
-            // Nome da tabela vem da config (SESSION_TABLE é configurável); a ligação por omissão
-            // mantém o delete dentro desta transação, para entrar no rollback se algo falhar
-            // (por isso SESSION_CONNECTION tem de ficar vazio).
             DB::table(config('session.table'))->where('user_id', $this->id)->delete();
 
             $this->delete();
 
             if (! $stripeCustomerDeleted) {
-                // afterCommit: uma anonimização que faça rollback não deixa um job na fila.
                 DeleteStripeCustomerJob::dispatch($this->id)->afterCommit();
             }
         });
 
-        // Os ficheiros só são apagados depois do commit (também de uma transação exterior),
-        // para não se perderem imagens se a base de dados fizer rollback.
         DB::afterCommit(function () {
             Storage::disk('public')->deleteDirectory("logos/{$this->id}");
             Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");

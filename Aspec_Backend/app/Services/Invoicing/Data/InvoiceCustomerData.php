@@ -2,6 +2,8 @@
 
 namespace App\Services\Invoicing\Data;
 
+use App\Models\User;
+
 /**
  * Cliente a quem a fatura é emitida (a empresa do membro, com NIF). O país é sempre Portugal.
  *
@@ -22,4 +24,31 @@ final readonly class InvoiceCustomerData
         public string $city,
         #[\SensitiveParameter] public string $email,
     ) {}
+
+    /**
+     * Cliente da fatura a partir dos dados de faturação do membro (nunca o telefone).
+     *
+     * @return self|null null se faltar algum dado de faturação (conta sem ativação ou anonimizada):
+     *                   sem NIF e morada não há fatura válida.
+     */
+    public static function fromUser(User $user): ?self
+    {
+        $fields = ['billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city'];
+
+        foreach ($fields as $field) {
+            if (blank($user->{$field})) {
+                return null;
+            }
+        }
+
+        return new self(
+            code: $user->id,
+            name: $user->billing_name,
+            nif: $user->nif,
+            address: $user->billing_address,
+            postalCode: $user->billing_postal_code,
+            city: $user->billing_city,
+            email: $user->email,
+        );
+    }
 }
