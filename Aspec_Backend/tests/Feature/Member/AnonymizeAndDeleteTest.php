@@ -3,18 +3,25 @@
 namespace Tests\Feature\Member;
 
 use App\Enums\InactiveReason;
+use App\Jobs\DeleteStripeCustomerJob;
 use App\Models\AccountStatus;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
+use App\Services\Payments\StripeCustomerService;
+use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
+use Stripe\Exception\ApiConnectionException;
 use Tests\TestCase;
 
 class AnonymizeAndDeleteTest extends TestCase
@@ -305,5 +312,203 @@ class AnonymizeAndDeleteTest extends TestCase
 
         $this->assertDatabaseHas('sessions', ['id' => $sessionId, 'user_id' => $user->id]);
         $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    private function memberWithStripeCustomer(): User
+    {
+        $user = $this->memberWithFullProfile();
+        $user->forceFill([
+            'stripe_id' => 'cus_test123',
+            'pm_type' => 'visa',
+            'pm_last_four' => '4242',
+            'billing_name' => 'Silva Contabilidade Lda',
+            'nif' => '245678901',
+            'billing_address' => 'Rua da Faturação 10',
+            'billing_postal_code' => '1000-001',
+            'billing_city' => 'Lisboa',
+        ])->save();
+
+        return $user;
+    }
+
+    #[Test]
+    public function user_without_stripe_customer_never_calls_stripe(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('delete');
+        });
+        $admin = User::factory()->admin()->create();
+        $pending = User::factory()->pending()->create();
+
+        $admin->anonymizeAndDelete();
+        $pending->anonymizeAndDelete();
+
+        Queue::assertNotPushed(DeleteStripeCustomerJob::class);
+        $this->assertSoftDeleted('users', ['id' => $admin->id]);
+        $this->assertSoftDeleted('users', ['id' => $pending->id]);
+    }
+
+    #[Test]
+    public function stripe_customer_is_deleted_and_stripe_columns_are_cleared(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->once()->with('cus_test123');
+        });
+        $user = $this->memberWithStripeCustomer();
+
+        $user->anonymizeAndDelete();
+
+        $fresh = User::withTrashed()->find($user->id);
+        $this->assertNull($fresh->stripe_id);
+        $this->assertNull($fresh->pm_type);
+        $this->assertNull($fresh->pm_last_four);
+        Queue::assertNotPushed(DeleteStripeCustomerJob::class);
+    }
+
+    #[Test]
+    public function stripe_failure_still_anonymizes_and_schedules_the_fallback_job(): void
+    {
+        Queue::fake();
+        Log::spy();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->once()->with('cus_test123')
+                ->andThrow(ApiConnectionException::factory('falha'));
+        });
+        $user = $this->memberWithStripeCustomer();
+
+        $user->anonymizeAndDelete();
+
+        $this->assertSoftDeleted('users', ['id' => $user->id]);
+        $fresh = User::withTrashed()->find($user->id);
+        $this->assertMatchesRegularExpression('/^deleted_.+@aspec\.local$/', $fresh->email);
+        $this->assertNull($fresh->billing_name);
+        $this->assertNull($fresh->nif);
+        $this->assertNull($fresh->billing_address);
+        $this->assertNull($fresh->pm_type);
+        $this->assertNull($fresh->pm_last_four);
+        // O job de recurso precisa do stripe_id para voltar a tentar apagar o cliente.
+        $this->assertSame('cus_test123', $fresh->stripe_id);
+        Queue::assertPushed(DeleteStripeCustomerJob::class, fn ($job) => $job->userId === $user->id);
+    }
+
+    #[Test]
+    public function fallback_job_is_dispatched_only_after_commit(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->andThrow(ApiConnectionException::factory('falha'));
+        });
+        $user = $this->memberWithStripeCustomer();
+
+        $user->anonymizeAndDelete();
+
+        Queue::assertPushed(DeleteStripeCustomerJob::class, fn ($job) => $job->afterCommit === true
+            || $job instanceof ShouldQueueAfterCommit);
+    }
+
+    #[Test]
+    public function stripe_failure_is_logged_without_personal_data(): void
+    {
+        Queue::fake();
+        Log::spy();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->andThrow(ApiConnectionException::factory('falha'));
+        });
+        $user = $this->memberWithStripeCustomer();
+        $originalEmail = $user->email;
+
+        $user->anonymizeAndDelete();
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(function (string $message, array $context = []) use ($user, $originalEmail) {
+                $logged = $message.json_encode($context, JSON_UNESCAPED_UNICODE);
+
+                return ($context['user_id'] ?? null) === $user->id
+                    && ! str_contains($logged, $originalEmail)
+                    && ! str_contains($logged, '245678901');
+            })
+            ->once();
+    }
+
+    private function subscribe(User $user, string $stripeId, string $status): void
+    {
+        $user->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => $stripeId,
+            'stripe_status' => $status,
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+            'trial_ends_at' => $status === 'trialing' ? now()->addDays(30) : null,
+        ]);
+    }
+
+    private function assertAllSubscriptionsCanceled(User $user): void
+    {
+        $subscriptions = DB::table('subscriptions')->where('user_id', $user->id)->get();
+
+        $this->assertCount(2, $subscriptions);
+        foreach ($subscriptions as $subscription) {
+            $this->assertSame('canceled', $subscription->stripe_status, "{$subscription->stripe_id} devia estar cancelada");
+            $this->assertNotNull($subscription->ends_at, "{$subscription->stripe_id} devia ter ends_at");
+        }
+    }
+
+    #[Test]
+    public function local_subscriptions_are_canceled_when_the_account_is_anonymized(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->once()->with('cus_test123');
+        });
+        $user = $this->memberWithStripeCustomer();
+        $this->subscribe($user, 'sub_test_active', 'active');
+        $this->subscribe($user, 'sub_test_trialing', 'trialing');
+
+        $user->anonymizeAndDelete();
+
+        $this->assertAllSubscriptionsCanceled($user);
+        $this->assertFalse(User::withTrashed()->find($user->id)->subscribed());
+    }
+
+    #[Test]
+    public function local_subscriptions_are_canceled_even_when_stripe_fails(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->andThrow(ApiConnectionException::factory('falha'));
+        });
+        $user = $this->memberWithStripeCustomer();
+        $this->subscribe($user, 'sub_test_active', 'active');
+        $this->subscribe($user, 'sub_test_trialing', 'trialing');
+
+        $user->anonymizeAndDelete();
+
+        $this->assertAllSubscriptionsCanceled($user);
+        Queue::assertPushed(DeleteStripeCustomerJob::class);
+    }
+
+    #[Test]
+    public function other_members_subscriptions_are_untouched(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete');
+        });
+        $user = $this->memberWithStripeCustomer();
+        $this->subscribe($user, 'sub_test_active', 'active');
+        $other = $this->memberWithFullProfile();
+        $this->subscribe($other, 'sub_test_other', 'active');
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseHas('subscriptions', [
+            'stripe_id' => 'sub_test_other',
+            'user_id' => $other->id,
+            'stripe_status' => 'active',
+            'ends_at' => null,
+        ]);
+        $this->assertTrue($other->fresh()->subscribed());
     }
 }

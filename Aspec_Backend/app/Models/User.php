@@ -4,6 +4,8 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Enums\InactiveReason;
+use App\Jobs\DeleteStripeCustomerJob;
+use App\Services\Payments\StripeCustomerService;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -12,10 +14,13 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Billable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
+use Stripe\Exception\ApiErrorException;
+use Stripe\Subscription as StripeSubscription;
 
 class User extends Authenticatable
 {
@@ -126,12 +131,20 @@ class User extends Authenticatable
      * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
      * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
      * Limpa os dados de faturação e o estado da subscrição; o motivo passa a Deleted (substitui
-     * qualquer outro, mesmo Blocked, porque a conta deixa de existir). O cliente Stripe é tratado à parte.
+     * qualquer outro, mesmo Blocked, porque a conta deixa de existir).
+     * Apaga o cliente no Stripe; se falhar, agenda DeleteStripeCustomerJob e mantém o stripe_id
+     * até o job ter sucesso. As subscrições locais ficam canceladas.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
+     * Não chamar dentro de outra transação: a chamada ao Stripe é feita antes da transação e não
+     * pode ser desfeita por um rollback exterior.
      */
     public function anonymizeAndDelete(): void
     {
-        DB::transaction(function () {
+        // Antes da transação: não prender a transação à espera da rede. Se a transação falhar
+        // depois, o stripe_id fica e uma nova tentativa recebe "cliente já apagado" (sucesso).
+        $stripeCustomerDeleted = $this->deleteStripeCustomer();
+
+        DB::transaction(function () use ($stripeCustomerDeleted) {
             // withTrashed: um perfil já apagado (soft delete) também tem de ser anonimizado.
             $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
 
@@ -170,9 +183,27 @@ class User extends Authenticatable
                 'billing_address'            => null,
                 'billing_postal_code'        => null,
                 'billing_city'               => null,
+                'pm_type'                    => null,
+                'pm_last_four'               => null,
                 'account_status_id'          => AccountStatus::where('name', 'Inactive')->value('id'),
                 'inactive_reason'            => InactiveReason::Deleted,
-            ])->save();
+            ]);
+
+            // O job de recurso precisa do stripe_id para voltar a tentar.
+            if ($stripeCustomerDeleted) {
+                $this->stripe_id = null;
+            }
+
+            $this->save();
+
+            // Sem isto, subscribed() continuava true para uma conta apagada até chegar o webhook do
+            // Stripe. Corre mesmo que o Stripe tenha falhado: a conta deixa de existir de qualquer forma.
+            $this->subscriptions()
+                ->where('stripe_status', '!=', StripeSubscription::STATUS_CANCELED)
+                ->update([
+                    'stripe_status' => StripeSubscription::STATUS_CANCELED,
+                    'ends_at'       => now(),
+                ]);
 
             $this->tokens()->delete();
 
@@ -182,6 +213,11 @@ class User extends Authenticatable
             DB::table(config('session.table'))->where('user_id', $this->id)->delete();
 
             $this->delete();
+
+            if (! $stripeCustomerDeleted) {
+                // afterCommit: uma anonimização que faça rollback não deixa um job na fila.
+                DeleteStripeCustomerJob::dispatch($this->id)->afterCommit();
+            }
         });
 
         // Os ficheiros só são apagados depois do commit (também de uma transação exterior),
@@ -192,7 +228,33 @@ class User extends Authenticatable
         });
     }
 
-        /**
+    /**
+     * Apaga o cliente Stripe do utilizador, se existir.
+     *
+     * @return bool true se não havia cliente ou se foi apagado; false se o Stripe falhou.
+     */
+    private function deleteStripeCustomer(): bool
+    {
+        if (blank($this->stripe_id)) {
+            return true;
+        }
+
+        try {
+            app(StripeCustomerService::class)->delete($this->stripe_id);
+
+            return true;
+        } catch (ApiErrorException $e) {
+            Log::warning('Falha ao apagar o cliente Stripe; job de recurso agendado.', [
+                'user_id'           => $this->id,
+                'exception'         => $e::class,
+                'stripe_request_id' => $e->getRequestId(),
+            ]);
+
+            return false;
+        }
+    }
+
+    /**
      * Passa a conta a Inactive e termina todas as sessões (revoga os tokens).
      */
     public function deactivate(string $reason): void
