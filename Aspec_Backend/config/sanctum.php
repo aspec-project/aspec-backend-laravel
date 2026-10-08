@@ -5,6 +5,12 @@ use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
+$frontendUrl = (string) env('FRONTEND_URL', 'http://localhost:5173');
+$frontendHost = parse_url($frontendUrl, PHP_URL_HOST);
+$frontendPort = parse_url($frontendUrl, PHP_URL_PORT);
+// Host do frontend na lista por omissão: o login SPA funciona mesmo sem SANCTUM_STATEFUL_DOMAINS no .env.
+$frontendStateful = $frontendHost ? ','.$frontendHost.($frontendPort ? ':'.$frontendPort : '') : '';
+
 return [
 
     /*
@@ -19,9 +25,10 @@ return [
     */
 
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
+        '%s%s%s',
         'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
         Sanctum::currentApplicationUrlWithPort(),
+        $frontendStateful,
         // Sanctum::currentRequestHost(),
     ))),
 

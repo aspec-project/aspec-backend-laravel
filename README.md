@@ -10,6 +10,8 @@ Na pasta `Aspec_Backend/`:
 4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{user_id}`, `portfolios/{user_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**.
 5. `php artisan serve` — a API fica em `http://localhost:8000/api`.
 
+No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão de browser.
+
 ### Já tinha o projeto instalado?
 
 Se o teu `.env` tem `APP_URL=http://localhost` (sem a porta), muda para `http://localhost:8000`, corre `php artisan config:clear` e confirma que existe `public/storage` (senão, `php artisan storage:link`). Sem isto, os logótipos e as imagens do portfólio aparecem partidos no frontend.

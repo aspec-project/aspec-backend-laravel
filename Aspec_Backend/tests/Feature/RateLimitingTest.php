@@ -120,6 +120,29 @@ class RateLimitingTest extends TestCase
     }
 
 
+    // The throttle middleware runs before the controller, so requests rejected for lacking a session still count.
+    #[Test]
+    public function login_without_session_counts_towards_throttle(): void
+    {
+        $user = User::factory()->create();
+
+        for ($attempt = 1; $attempt <= 5; $attempt++) {
+            $this
+                ->postJson('/api/auth/login', [
+                    'email' => $user->email,
+                    'password' => 'password-errada',
+                ])
+                ->assertBadRequest();
+        }
+
+        $this
+            ->postJson('/api/auth/login', [
+                'email' => $user->email,
+                'password' => 'password-errada',
+            ])
+            ->assertTooManyRequests();
+    }
+
     #[Test]
     public function token_login_is_rate_limited_after_five_attempts(): void
     {

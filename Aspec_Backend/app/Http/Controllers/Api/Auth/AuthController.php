@@ -132,13 +132,19 @@ class AuthController extends Controller
      *
      * Verifica se o email e password correspondem a um utilizador existente e se a conta está ativa.
      * Se a autenticação for bem-sucedida, inicia uma sessão para o utilizador.
+     * Só aceita pedidos SPA com sessão (origem em `sanctum.stateful`); sem sessão devolve 400.
      *
      * @param Request $request Pedido HTTP contendo as credenciais do utilizador.
-     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador autenticado (HTTP 200) ou mensagem de erro (HTTP 401/403).
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador autenticado (HTTP 200) ou mensagem de erro (HTTP 400/401/403).
      */
 
     public function login(Request $request): JsonResponse
     {
+        // Antes da validação e das credenciais: sem sessão nunca há login, por isso não se gasta hashing nem se deixa testar passwords por este caminho.
+        if (! $request->hasSession()) {
+            return $this->errorResponse('Pedido de login sem sessão. Use o frontend da plataforma ou POST /api/auth/token.', Response::HTTP_BAD_REQUEST);
+        }
+
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],

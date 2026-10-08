@@ -20,6 +20,8 @@ class AuthControllerTest extends TestCase
 
     private const FRONTEND_ORIGIN = 'http://localhost:5173';
 
+    private const NO_SESSION_MESSAGE = 'Pedido de login sem sessão. Use o frontend da plataforma ou POST /api/auth/token.';
+
     private function activeUser(): User
     {
         return User::factory()->create([
@@ -129,10 +131,12 @@ class AuthControllerTest extends TestCase
     {
         $user = $this->activeUser();
 
-        $response = $this->postJson('/api/auth/login', [
-            'email' => $user->email,
-            'password' => 'password-errada',
-        ]);
+        $response = $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', [
+                'email' => $user->email,
+                'password' => 'password-errada',
+            ]);
 
         $response
             ->assertUnauthorized()
@@ -147,10 +151,12 @@ class AuthControllerTest extends TestCase
     #[Test]
     public function login_fails_with_unknown_email(): void
     {
-        $response = $this->postJson('/api/auth/login', [
-            'email' => 'nao-existe@example.com',
-            'password' => 'password',
-        ]);
+        $response = $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', [
+                'email' => 'nao-existe@example.com',
+                'password' => 'password',
+            ]);
 
         $response
             ->assertUnauthorized()
@@ -165,7 +171,9 @@ class AuthControllerTest extends TestCase
     #[Test]
     public function login_validates_required_fields(): void
     {
-        $response = $this->postJson('/api/auth/login', []);
+        $response = $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', []);
 
         $response
             ->assertUnprocessable()
@@ -497,6 +505,7 @@ class AuthControllerTest extends TestCase
             ->create();
 
         $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
             ->postJson('/api/auth/login', $this->loginPayload($user))
             ->assertForbidden()
             ->assertJson([
@@ -515,6 +524,7 @@ class AuthControllerTest extends TestCase
             ->create();
 
         $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
             ->postJson('/api/auth/login', $this->loginPayload($user))
             ->assertForbidden()
             ->assertJson([
@@ -565,7 +575,87 @@ class AuthControllerTest extends TestCase
         ]);
     }
 
+    #[Test]
+    public function login_without_origin_returns_400_without_authenticating(): void
+    {
+        $user = $this->activeUser();
 
+        $this
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertBadRequest()
+            ->assertExactJson([
+                'success' => false,
+                'message' => self::NO_SESSION_MESSAGE,
+            ]);
 
+        $this->assertGuest('web');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
 
+    // The session check runs before the credentials, so this path can never be used to test passwords.
+    #[Test]
+    public function login_with_wrong_password_without_origin_returns_400(): void
+    {
+        $user = $this->activeUser();
+
+        $this
+            ->postJson('/api/auth/login', [
+                'email' => $user->email,
+                'password' => 'password-errada',
+            ])
+            ->assertBadRequest()
+            ->assertExactJson([
+                'success' => false,
+                'message' => self::NO_SESSION_MESSAGE,
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function login_without_origin_and_empty_body_returns_400(): void
+    {
+        $this
+            ->postJson('/api/auth/login', [])
+            ->assertBadRequest()
+            ->assertExactJson([
+                'success' => false,
+                'message' => self::NO_SESSION_MESSAGE,
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function login_from_a_non_stateful_origin_returns_400(): void
+    {
+        $user = $this->activeUser();
+
+        $this
+            ->withHeader('Origin', 'http://evil.example')
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertBadRequest()
+            ->assertExactJson([
+                'success' => false,
+                'message' => self::NO_SESSION_MESSAGE,
+            ]);
+
+        $this->assertGuest('web');
+        $this->assertDatabaseCount('personal_access_tokens', 0);
+    }
+
+    #[Test]
+    public function login_with_stateful_referer_is_accepted(): void
+    {
+        $user = $this->activeUser();
+
+        $this
+            ->withHeader('Referer', self::FRONTEND_ORIGIN.'/login')
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.id', $user->id);
+
+        $this->assertAuthenticatedAs($user, 'web');
+    }
 }
