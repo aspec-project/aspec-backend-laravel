@@ -79,12 +79,31 @@ class AuthControllerTest extends TestCase
             ->assertJsonPath(
                 'message',
                 'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.'
-            );
+            )
+            ->assertJsonPath('data.email', 'novo.membro@example.com')
+            ->assertJsonPath('data.phone', '912345678')
+            ->assertJsonPath('data.role.name', 'Member')
+            ->assertJsonPath('data.account_status.name', 'Pending')
+            ->assertJsonPath(
+                'data.member_profile.business_name',
+                'Empresa de Teste'
+            )
+            ->assertJsonPath(
+                'data.member_profile.congregation',
+                'Congregação de Teste'
+            )
+            ->assertJsonMissingPath('data.password')
+            ->assertJsonMissingPath('data.remember_token')
+            ->assertJsonMissingPath('data.user')
+            ->assertJsonMissingPath('data.profile');
 
         $this->assertDatabaseHas('users', [
             'email' => 'novo.membro@example.com',
             'role_id' => $role->id,
-            'account_status_id' => AccountStatus::where('name', 'Pending')->value('id'),
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Pending'
+            )->value('id'),
         ]);
 
         $this->assertDatabaseHas('member_profiles', [

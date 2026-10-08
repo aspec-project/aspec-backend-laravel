@@ -71,13 +71,7 @@ class AdminUserController extends Controller
         $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
-            new UserResource(
-                $user->fresh()->load([
-                    'role',
-                    'accountStatus',
-                    'memberProfile',
-                ])
-            ),
+            new UserResource($user),
             'Utilizador aprovado com sucesso.',
             Response::HTTP_OK
         );
@@ -121,13 +115,7 @@ class AdminUserController extends Controller
         $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
-            new UserResource(
-                $user->fresh()->load([
-                    'role',
-                    'accountStatus',
-                    'memberProfile',
-                ])
-            ),
+            new UserResource($user),
             'Utilizador rejeitado com sucesso.',
             Response::HTTP_OK
         );
