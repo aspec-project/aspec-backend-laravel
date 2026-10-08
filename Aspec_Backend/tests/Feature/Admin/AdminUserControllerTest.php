@@ -847,6 +847,75 @@ public function admin_cannot_unblock_themselves(): void
 }
 
 
+#[Test]
+public function admin_cannot_block_themselves(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    Sanctum::actingAs($admin);
+
+    $this
+        ->patchJson("/api/admin/users/{$admin->id}/block")
+        ->assertConflict()
+        ->assertJson([
+            'success' => false,
+            'message' => 'Não pode alterar o estado da própria conta.',
+        ]);
+}
+
+
+#[Test]
+public function admin_cannot_block_another_admin(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $otherAdmin = User::factory()
+        ->admin()
+        ->create();
+
+    Sanctum::actingAs($admin);
+
+    $this
+        ->patchJson("/api/admin/users/{$otherAdmin->id}/block")
+        ->assertConflict()
+        ->assertJson([
+            'success' => false,
+            'message' => 'Não pode alterar o estado de um administrador.',
+        ]);
+}
+
+
+#[Test]
+public function admin_cannot_block_an_already_blocked_user(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $user = User::factory()
+        ->inactive(InactiveReason::Blocked)
+        ->create();
+
+    Sanctum::actingAs($admin);
+
+    $this
+        ->patchJson("/api/admin/users/{$user->id}/block")
+        ->assertConflict()
+        ->assertJson([
+            'success' => false,
+            'message' => 'O utilizador já está bloqueado.',
+        ]);
+
+    $this->assertDatabaseHas('users', [
+        'id' => $user->id,
+        'inactive_reason' => InactiveReason::Blocked->value,
+    ]);
+}
+
 
 
 
