@@ -116,10 +116,15 @@ class AuthController extends Controller
 
             return compact('user', 'profile');
         });
+        $user = $result['user'];
+
+        $user = $this->loadUserRelations(
+            $user->fresh()
+        );
 
         return $this->successResponse(
-            $result, 
-            'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.', 
+            new UserResource($user),
+            'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.',
             Response::HTTP_CREATED
         );
     }
