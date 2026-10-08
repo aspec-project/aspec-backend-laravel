@@ -5,6 +5,7 @@ namespace Tests\Feature\Member;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Models\AccountStatus;
+use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\SocialPlatform;
@@ -510,5 +511,27 @@ class AnonymizeAndDeleteTest extends TestCase
             'ends_at' => null,
         ]);
         $this->assertTrue($other->fresh()->subscribed());
+    }
+
+    #[Test]
+    public function invoices_are_kept_after_anonymization(): void
+    {
+        // Obrigação fiscal: as faturas sobrevivem ao apagamento dos dados pessoais.
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->once()->with('cus_test123');
+        });
+        $user = $this->memberWithStripeCustomer();
+        $invoice = Invoice::factory()->create(['user_id' => $user->id, 'status' => 'issued', 'number' => 'LOG-2026-AAAAAAAA']);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice->id,
+            'user_id' => $user->id,
+            'stripe_invoice_id' => $invoice->stripe_invoice_id,
+            'number' => 'LOG-2026-AAAAAAAA',
+            'status' => 'issued',
+        ]);
     }
 }
