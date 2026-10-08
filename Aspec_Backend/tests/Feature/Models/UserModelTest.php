@@ -219,6 +219,54 @@ class UserModelTest extends TestCase
     }
 
     #[Test]
+    public function stripe_customer_fields_are_ignored_on_create(): void
+    {
+        $user = User::create([
+            'email' => 'cliente@example.com',
+            'password' => 'Password1!',
+            'phone' => '912345678',
+            'role_id' => Role::where('name', 'Member')->value('id'),
+            'account_status_id' => AccountStatus::where('name', 'Active')->value('id'),
+            'stripe_id' => 'cus_x',
+            'pm_type' => 'visa',
+            'pm_last_four' => '4242',
+        ]);
+
+        $fresh = $user->fresh();
+        $this->assertNull($fresh->stripe_id);
+        $this->assertNull($fresh->pm_type);
+        $this->assertNull($fresh->pm_last_four);
+    }
+
+    #[Test]
+    public function stripe_customer_fields_are_hidden_from_serialization(): void
+    {
+        $user = User::factory()->create();
+        $user->forceFill(['stripe_id' => 'cus_test_hidden', 'pm_type' => 'visa', 'pm_last_four' => '4242'])->save();
+
+        $array = $user->fresh()->toArray();
+
+        $this->assertArrayNotHasKey('stripe_id', $array);
+        $this->assertArrayNotHasKey('pm_type', $array);
+        $this->assertArrayNotHasKey('pm_last_four', $array);
+    }
+
+    #[Test]
+    public function auth_me_does_not_expose_the_stripe_customer(): void
+    {
+        $user = $this->activeMemberWithBilling();
+        $user->forceFill(['stripe_id' => 'cus_test_hidden', 'pm_type' => 'visa', 'pm_last_four' => '4242'])->save();
+        Sanctum::actingAs($user->fresh());
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonMissingPath('data.stripe_id')
+            ->assertJsonMissingPath('data.pm_type')
+            ->assertJsonMissingPath('data.pm_last_four')
+            ->assertDontSee('cus_');
+    }
+
+    #[Test]
     public function factory_approved_state_creates_an_approved_account(): void
     {
         $user = User::factory()->approved()->create();

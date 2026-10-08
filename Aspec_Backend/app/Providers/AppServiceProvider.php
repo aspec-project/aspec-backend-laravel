@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use InvalidArgumentException;
+use Laravel\Cashier\Cashier;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,6 +21,19 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerInvoiceService();
+        $this->configureCashier();
+    }
+
+    /**
+     * Sem as rotas do Cashier (webhook e página de pagamento): nenhum endpoint de pagamentos
+     * fica exposto antes de termos o nosso webhook com assinatura e idempotência.
+     * Subscrição past_due continua ativa: na semana de carência o membro mantém o acesso.
+     * Tem de correr no register(), antes de o CashierServiceProvider registar as rotas no boot().
+     */
+    private function configureCashier(): void
+    {
+        Cashier::ignoreRoutes();
+        Cashier::keepPastDueSubscriptionsActive();
     }
 
     /**

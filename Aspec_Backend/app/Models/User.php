@@ -13,13 +13,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Laravel\Cashier\Billable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasUuids, HasApiTokens;
+    use HasFactory, Notifiable, SoftDeletes, HasUuids, HasApiTokens, Billable;
 
     /**
      * Get the attributes that should be cast.
@@ -64,6 +65,10 @@ class User extends Authenticatable
         'billing_address',
         'billing_postal_code',
         'billing_city',
+        // Cliente Stripe e cartão: só o Cashier os grava (forceFill), nunca saem na API.
+        'stripe_id',
+        'pm_type',
+        'pm_last_four',
     ];
 
     public function role()
@@ -79,6 +84,41 @@ class User extends Authenticatable
     public function memberProfile()
     {
         return $this->hasOne(MemberProfile::class);
+    }
+
+    /**
+     * Nome do cliente no Stripe: o nome de faturação (o User não tem `name`).
+     */
+    public function stripeName(): ?string
+    {
+        return $this->billing_name;
+    }
+
+    /**
+     * Morada do cliente no Stripe, a partir da morada de faturação (sempre em Portugal).
+     *
+     * @return array<string, string> Vazio se ainda não houver morada de faturação.
+     */
+    public function stripeAddress(): array
+    {
+        if (blank($this->billing_address)) {
+            return [];
+        }
+
+        return [
+            'line1'       => $this->billing_address,
+            'postal_code' => $this->billing_postal_code,
+            'city'        => $this->billing_city,
+            'country'     => 'PT',
+        ];
+    }
+
+    /**
+     * O telefone nunca é enviado ao Stripe: não é preciso para cobrar (minimização de dados, RGPD).
+     */
+    public function stripePhone(): ?string
+    {
+        return null;
     }
 
     /**
