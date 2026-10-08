@@ -140,22 +140,43 @@ class AdminUserController extends Controller
      * @param string $id The ID of the user to block.
      * @return JsonResponse A JSON response containing the blocked user's data and a success message.
      */
-    public function block(string $id): JsonResponse
+    public function block(Request $request, string $id): JsonResponse
     {
-        $user = User::findOrFail($id);
+        $user = User::with([
+            'role',
+            'accountStatus',
+        ])->findOrFail($id);
 
-        $user->deactivate('blocked');
+        if ($user->id === $request->user()->id) {
+            return $this->errorResponse(
+                'Não pode alterar o estado da própria conta.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        if ($user->role?->name === 'Admin') {
+            return $this->errorResponse(
+                'Não pode alterar o estado de um administrador.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        if (
+            $user->accountStatus?->name === 'Inactive'
+            && $user->inactive_reason === InactiveReason::Blocked
+        ) {
+            return $this->errorResponse(
+                'O utilizador já está bloqueado.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $user->deactivate(InactiveReason::Blocked->value);
 
         $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
-            new UserResource(
-                $user->fresh()->load([
-                    'role',
-                    'accountStatus',
-                    'memberProfile',
-                ])
-            ),
+            new UserResource($user),
             'Utilizador bloqueado com sucesso.',
             Response::HTTP_OK
         );
