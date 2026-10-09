@@ -167,6 +167,8 @@ class AdminUserController extends Controller
 
         $user->deactivate(InactiveReason::Blocked->value);
 
+        app(SubscriptionService::class)->cancel($user);
+
         $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
