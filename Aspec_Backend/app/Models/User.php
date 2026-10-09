@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Services\Payments\StripeCustomerService;
@@ -101,6 +102,36 @@ class User extends Authenticatable
     public function issuedInvoices(): HasMany
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    /**
+     * Regra única de quem pode pagar pelo link do email: Approved ativa (com trial) e
+     * Inactive por falta de pagamento reativa (sem trial). Bloqueadas, recusadas, apagadas,
+     * pendentes, ativas e Inactive sem motivo devolvem null.
+     */
+    public function activationType(): ?ActivationType
+    {
+        $status = $this->accountStatus?->name;
+
+        return match (true) {
+            $status === 'Approved' => ActivationType::Activation,
+            $status === 'Inactive' && $this->inactive_reason === InactiveReason::Unpaid => ActivationType::Reactivation,
+            default => null,
+        };
+    }
+
+    /**
+     * Indica se o utilizador tem uma subscrição em curso (trial, ativa ou em carência; as
+     * terminadas e as incompletas não contam).
+     *
+     * @param  string|null  $exceptStripeId  Subscrição a ignorar (ex.: a que o webhook acabou de criar).
+     */
+    public function hasOngoingSubscription(?string $exceptStripeId = null): bool
+    {
+        return $this->subscriptions()
+            ->active()
+            ->when($exceptStripeId, fn ($query) => $query->where('stripe_id', '!=', $exceptStripeId))
+            ->exists();
     }
 
     /**
