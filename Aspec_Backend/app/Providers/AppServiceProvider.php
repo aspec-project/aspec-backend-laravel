@@ -167,7 +167,11 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perMinute(20)->by($request->ip())
         );
 
-
+        // O limite diário por email está no controller: aqui apareceria nos cabeçalhos X-RateLimit.
+        RateLimiter::for('activation-resend', fn (Request $request) => [
+            Limit::perMinutes(15, 3)->by('email:'.strtolower(trim((string) $request->input('email'))).'|'.$request->ip()),
+            Limit::perHour(10)->by('ip:'.$request->ip()),
+        ]);
 
         // Reset password: 5/min por IP.
         RateLimiter::for(

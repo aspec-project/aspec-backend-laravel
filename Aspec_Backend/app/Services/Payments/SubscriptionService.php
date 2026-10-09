@@ -64,6 +64,22 @@ class SubscriptionService
     }
 
     /**
+     * Envia um novo link a contas Approved (ativação) ou Inactive por falta de pagamento
+     * (reativação); outras contas e emails inexistentes não recebem nada. A comparação do email
+     * é exata, como no pedido de reposição de password.
+     */
+    public function resendLink(string $email): void
+    {
+        $user = User::with('accountStatus')->where('email', $email)->first();
+
+        match ($user?->activationType()) {
+            ActivationType::Activation => $this->sendActivationLink($user),
+            ActivationType::Reactivation => $this->sendReactivationLink($user),
+            null => null,
+        };
+    }
+
+    /**
      * Deixa de cobrar a conta (usado no bloqueio): expira a sessão de Checkout guardada e cancela
      * de imediato as subscrições não terminadas. Pré-condição: chamar depois do commit do
      * deactivate(), porque é o estado já gravado que impede sessões novas depois do retrato.

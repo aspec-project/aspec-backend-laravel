@@ -31,6 +31,9 @@ Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
 
+Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
+    ->middleware('throttle:activation-resend')->name('account-activations.resend');
+
 // Públicas: a autorização é a assinatura do link do email (relativa, porque o link aponta para o frontend).
 Route::middleware('throttle:account-activation')->group(function () {
     Route::get('/account-activations/{user}', [AccountActivationController::class, 'show'])
