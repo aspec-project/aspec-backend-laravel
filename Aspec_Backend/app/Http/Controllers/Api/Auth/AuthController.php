@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Password;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Notifications\PasswordChangedNotification;
 use Illuminate\Support\Str;
+use App\Jobs\SendPasswordResetLinkJob;
 
 class AuthController extends Controller
 {
@@ -307,15 +308,13 @@ class AuthController extends Controller
     
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
-        $email = $request->validated('email');
+        $user = User::query()
+            ->where('email', $request->validated('email'))
+            ->whereHas('accountStatus', fn ($query) => $query->where('name', 'Active'))
+            ->first();
 
-        $isActive = User::where('email', $email)
-            ->whereHas('accountStatus', fn ($q) => $q->where('name', 'Active'))
-            ->exists();
-
-        // Só gera token e envia email a contas Active; a resposta é igual em todos os casos.
-        if ($isActive) {
-            Password::broker()->sendResetLink(['email' => $email]);
+        if ($user) {
+            SendPasswordResetLinkJob::dispatch($user->id)->afterCommit();
         }
 
         return $this->successResponse(
