@@ -40,3 +40,13 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 - **Test clocks** (dashboard do Stripe) para avançar o trial e a carência numa demonstração.
 - **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e `php artisan schedule:work` (fim da carência).
 - **Depois de `git pull`:** `composer install` e `php artisan migrate`.
+
+### Ativação da conta (demo ponta a ponta)
+
+1. Correr ao mesmo tempo: `php artisan serve`, `php artisan queue:work` (sem ele os emails não saem), o `stripe listen` acima e o frontend (`http://localhost:5173`).
+2. `FRONTEND_URL` no `.env` (por omissão `http://localhost:5173`) define o domínio dos links enviados por email.
+3. Registar um membro e aprová-lo no backoffice ou com `PATCH /api/admin/users/{id}/approve`. A conta fica **Approved** (sem acesso) e é enviado o email de ativação.
+4. Com `MAIL_MAILER=log`, abrir o link do email no `storage/logs/laravel.log` (`{FRONTEND_URL}/ativacao/{id}?expires=…&signature=…`), preencher os dados de faturação e seguir para o Stripe Checkout.
+5. Pagar com o cartão `4242 4242 4242 4242`. O webhook `customer.subscription.created` passa a conta a **Active** em segundos (com o fim do período experimental em `users.trial_ends_at`) e envia o email de boas-vindas; o login passa a funcionar.
+
+O link vale 7 dias (`ACTIVATION_LINK_DAYS` / `REACTIVATION_LINK_DAYS`) e pode ser aberto várias vezes: repetir o pedido com um Checkout ainda aberto devolve o mesmo pagamento. Desbloquear uma conta também envia o link (ativação, se nunca subscreveu; reativação, sem novo período experimental, se já subscreveu).
