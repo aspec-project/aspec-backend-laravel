@@ -10,6 +10,8 @@ use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use App\Enums\InactiveReason;
+use App\Services\Payments\SubscriptionService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 
 class AdminUserController extends Controller
@@ -31,10 +33,11 @@ class AdminUserController extends Controller
 
 
     /**
-     * Approve a user by setting their account status to "Active".
+     * Aprova uma candidatura: Pending passa a Approved e é enviado o email com o link de ativação.
+     * A conta só fica Active quando o membro paga (webhook do Stripe). O email sai depois do commit.
      *
      * @param string $id The ID of the user to approve.
-     * @return JsonResponse A JSON response containing the approved user's data and a success message.
+     * @return JsonResponse 200 com o UserResource, 404 ou 409 (próprio, admin ou não pendente).
      */
     public function approve(Request $request, string $id): JsonResponse
     {
@@ -62,18 +65,20 @@ class AdminUserController extends Controller
             );
         }
 
-        $activeStatus = AccountStatus::where('name', 'Active')
-            ->firstOrFail();
+        DB::transaction(function () use ($user) {
+            $user->forceFill([
+                'account_status_id' => AccountStatus::where('name', 'Approved')->value('id'),
+                'inactive_reason' => null,
+            ])->save();
 
-        $user->update([
-            'account_status_id' => $activeStatus->id,
-        ]);
+            app(SubscriptionService::class)->sendActivationLink($user);
+        });
 
         $user = $this->loadUserRelations($user->fresh());
 
         return $this->successResponse(
             new UserResource($user),
-            'Utilizador aprovado com sucesso.',
+            'Utilizador aprovado. Foi enviado o email de ativação.',
             Response::HTTP_OK
         );
     }
@@ -174,10 +179,14 @@ class AdminUserController extends Controller
 
 
     /**
-     * Unblock a user by activating their account.
+     * Desbloqueia um utilizador bloqueado, nunca para Active direto (o bloqueio cancelou o pagamento):
+     * quem nunca subscreveu passa a Approved e recebe o link de ativação; quem já subscreveu fica
+     * Inactive por falta de pagamento e recebe o link de reativação. O email sai depois do commit.
+     * Esquece a sessão de Checkout guardada: uma sessão paga antes do bloqueio (subscrição já
+     * cancelada pelo webhook) bloquearia para sempre o novo pagamento com 409.
      *
      * @param string $id The ID of the user to unblock.
-     * @return JsonResponse A JSON response containing the unblocked user's data and a success message.
+     * @return JsonResponse 200 com o UserResource, 404 ou 409 (próprio, admin ou não bloqueado).
      */
     public function unblock(Request $request, string $id): JsonResponse
     {
@@ -210,12 +219,41 @@ class AdminUserController extends Controller
             );
         }
 
-        /*
-        * A transição final depende do fluxo de subscrição:
-        *
-        * - sem subscrição: Approved + link de ativação;
-        * - com subscrição: Inactive + unpaid + link de reativação.
-        */
+        $neverSubscribed = $user->subscriptions()->doesntExist();
+
+        DB::transaction(function () use ($user, $neverSubscribed) {
+            $subscriptions = app(SubscriptionService::class);
+
+            if ($neverSubscribed) {
+                $user->forceFill([
+                    'account_status_id' => AccountStatus::where('name', 'Approved')->value('id'),
+                    'inactive_reason' => null,
+                    'stripe_checkout_session_id' => null,
+                ])->save();
+
+                $subscriptions->sendActivationLink($user);
+
+                return;
+            }
+
+            $user->forceFill([
+                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+                'inactive_reason' => InactiveReason::Unpaid,
+                'stripe_checkout_session_id' => null,
+            ])->save();
+
+            $subscriptions->sendReactivationLink($user);
+        });
+
+        $user = $this->loadUserRelations($user->fresh());
+
+        return $this->successResponse(
+            new UserResource($user),
+            $neverSubscribed
+                ? 'Utilizador desbloqueado. Foi enviado o email de ativação.'
+                : 'Utilizador desbloqueado. Foi enviado o email de reativação.',
+            Response::HTTP_OK
+        );
     }
 
 

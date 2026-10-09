@@ -7,11 +7,14 @@ use App\Traits\ApiResponse;
 use Illuminate\Auth\Access\Response as GateResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
+use Stripe\Exception\ApiConnectionException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Tests\TestCase;
@@ -28,6 +31,8 @@ class ApiErrorHandlingTest extends TestCase
     private const MSG_419 = 'A sessão expirou. Atualize a página e tente novamente.';
     private const MSG_429 = 'Demasiados pedidos. Tente novamente mais tarde.';
     private const MSG_500 = 'Ocorreu um erro interno. Tente novamente mais tarde.';
+    private const MSG_502 = 'Não foi possível contactar o serviço de pagamentos. Tente novamente.';
+    private const MSG_INVALID_LINK = 'O link é inválido ou expirou.';
 
     protected function setUp(): void
     {
@@ -63,6 +68,14 @@ class ApiErrorHandlingTest extends TestCase
             Route::get('/abort-403-empty', fn () => abort(403));
 
             Route::get('/signed', fn () => response()->json(['ok' => true]))->middleware('signed');
+
+            Route::get('/invalid-signature', function () {
+                throw new InvalidSignatureException;
+            });
+
+            Route::get('/stripe-down', function () {
+                throw ApiConnectionException::factory('Could not connect to Stripe (detalhe interno do Stripe).');
+            });
 
             Route::get('/http-exception-subclass-403', function () {
                 throw new class(403, 'Framework internal forbidden message.') extends HttpException {};
@@ -195,13 +208,61 @@ class ApiErrorHandlingTest extends TestCase
     }
 
     #[Test]
-    public function invalid_signature_returns_generic_403_message(): void
+    public function invalid_signature_returns_link_message(): void
     {
         $response = $this->getJson('/api/_test/signed');
 
         $response->assertStatus(403)
-            ->assertExactJson(['success' => false, 'message' => self::MSG_403]);
+            ->assertExactJson(['success' => false, 'message' => self::MSG_INVALID_LINK]);
         $this->assertStringNotContainsString('Invalid signature', $response->getContent());
+    }
+
+    #[Test]
+    public function thrown_invalid_signature_exception_returns_link_message(): void
+    {
+        $this->getJson('/api/_test/invalid-signature')
+            ->assertStatus(403)
+            ->assertExactJson(['success' => false, 'message' => self::MSG_INVALID_LINK]);
+    }
+
+    // 502
+
+    #[Test]
+    public function stripe_error_returns_502_without_the_stripe_message(): void
+    {
+        config(['app.debug' => false]);
+
+        $response = $this->getJson('/api/_test/stripe-down');
+
+        $response->assertStatus(502)
+            ->assertExactJson(['success' => false, 'message' => self::MSG_502]);
+        $this->assertStringNotContainsString('detalhe interno do Stripe', $response->getContent());
+    }
+
+    #[Test]
+    public function stripe_error_without_accept_header_returns_502_json(): void
+    {
+        config(['app.debug' => false]);
+
+        $this->get('/api/_test/stripe-down')
+            ->assertStatus(502)
+            ->assertExactJson(['success' => false, 'message' => self::MSG_502]);
+    }
+
+    #[Test]
+    public function stripe_error_is_logged_with_class_and_request_id_only(): void
+    {
+        config(['app.debug' => false]);
+        Log::spy();
+
+        $this->getJson('/api/_test/stripe-down')->assertStatus(502);
+
+        Log::shouldHaveReceived('error')
+            ->withArgs(fn (string $message, array $context = []) => $message === 'Falha ao contactar o Stripe.'
+                && ($context['exception'] ?? null) === ApiConnectionException::class
+                && array_key_exists('stripe_request_id', $context)
+                && ! str_contains(json_encode($context), 'detalhe interno do Stripe'))
+            ->once();
     }
 
     #[Test]
