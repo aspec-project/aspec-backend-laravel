@@ -8,9 +8,12 @@ use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Cashier\Subscription;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Stripe\ApiRequestor;
 use Stripe\Exception\ApiConnectionException;
+use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 use Stripe\HttpClient\ClientInterface;
 use Tests\TestCase;
@@ -315,6 +318,144 @@ class StripeSubscriptionServiceTest extends TestCase
         $this->expectException(InvalidRequestException::class);
 
         $this->service()->expireCheckout('cs_test_1');
+    }
+
+    private function respondToBillingPortal(): void
+    {
+        $this->http->respond = fn ($method, $url) => str_ends_with($url, '/v1/billing_portal/sessions')
+            ? [['id' => 'bps_test_1', 'object' => 'billing_portal.session', 'url' => 'https://billing.stripe.com/p/session/test_1'], 200]
+            : null;
+    }
+
+    private function billingPortalCreation(): ?array
+    {
+        foreach ($this->http->requests as $request) {
+            if ($request['method'] === 'post' && str_ends_with($request['url'], '/v1/billing_portal/sessions')) {
+                return $request['params'];
+            }
+        }
+
+        return null;
+    }
+
+    #[Test]
+    public function billing_portal_url_creates_a_portal_session_for_the_customer(): void
+    {
+        config(['subscription.billing_portal_configuration' => null]);
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->respondToBillingPortal();
+
+        $url = $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
+
+        $this->assertSame('https://billing.stripe.com/p/session/test_1', $url);
+        $params = $this->billingPortalCreation();
+        $this->assertNotNull($params);
+        $this->assertSame('cus_test_1', $params['customer']);
+        $this->assertSame('http://localhost:5173/conta/subscricao', $params['return_url']);
+        $this->assertSame('pt', $params['locale']);
+    }
+
+    /**
+     * Com o id da configuração no .env, as opções do portal (só atualizar o cartão) ficam ligadas
+     * a cada ambiente e não dependem da configuração por omissão do dashboard.
+     */
+    #[Test]
+    public function billing_portal_url_sends_the_configured_portal_configuration(): void
+    {
+        config(['subscription.billing_portal_configuration' => 'bpc_test_1']);
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->respondToBillingPortal();
+
+        $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
+
+        $this->assertSame('bpc_test_1', $this->billingPortalCreation()['configuration'] ?? null);
+    }
+
+    public static function developmentEnvironments(): array
+    {
+        return [
+            'local' => ['local'],
+            'testing' => ['testing'],
+        ];
+    }
+
+    /**
+     * Em desenvolvimento a configuração é opcional para cada colega não ter de criar uma no
+     * Stripe: o portal usa a configuração por omissão do dashboard.
+     */
+    #[Test]
+    #[DataProvider('developmentEnvironments')]
+    public function billing_portal_url_without_configuration_uses_the_dashboard_default_in_development(string $environment): void
+    {
+        $this->app->detectEnvironment(fn () => $environment);
+        config(['subscription.billing_portal_configuration' => null]);
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->respondToBillingPortal();
+
+        $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
+
+        $params = $this->billingPortalCreation();
+        $this->assertNotNull($params);
+        $this->assertArrayNotHasKey('configuration', $params);
+    }
+
+    public static function deployedEnvironments(): array
+    {
+        return [
+            'production' => ['production'],
+            'staging' => ['staging'],
+        ];
+    }
+
+    /**
+     * Sem configuração própria, as opções do portal vinham do dashboard: se alguém lá ligasse
+     * "cancelar" ou "editar dados do cliente", o membro contornava as nossas regras. Fora de
+     * desenvolvimento o portal é recusado antes de qualquer pedido ao Stripe (fail closed).
+     */
+    #[Test]
+    #[DataProvider('deployedEnvironments')]
+    public function billing_portal_url_without_configuration_is_refused_outside_development(string $environment): void
+    {
+        $this->app->detectEnvironment(fn () => $environment);
+        config(['subscription.billing_portal_configuration' => null]);
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->respondToBillingPortal();
+
+        try {
+            $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
+            $this->fail('Devia ter recusado o portal sem configuração.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('STRIPE_BILLING_PORTAL_CONFIGURATION', $e->getMessage());
+        }
+
+        $this->assertSame([], $this->http->requests);
+    }
+
+    #[Test]
+    public function billing_portal_url_with_configuration_works_in_production(): void
+    {
+        $this->app->detectEnvironment(fn () => 'production');
+        config(['subscription.billing_portal_configuration' => 'bpc_test_1']);
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->respondToBillingPortal();
+
+        $url = $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
+
+        $this->assertSame('https://billing.stripe.com/p/session/test_1', $url);
+        $params = $this->billingPortalCreation();
+        $this->assertNotNull($params);
+        $this->assertSame('bpc_test_1', $params['configuration'] ?? null);
+    }
+
+    #[Test]
+    public function billing_portal_url_rethrows_stripe_errors(): void
+    {
+        $user = User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']);
+        $this->http->respond = fn () => $this->stripeError('resource_missing', 'No such customer');
+
+        $this->expectException(ApiErrorException::class);
+
+        $this->service()->billingPortalUrl($user, 'http://localhost:5173/conta/subscricao');
     }
 
     #[Test]

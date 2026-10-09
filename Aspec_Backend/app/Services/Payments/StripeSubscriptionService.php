@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Payments\Data\CheckoutSessionData;
 use Laravel\Cashier\Cashier;
 use Laravel\Cashier\Subscription;
+use RuntimeException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
 
@@ -50,6 +51,28 @@ class StripeSubscriptionService
         if ($user->hasStripeId()) {
             $user->syncStripeCustomerDetails();
         }
+    }
+
+    /**
+     * Cria uma sessão do portal de faturação do Stripe (só atualizar o cartão) e devolve o URL.
+     * O URL é uma credencial de curta duração: não se guarda nem vai para o log.
+     * Fora de local/testing exige STRIPE_BILLING_PORTAL_CONFIGURATION (fail closed).
+     *
+     * @throws RuntimeException Se o portal não estiver configurado fora de local/testing.
+     * @throws ApiErrorException Se o Stripe falhar.
+     */
+    public function billingPortalUrl(User $user, string $returnUrl): string
+    {
+        $configuration = config('subscription.billing_portal_configuration');
+
+        if (blank($configuration) && ! app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('STRIPE_BILLING_PORTAL_CONFIGURATION não configurado; portal de faturação recusado.');
+        }
+
+        return $user->billingPortalUrl($returnUrl, array_filter([
+            'configuration' => $configuration,
+            'locale' => 'pt',
+        ]));
     }
 
     /**

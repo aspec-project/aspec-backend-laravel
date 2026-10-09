@@ -127,6 +127,7 @@ class AppServiceProvider extends ServiceProvider
             'portfolio-upload',
             'portfolio-delete',
             'password-update',
+            'billing-portal',
         ];
 
         foreach ($actions as $action) {
