@@ -129,6 +129,7 @@ return [
         'symbols' => 'O campo :attribute tem de conter pelo menos um símbolo.',
         'uncompromised' => 'O valor de :attribute apareceu numa fuga de dados. Escolha outro valor para :attribute.',
     ],
+    'portuguese_nif' => 'O campo :attribute tem de ser um NIF português válido.',
     'portuguese_phone' => 'O campo :attribute tem de ser um número de telefone português válido.',
     'present' => 'O campo :attribute tem de estar presente.',
     'present_if' => 'O campo :attribute tem de estar presente quando :other é :value.',
@@ -214,6 +215,11 @@ return [
         'social_links.*.url' => 'URL da rede social',
         'logo' => 'logótipo',
         'image' => 'imagem',
+        'nif' => 'NIF',
+        'billing_name' => 'nome de faturação',
+        'billing_address' => 'morada de faturação',
+        'billing_postal_code' => 'código postal',
+        'billing_city' => 'localidade',
     ],
 
 ];
