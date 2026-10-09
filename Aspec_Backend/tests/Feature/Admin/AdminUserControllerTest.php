@@ -1057,6 +1057,157 @@ public function admin_cannot_block_an_already_blocked_user(): void
     ]);
 }
 
+#[Test]
+public function admin_can_list_users_without_status_filter(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    User::factory()->pending()->create();
+    User::factory()->approved()->create();
+    User::factory()->create(); // Active por padrão
+    User::factory()->inactive()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->getJson('/api/admin/users')
+        ->assertOk()
+        ->assertJsonPath('success', true)
+        ->assertJsonPath(
+            'message',
+            'Lista de utilizadores obtida com sucesso.'
+        )
+        ->assertJsonCount(5, 'data.items')
+        ->assertJsonPath('data.pagination.current_page', 1)
+        ->assertJsonPath('data.pagination.per_page', 15)
+        ->assertJsonPath('data.pagination.total', 5)
+        ->assertJsonPath('data.pagination.last_page', 1);
+}
+
+#[Test]
+public function admin_can_filter_users_by_account_status(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $usersByStatus = [
+        'Pending' => User::factory()->pending()->create(),
+        'Approved' => User::factory()->approved()->create(),
+        'Active' => User::factory()->create(),
+        'Inactive' => User::factory()->inactive()->create(),
+    ];
+
+    Sanctum::actingAs($admin);
+
+    foreach ($usersByStatus as $status => $expectedUser) {
+        $response = $this->getJson('/api/admin/users?status='.$status);
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(
+                $status === 'Active' ? 2 : 1,
+                'data.items'
+            );
+
+        $listedIds = collect($response->json('data.items'))
+            ->pluck('id')
+            ->all();
+
+        $this->assertContains($expectedUser->id, $listedIds);
+    }
+}
+
+#[Test]
+public function admin_cannot_filter_users_by_unknown_status(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->getJson('/api/admin/users?status=Unknown')
+        ->assertUnprocessable();
+}
+
+#[Test]
+public function unauthenticated_user_cannot_list_admin_users(): void
+{
+    $this->getJson('/api/admin/users')
+        ->assertUnauthorized();
+}
+
+#[Test]
+public function regular_user_cannot_list_admin_users(): void
+{
+    $member = User::factory()->create();
+
+    Sanctum::actingAs($member);
+
+    $this->getJson('/api/admin/users')
+        ->assertForbidden();
+}
+
+#[Test]
+public function admin_user_list_is_paginated(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    User::factory()->count(16)->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->getJson('/api/admin/users')
+        ->assertOk()
+        ->assertJsonCount(15, 'data.items')
+        ->assertJsonPath('data.pagination.current_page', 1)
+        ->assertJsonPath('data.pagination.per_page', 15)
+        ->assertJsonPath('data.pagination.total', 17)
+        ->assertJsonPath('data.pagination.last_page', 2);
+}
+
+#[Test]
+public function admin_can_search_users_within_the_selected_status(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $pendingUser = User::factory()
+        ->pending()
+        ->create();
+
+    \App\Models\MemberProfile::factory()
+        ->for($pendingUser)
+        ->create([
+            'name' => 'Joao Pesquisa',
+            'business_name' => 'Consultoria Exemplo',
+        ]);
+
+    $activeUser = User::factory()->create([
+        'email' => 'joao.active@example.com',
+    ]);
+
+    \App\Models\MemberProfile::factory()
+        ->for($activeUser)
+        ->create([
+            'name' => 'Joao Active',
+            'business_name' => 'Outra Empresa',
+        ]);
+
+    Sanctum::actingAs($admin);
+
+    $this->getJson('/api/admin/users?status=Pending&search=Joao')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.items')
+        ->assertJsonPath('data.items.0.id', $pendingUser->id)
+        ->assertJsonPath('data.pagination.total', 1);
+}
+
 
 
 
