@@ -157,10 +157,15 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        if (
-            ! $user ||
-            ! Hash::check($credentials['password'], $user->password)
-        ) {
+        $passwordHash = $user?->password
+            ?? config('auth.dummy_password_hash');
+
+        $passwordIsValid = Hash::check(
+            $credentials['password'],
+            $passwordHash
+        );
+
+        if (! $user || ! $passwordIsValid) {
             return $this->errorResponse(
                 'Credenciais inválidas. Verifique o seu email e password.',
                 Response::HTTP_UNAUTHORIZED
@@ -240,15 +245,21 @@ class AuthController extends Controller
 
         $user = User::where('email', $credentials['email'])->first();
 
-        if (
-            ! $user ||
-            ! Hash::check($credentials['password'], $user->password)
-        ) {
-            return $this->errorResponse(
-                'Credenciais inválidas. Verifique o seu email e password.',
-                Response::HTTP_UNAUTHORIZED
-            );
-        }
+        $passwordHash = $user?->password
+        ?? config('auth.dummy_password_hash');
+
+        $passwordIsValid = Hash::check(
+            $credentials['password'],
+            $passwordHash
+        );
+
+        if (! $user || ! $passwordIsValid) {
+                return $this->errorResponse(
+                    'Credenciais inválidas. Verifique o seu email e password.',
+                    Response::HTTP_UNAUTHORIZED
+                );
+            }
+
 
         $user = $this->loadUserRelations($user);
         if ($response = $this->accountStatusError($user)) {
