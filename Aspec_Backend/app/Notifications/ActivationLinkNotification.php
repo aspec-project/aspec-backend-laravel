@@ -40,12 +40,13 @@ class ActivationLinkNotification extends Notification implements ShouldQueue
     {
         $trialDays = config('subscription.trial_days');
         $linkDays = config('subscription.activation_link_days');
+        $newLinkUrl = rtrim(config('app.frontend_url'), '/').'/ativacao/novo-link';
 
         return $this->paymentMail($notifiable)
             ->subject('Ative a sua conta ASPEC')
             ->line('A sua candidatura à ASPEC foi aprovada.')
             ->line("Para ativar a conta, indique os dados de faturação e o cartão. Tem {$trialDays} dias de período experimental sem custos; depois, a quota é de {$this->formattedPrice()} € por mês.")
             ->action('Ativar conta', app(SubscriptionService::class)->activationUrl($notifiable))
-            ->line("O link é válido durante {$linkDays} dias. Se expirar, contacte a ASPEC para receber um novo.");
+            ->line("O link é válido durante {$linkDays} dias. Se expirar, peça um novo em {$newLinkUrl}.");
     }
 }

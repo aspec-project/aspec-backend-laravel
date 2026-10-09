@@ -182,6 +182,42 @@ class ActivationLinkTest extends TestCase
     }
 
     #[Test]
+    public function activation_email_tells_the_member_to_request_a_new_link_on_the_frontend(): void
+    {
+        $user = $this->memberWithProfile(User::factory()->approved()->create());
+
+        $text = $this->mailText((new ActivationLinkNotification)->toMail($user));
+
+        $this->assertStringContainsString(self::FRONTEND_URL.'/ativacao/novo-link', $text);
+        $this->assertStringContainsString('peça um novo', $text);
+        $this->assertStringNotContainsString('contacte a ASPEC', $text);
+    }
+
+    #[Test]
+    public function reactivation_email_tells_the_member_to_request_a_new_link_on_the_frontend(): void
+    {
+        $user = $this->memberWithProfile(User::factory()->inactive(InactiveReason::Unpaid)->withBilling()->create());
+
+        $text = $this->mailText((new ReactivationLinkNotification)->toMail($user));
+
+        $this->assertStringContainsString(self::FRONTEND_URL.'/ativacao/novo-link', $text);
+        $this->assertStringContainsString('peça um novo', $text);
+        $this->assertStringNotContainsString('contacte a ASPEC', $text);
+    }
+
+    #[Test]
+    public function new_link_page_in_the_email_does_not_depend_on_a_trailing_slash_in_the_frontend_url(): void
+    {
+        config(['app.frontend_url' => self::FRONTEND_URL.'/']);
+        $user = $this->memberWithProfile(User::factory()->approved()->create());
+
+        $text = $this->mailText((new ActivationLinkNotification)->toMail($user));
+
+        $this->assertStringContainsString(self::FRONTEND_URL.'/ativacao/novo-link', $text);
+        $this->assertStringNotContainsString(self::FRONTEND_URL.'//ativacao', $text);
+    }
+
+    #[Test]
     public function queued_activation_notification_does_not_store_the_signed_link(): void
     {
         $serialized = serialize(new ActivationLinkNotification);

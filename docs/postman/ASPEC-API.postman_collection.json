@@ -5723,7 +5723,7 @@
                 "resend"
               ]
             },
-            "description": "**Público, sem login.** Dois limites de pedidos: **3 / 15 min por IP + email** e **10 / hora por IP** (impede percorrer muitos emails a partir do mesmo IP). Ao passar qualquer um → 429.\n\nPara quando o link expirou ou o email se perdeu. Envia um novo link de ativação a contas **Approved** ou de reativação a contas **Inactive** por falta de pagamento. Outras contas ou emails inexistentes não recebem nada.\n\nResponde **sempre 200 com a mesma mensagem** para qualquer email (inexistente, Active, Pending, Approved…), para não revelar que emails estão registados. O email é enviado em fila, por isso o tempo de resposta também não o revela.\n\nErros: 422 email em falta ou com formato inválido · 429 demasiados pedidos.",
+            "description": "**Público, sem login e sem assinatura** (não é um link do email). Três limites de pedidos (o email conta sem distinguir maiúsculas nem espaços):\n- **5 / dia por email, de qualquer IP** (impede encher a caixa de correio de alguém a partir de muitos IPs). Conta qualquer email válido, exista a conta ou não, e só depois da validação: pedidos inválidos (422) ou já recusados pelos limites por IP não gastam este limite. O 429 deste limite **não traz `Retry-After`** (não revela quando outras pessoas pediram).\n- **3 / 15 min por IP + email** e **10 / hora por IP** (limitador `activation-resend`; impedem repetições rápidas e percorrer muitos emails a partir do mesmo IP). Verificados antes da validação, por isso pedidos inválidos também contam; o 429 traz `Retry-After`.\n\nOrdem: 429 (limites por IP) → 422 (validação) → 429 (limite diário) → 200. O 429 tem o mesmo corpo nos três limites.\n\nPara quando o link expirou ou o email se perdeu (página do frontend `/ativacao/novo-link`, indicada nos emails de ativação e reativação). Envia um novo link de ativação a contas **Approved** ou de reativação a contas **Inactive** por falta de pagamento. Outras contas (Pending, Active, bloqueadas, recusadas, apagadas, administradores) ou emails inexistentes não recebem nada. Os links enviados antes continuam válidos até expirarem.\n\nResponde **sempre 200 com a mesma mensagem** para qualquer email válido, para não revelar que emails estão registados. A procura da conta e o envio do email correm **depois de a resposta sair**, por isso o pedido faz o mesmo trabalho para qualquer email (em produção com PHP-FPM o tempo de resposta não o revela; com `php artisan serve` não há essa garantia). O frontend deve mostrar sempre a mensagem da API.\n\nErros: 422 email em falta ou com formato inválido · 429 demasiados pedidos.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\"\n}",
@@ -5888,7 +5888,7 @@
                 "subscription"
               ]
             },
-            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`).\n\nEstado da subscrição do membro autenticado, para a página \"Conta → Subscrição\":\n- `status`: estado no Stripe: `trialing` (período experimental), `active` (pago), `past_due` (pagamento falhou: período de carência com acesso total; mostrar aviso para atualizar o cartão);\n- `trial_ends_at`: fim do período experimental (ou `null`);\n- `grace_ends_at`: fim do período de carência (só com `past_due`; `null` nos outros casos). Se não houver pagamento até esta data, a conta passa a **Inactive**;\n- `ends_at`: data de fim de uma subscrição cancelada (normalmente `null`);\n- `price` e `billing` (dados de faturação do próprio membro).\n\nNão inclui a data da próxima cobrança (obrigava a chamar o Stripe em cada pedido).\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador)."
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem limite de pedidos (só lê a base de dados).\n\nEstado da subscrição do membro autenticado, para a página \"Conta → Subscrição\" (`/conta/subscricao`). Responde só com **dados locais** (mantidos pelos webhooks do Stripe), **sem chamar o Stripe**: rápido e funciona mesmo com o Stripe em baixo.\n\nSubscrição mostrada: a **mais recente em curso** (trial, ativa ou em carência); se não houver nenhuma em curso, a mais recente de todas (ex.: só uma cancelada).\n\n- `status`: estado no Stripe: `trialing` (período experimental), `active` (pago), `past_due` (pagamento falhou: período de carência com acesso total), `canceled`;\n- `trial_ends_at`: fim do período experimental **desta subscrição** (ou `null`);\n- `grace_ends_at`: fim do período de carência (só com `past_due`). Se não houver pagamento até esta data, a conta passa a **Inactive**. **Por agora é sempre `null`** (o período de carência ainda não está implementado): o frontend deve mostrar o aviso para atualizar o cartão pelo **`status === 'past_due'`**, não por esta data;\n- `ends_at`: data de fim de uma subscrição cancelada (normalmente `null`);\n- `price` e `billing` (dados de faturação do próprio membro).\n\nDatas em ISO 8601. Não inclui a data da próxima cobrança nem o cartão (o portal de faturação mostra-o). Nunca expõe ids do Stripe nem ids internos.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador)."
           },
           "response": [
             {
@@ -6074,7 +6074,7 @@
                 "billing-portal"
               ]
             },
-            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body.\n\nCria uma sessão do **Stripe Billing Portal** e devolve `data.url`. O frontend redireciona o browser para lá; o membro atualiza o cartão (ex.: durante o período de carência) e o Stripe volta a `{FRONTEND_URL}/conta/subscricao`. O cancelamento da subscrição no portal está desligado até o cliente decidir.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição · 502 falha a contactar o Stripe."
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`: é um POST porque cria uma sessão no Stripe.\n\nCria uma sessão do **Stripe Billing Portal** e devolve `data.url`. O frontend redireciona logo o browser para lá (`window.location = url`; o URL é de uso imediato e de curta duração, não guardar). O membro atualiza o cartão (ex.: durante o período de carência) e o Stripe volta a `{FRONTEND_URL}/conta/subscricao`. No portal só está ligado **atualizar o cartão**: cancelar, mudar de plano, editar dados do cliente e histórico de faturas estão desligados (as faturas fiscais são enviadas por email).\n\n**Limite:** `billing-portal`, 10 pedidos por minuto por utilizador (cada pedido chama o Stripe).\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição ou sem cliente Stripe (ex.: administrador) · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
           },
           "response": [
             {
@@ -6212,6 +6212,44 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Não existe subscrição.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/billing-portal",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "billing-portal"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "502 Serviço de pagamentos indisponível",

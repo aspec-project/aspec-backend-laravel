@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
+use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
+use App\Http\Controllers\Api\Payments\SubscriptionController;
 
 
 
@@ -30,6 +32,9 @@ Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
+
+Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
+    ->middleware('throttle:activation-resend')->name('account-activations.resend');
 
 // Públicas: a autorização é a assinatura do link do email (relativa, porque o link aponta para o frontend).
 Route::middleware('throttle:account-activation')->group(function () {
@@ -69,5 +74,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:portfolio-upload');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
+    Route::get('/subscription', [SubscriptionController::class, 'show']);
+    Route::post('/subscription/billing-portal', [BillingPortalSessionController::class, 'store'])->middleware('throttle:billing-portal');
 });
 

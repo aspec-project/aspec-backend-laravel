@@ -5,20 +5,30 @@ namespace App\Http\Controllers\Api\Payments;
 use App\Exceptions\ActivationLinkNoLongerValidException;
 use App\Exceptions\SubscriptionInProgressException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ResendActivationLinkRequest;
 use App\Http\Requests\StartActivationRequest;
 use App\Http\Resources\AccountActivationResource;
+use App\Jobs\ResendActivationLinkJob;
 use App\Models\User;
 use App\Services\Payments\SubscriptionService;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Ativação e reativação da conta pelo link do email, sem login (rotas com signed:relative).
  * O utilizador vem como string e é procurado aqui, sem route model binding: assim a assinatura
- * é sempre validada primeiro e um link forjado dá 403, nunca 404.
+ * é sempre validada primeiro e um link forjado dá 403, nunca 404. O pedido de um novo link
+ * (resend) é público e sem assinatura.
  */
 class AccountActivationController extends Controller
 {
+    private const DAILY_RESEND_LIMIT = 5;
+
+    private const DAILY_RESEND_DECAY_SECONDS = 86400;
+
     /**
      * Valida o link e devolve o que a página de ativação mostra.
      *
@@ -61,6 +71,34 @@ class AccountActivationController extends Controller
         return $this->successResponse(
             ['checkout_url' => $checkoutUrl],
             'A redirecionar para o pagamento.',
+            Response::HTTP_OK
+        );
+    }
+
+    /**
+     * Pede um novo link de ativação/reativação. Responde sempre 200 com a mesma mensagem, exista
+     * a conta ou não, para não revelar quem é membro; a procura e o envio correm depois da resposta.
+     * No máximo 5 pedidos por email por dia (qualquer IP), contados depois dos limites por IP;
+     * 429 sem Retry-After para não revelar quando outros pediram.
+     *
+     * @throws ThrottleRequestsException Se o limite diário do email estiver esgotado.
+     */
+    public function resend(ResendActivationLinkRequest $request): JsonResponse
+    {
+        $email = $request->validated('email');
+        $key = 'activation-resend-email:'.Str::lower(trim($email));
+
+        if (RateLimiter::tooManyAttempts($key, self::DAILY_RESEND_LIMIT)) {
+            throw new ThrottleRequestsException;
+        }
+
+        RateLimiter::hit($key, self::DAILY_RESEND_DECAY_SECONDS);
+
+        ResendActivationLinkJob::dispatchAfterResponse($email);
+
+        return $this->successResponse(
+            null,
+            'Se a conta existir e aguardar ativação, enviámos um novo link.',
             Response::HTTP_OK
         );
     }

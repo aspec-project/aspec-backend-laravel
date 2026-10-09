@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Cashier\Billable;
+use Laravel\Cashier\Subscription;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
@@ -133,6 +134,19 @@ class User extends Authenticatable
             ->active()
             ->when($exceptStripeId, fn ($query) => $query->where('stripe_id', '!=', $exceptStripeId))
             ->exists();
+    }
+
+    /**
+     * Subscrição a mostrar ao membro: a mais recente em curso; se não houver, a mais recente de
+     * todas. Não usa o subscription('default') do Cashier, que devolve só a mais recente: um
+     * duplicado cancelado pelo webhook, criado depois, escondia a subscrição verdadeira. Desempata
+     * pelo id porque o created_at pode coincidir no mesmo segundo.
+     */
+    public function currentSubscription(): ?Subscription
+    {
+        $query = fn () => $this->subscriptions()->where('type', 'default')->orderByDesc('id');
+
+        return $query()->active()->first() ?? $query()->first();
     }
 
     /**
