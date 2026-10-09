@@ -10,6 +10,7 @@ use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use App\Enums\InactiveReason;
+use Illuminate\Database\Eloquent\Builder;
 
 class AdminUserController extends Controller
 {
@@ -215,6 +216,47 @@ class AdminUserController extends Controller
         * - sem subscrição: Approved + link de ativação;
         * - com subscrição: Inactive + unpaid + link de reativação.
         */
+    }
+
+
+    public function index(Request $request): JsonResponse
+    {
+        $request->validate([
+            'status' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'exists:account_statuses,name',
+            ],
+        ]);
+
+        $query = User::query()
+            ->with(['role', 'accountStatus']);
+
+        if ($request->filled('status')) {
+            $status = $request->input('status');
+
+            $query->whereHas(
+                'accountStatus',
+                fn (Builder $statusQuery) => $statusQuery->where('name', $status)
+            );
+        }
+
+        $users = $query
+            ->orderBy('email')
+            ->paginate(15);
+
+        return $this->successResponse([
+            'items' => UserResource::collection(
+                $users->getCollection()
+            )->resolve($request),
+            'pagination' => [
+                'current_page' => $users->currentPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'last_page' => $users->lastPage(),
+            ],
+        ], 'Lista de utilizadores obtida com sucesso.');
     }
 
     
