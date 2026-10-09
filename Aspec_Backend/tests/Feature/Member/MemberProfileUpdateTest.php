@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -838,5 +839,70 @@ class MemberProfileUpdateTest extends TestCase
         $this->putJson(self::URL, ['business_name' => 'Nova Lda'])
             ->assertNotFound()
             ->assertExactJson(['success' => false, 'message' => 'Perfil de membro não encontrado.']);
+    }
+
+    private function createPasswordResetToken(User $user): void
+    {
+        Password::broker()->createToken($user);
+    }
+
+    #[Test]
+    public function email_change_deletes_password_reset_tokens_of_the_old_email(): void
+    {
+        $user = $this->memberWithProfile();
+        $oldEmail = $user->email;
+        $this->createPasswordResetToken($user);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertOk();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $oldEmail]);
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+    }
+
+    #[Test]
+    public function email_change_keeps_password_reset_tokens_of_other_users(): void
+    {
+        $user = $this->memberWithProfile();
+        $other = $this->memberWithProfile();
+        $this->createPasswordResetToken($user);
+        $this->createPasswordResetToken($other);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertOk();
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $other->email]);
+        $this->assertDatabaseCount('password_reset_tokens', 1);
+    }
+
+    #[Test]
+    public function update_without_email_change_keeps_password_reset_tokens(): void
+    {
+        $user = $this->memberWithProfile();
+        $this->createPasswordResetToken($user);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => '919999999'])->assertOk();
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+
+        $this->putJson(self::URL, ['email' => $user->email, 'current_password' => 'password'])->assertOk();
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+    }
+
+    #[Test]
+    public function failed_email_change_keeps_password_reset_tokens(): void
+    {
+        $user = $this->memberWithProfile();
+        $this->createPasswordResetToken($user);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'errada123'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['current_password']);
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
     }
 }

@@ -38,7 +38,8 @@ class MemberProfileController extends Controller
      * Atualiza parcialmente o perfil do membro autenticado e os dados de conta (email, phone).
      * Campos ausentes ficam inalterados; business_hours e social_links, se enviados, substituem a lista atual (sync).
      * Campos sensíveis (role_id, account_status_id, password, ...) nunca são aceites.
-     * Mudar o email fecha as outras sessões (tokens) e mantém a atual.
+     * Mudar o email fecha as outras sessões (tokens), mantém a atual e apaga os tokens de
+     * reposição de password do email antigo (senão voltariam a valer se esse email voltasse a existir).
      */
     public function update(UpdateMemberProfileRequest $request): JsonResponse
     {
@@ -63,9 +64,13 @@ class MemberProfileController extends Controller
                 'address',
             ]));
 
+            $oldEmail = $user->email;
+
             $user->update($request->safe()->only(['email', 'phone']));
 
             if ($user->wasChanged('email')) {
+                $user->deletePasswordResetTokens($oldEmail);
+
                 $currentToken = $user->currentAccessToken();
 
                 $user->tokens()
