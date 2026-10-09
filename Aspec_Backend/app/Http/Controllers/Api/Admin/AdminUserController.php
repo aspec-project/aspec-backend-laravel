@@ -219,6 +219,12 @@ class AdminUserController extends Controller
     }
 
 
+    /**
+     * List users with optional filtering by account status.
+     *
+     * @param Request $request The incoming HTTP request containing optional query parameters.
+     * @return JsonResponse A JSON response containing the list of users and pagination details.
+     */
     public function index(Request $request): JsonResponse
     {
         $request->validate([
