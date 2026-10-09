@@ -18,6 +18,9 @@ use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use App\Services\Payments\SubscriptionService;
 use Mockery\MockInterface;
+use App\Jobs\CancelStripeSubscriptionJob;
+use Illuminate\Support\Facades\Queue;
+use Stripe\Exception\ApiConnectionException;
 
 class AdminUserControllerTest extends TestCase
 {
@@ -1206,6 +1209,63 @@ public function admin_can_search_users_within_the_selected_status(): void
         ->assertJsonCount(1, 'data.items')
         ->assertJsonPath('data.items.0.id', $pendingUser->id)
         ->assertJsonPath('data.pagination.total', 1);
+}
+
+#[Test]
+public function blocking_user_expires_an_open_checkout_session(): void
+{
+    $admin = User::factory()->admin()->create();
+    $user = User::factory()->create();
+    $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+
+    $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+        $mock->shouldReceive('expireCheckout')
+            ->once()
+            ->with('cs_test_open');
+    });
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$user->id}/block")
+        ->assertOk();
+
+    $this->assertSame('Inactive', $user->fresh()->accountStatus->name);
+    $this->assertNull($user->fresh()->stripe_checkout_session_id);
+}
+
+#[Test]
+public function stripe_failure_does_not_prevent_blocking_and_queues_a_retry(): void
+{
+    Queue::fake();
+
+    $admin = User::factory()->admin()->create();
+    $user = User::factory()->create();
+    $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+
+    $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+        $mock->shouldReceive('expireCheckout')
+            ->once()
+            ->with('cs_test_open')
+            ->andThrow(ApiConnectionException::factory('falha Stripe'));
+    });
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$user->id}/block")
+        ->assertOk()
+        ->assertJsonPath('data.account_status.name', 'Inactive');
+
+    $this->assertSame(
+        InactiveReason::Blocked,
+        $user->fresh()->inactive_reason
+    );
+
+    Queue::assertPushed(
+        CancelStripeSubscriptionJob::class,
+        fn (CancelStripeSubscriptionJob $job) =>
+            $job->userId === $user->id
+            && $job->checkoutSessionId === 'cs_test_open'
+    );
 }
 
 
