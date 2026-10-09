@@ -152,6 +152,8 @@ class AppServiceProvider extends ServiceProvider
             );
         }
 
+
+        // Registo: 5/min por IP.
         RateLimiter::for(
             'auth-register',
             fn (Request $request) => Limit::perMinute(5)
@@ -163,6 +165,14 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'account-activation',
             fn (Request $request) => Limit::perMinute(20)->by($request->ip())
+        );
+
+
+
+        // Reset password: 5/min por IP.
+        RateLimiter::for(
+            'auth-reset-password',
+            fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );
     }
 }

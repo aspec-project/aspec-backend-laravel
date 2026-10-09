@@ -20,7 +20,9 @@ use Laravel\Sanctum\PersonalAccessToken;
 use App\Enums\InactiveReason;
 use App\Http\Requests\ForgotPasswordRequest;
 use Illuminate\Support\Facades\Password;
-
+use App\Http\Requests\ResetPasswordRequest;
+use App\Notifications\PasswordChangedNotification;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -319,6 +321,69 @@ class AuthController extends Controller
         return $this->successResponse(
             null,
             'Se o email estiver registado e a conta ativa, receberá um link para redefinir a password.'
+        );
+    }
+
+
+
+    /*
+     * Redefine a password do utilizador, se o token for válido e a conta estiver ativa.
+     *
+     * @param ResetPasswordRequest $request Pedido HTTP contendo o email, token e nova password.
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso ou erro.
+     */
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        $credentials = $request->validated();
+        $resetUser = null;
+
+        $status = DB::transaction(function () use ($credentials, &$resetUser): string {
+            $user = User::query()
+                ->with('accountStatus')
+                ->where('email', $credentials['email'])
+                ->lockForUpdate()
+                ->first();
+
+            if (! $user || $user->accountStatus?->name !== 'Active') {
+                return Password::INVALID_TOKEN;
+            }
+
+            $resetUser = $user;
+
+            return Password::broker()->reset(
+                $credentials,
+                function (User $user, string $password): void {
+                    $user->forceFill([
+                        'password' => $password,
+                        'remember_token' => Str::random(60),
+                    ])->save();
+
+                    $user->tokens()->delete();
+
+                    DB::table(config('session.table'))
+                        ->where('user_id', $user->getAuthIdentifier())
+                        ->delete();
+                }
+            );
+        });
+
+        if ($status !== Password::PASSWORD_RESET) {
+            return $this->errorResponse(
+                'Não foi possível redefinir a password. O token é inválido ou expirou.',
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
+        try {
+            $resetUser->notify(new PasswordChangedNotification);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return $this->successResponse(
+            null,
+            'Password redefinida com sucesso. Inicie sessão novamente.',
+            Response::HTTP_OK
         );
     }
 
