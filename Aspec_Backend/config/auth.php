@@ -20,6 +20,11 @@ return [
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),
     ],
 
+    'dummy_password_hash' => env(
+        'AUTH_DUMMY_PASSWORD_HASH',
+        '$2y$12$9zawJmQXGw52SgBGqcT0D.81RMqaGQkpDyAgu9MWHBW8Nn0zuztRm'
+    ),
+
     /*
     |--------------------------------------------------------------------------
     | Authentication Guards

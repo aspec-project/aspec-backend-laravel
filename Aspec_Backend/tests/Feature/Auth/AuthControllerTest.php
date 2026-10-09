@@ -677,4 +677,26 @@ class AuthControllerTest extends TestCase
 
         $this->assertAuthenticatedAs($user, 'web');
     }
+
+    #[Test]
+    public function token_login_fails_with_unknown_email(): void
+    {
+        $response = $this->postJson('/api/auth/token', [
+            'email' => 'nao-existe@example.com',
+            'password' => 'password',
+        ]);
+
+        $response
+            ->assertUnauthorized()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Credenciais inválidas. Verifique o seu email e password.',
+            ]);
+
+        $this->assertGuest('web');
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'name' => 'postman',
+        ]);
+    }
 }
