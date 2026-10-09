@@ -36,6 +36,22 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
   A linha em `invoices` passa a `issued` e o `storage/logs/laravel.log` tem "Fatura emitida (driver log)". Para limpar: `$u->subscription('default')->cancelNow(); $u->anonymizeAndDelete();` (a fatura fica: obrigação fiscal).
 - **Fila:** com `QUEUE_CONNECTION=database`, sem `php artisan queue:work` as faturas ficam `pending`.
 - **Pagamentos falhados (dashboard do Stripe → Billing → definições de pagamentos falhados):** depois das tentativas automáticas (Smart Retries, ≥ 7 dias), escolher **cancelar a subscrição**. Assim o Stripe deixa de cobrar e o webhook `customer.subscription.deleted` atualiza a subscrição local.
+- **Billing Portal (atualizar o cartão):** `STRIPE_BILLING_PORTAL_CONFIGURATION` é **obrigatória fora de `local`/`testing`** (sem ela o portal responde 500 e a exceção fica no log); em `local` é opcional (usa a configuração por omissão do dashboard), mas convém configurá-la para a demo mostrar só "atualizar cartão". O membro abre o portal com `POST /api/subscription/billing-portal` e volta a `{FRONTEND_URL}/conta/subscricao`. Passo a passo (modo de teste; repetir em live com as chaves live, porque as configurações não são partilhadas entre modos):
+  - **Opção A — Stripe CLI (recomendada, cria uma configuração própria):**
+    ```bash
+    stripe billing_portal configurations create \
+      -d "features[payment_method_update][enabled]=true" \
+      -d "features[subscription_cancel][enabled]=false" \
+      -d "features[subscription_update][enabled]=false" \
+      -d "features[customer_update][enabled]=false" \
+      -d "features[invoice_history][enabled]=false" \
+      -d "business_profile[headline]=ASPEC — atualizar o cartão"
+    ```
+    Copiar o `id` (`bpc_…`) da resposta.
+  - **Opção B — dashboard:** Settings → Billing → Customer portal: ligar só **atualizar o método de pagamento**; desligar **cancelar subscrição**, **mudar de plano**, **editar dados do cliente** (email, morada, NIF) e **histórico de faturas**; guardar. Obter o id com `stripe billing_portal configurations list` (a que tem `"is_default": true`). Nota: se alguém mudar a configuração por omissão no dashboard, este id muda de opções também, por isso é preferível a opção A.
+  - Pôr `STRIPE_BILLING_PORTAL_CONFIGURATION=bpc_…` no `.env` e correr `php artisan config:clear`.
+  - Confirmar: `stripe billing_portal configurations retrieve bpc_…` → só `payment_method_update.enabled = true`.
+  - Porquê desligar o resto: as faturas fiscais saem da InvoiceExpress com os dados de faturação guardados na plataforma, por isso alterá-los no Stripe não mudava as faturas; o cancelamento pelo próprio membro está à espera da resposta do cliente.
 - **Cartões de teste:** `4242 4242 4242 4242` (sucesso), `4000 0000 0000 0341` (é aceite mas a cobrança falha → período de carência); qualquer data futura e qualquer CVC.
 - **Test clocks** (dashboard do Stripe) para avançar o trial e a carência numa demonstração.
 - **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e `php artisan schedule:work` (fim da carência).
@@ -50,3 +66,5 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 5. Pagar com o cartão `4242 4242 4242 4242`. O webhook `customer.subscription.created` passa a conta a **Active** em segundos (com o fim do período experimental em `users.trial_ends_at`) e envia o email de boas-vindas; o login passa a funcionar.
 
 O link vale 7 dias (`ACTIVATION_LINK_DAYS` / `REACTIVATION_LINK_DAYS`) e pode ser aberto várias vezes: repetir o pedido com um Checkout ainda aberto devolve o mesmo pagamento. Desbloquear uma conta também envia o link (ativação, se nunca subscreveu; reativação, sem novo período experimental, se já subscreveu).
+
+**Reenviar o link:** se o link expirou ou o email se perdeu, a página `/ativacao/novo-link` do frontend pede o email e chama `POST /api/account-activations/resend` (público). Contas Approved recebem um novo link de ativação e contas inativas por falta de pagamento um de reativação; a resposta é sempre a mesma, exista a conta ou não. Limites: no máximo 5 reenvios por email por dia (de qualquer IP), 3 em 15 min por email+IP e 10/h por IP. Para testar: pedir o reenvio para o email de uma conta Approved e abrir o novo link no `storage/logs/laravel.log` (com `php artisan queue:work` a correr); com um email inexistente a resposta é igual e nada aparece no log.
