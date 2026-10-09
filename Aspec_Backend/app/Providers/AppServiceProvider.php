@@ -152,6 +152,13 @@ class AppServiceProvider extends ServiceProvider
             );
         }
 
+        // Limite por IP para pedidos de "forgot password".
+        RateLimiter::for(
+            'auth-forgot-password-ip',
+            fn (Request $request) => Limit::perHour(20)
+                ->by($request->ip())
+        );
+
 
         // Registo: 5/min por IP.
         RateLimiter::for(

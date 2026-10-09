@@ -130,4 +130,21 @@ class ForgotPasswordTest extends TestCase
         $this->postJson(self::URL, ['email' => 'x@example.com'])
             ->assertTooManyRequests();
     }
+
+
+    #[Test]
+    public function requests_from_one_ip_are_limited_across_different_emails(): void
+    {
+        Queue::fake();
+
+        for ($i = 1; $i <= 20; $i++) {
+            $this->postJson(self::URL, [
+                'email' => "pessoa{$i}@example.com",
+            ])->assertOk();
+        }
+
+        $this->postJson(self::URL, [
+            'email' => 'pessoa21@example.com',
+        ])->assertTooManyRequests();
+    }
 }
