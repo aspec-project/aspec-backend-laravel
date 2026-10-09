@@ -1029,6 +1029,44 @@ public function admin_user_list_is_paginated(): void
         ->assertJsonPath('data.pagination.last_page', 2);
 }
 
+#[Test]
+public function admin_can_search_users_within_the_selected_status(): void
+{
+    $admin = User::factory()
+        ->admin()
+        ->create();
+
+    $pendingUser = User::factory()
+        ->pending()
+        ->create();
+
+    \App\Models\MemberProfile::factory()
+        ->for($pendingUser)
+        ->create([
+            'name' => 'Joao Pesquisa',
+            'business_name' => 'Consultoria Exemplo',
+        ]);
+
+    $activeUser = User::factory()->create([
+        'email' => 'joao.active@example.com',
+    ]);
+
+    \App\Models\MemberProfile::factory()
+        ->for($activeUser)
+        ->create([
+            'name' => 'Joao Active',
+            'business_name' => 'Outra Empresa',
+        ]);
+
+    Sanctum::actingAs($admin);
+
+    $this->getJson('/api/admin/users?status=Pending&search=Joao')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.items')
+        ->assertJsonPath('data.items.0.id', $pendingUser->id)
+        ->assertJsonPath('data.pagination.total', 1);
+}
+
 
 
 

@@ -220,9 +220,9 @@ class AdminUserController extends Controller
 
 
     /**
-     * List users with optional filtering by account status.
+     * List users with optional filtering by status and search term.
      *
-     * @param Request $request The incoming HTTP request containing optional query parameters.
+     * @param Request $request The incoming HTTP request containing optional filters.
      * @return JsonResponse A JSON response containing the list of users and pagination details.
      */
     public function index(Request $request): JsonResponse
@@ -233,6 +233,17 @@ class AdminUserController extends Controller
                 'nullable',
                 'string',
                 'exists:account_statuses,name',
+            ],
+            'search' => [
+                'sometimes',
+                'nullable',
+                'string',
+                'max:255',
+            ],
+            'page' => [
+                'sometimes',
+                'integer',
+                'min:1',
             ],
         ]);
 
@@ -246,6 +257,23 @@ class AdminUserController extends Controller
                 'accountStatus',
                 fn (Builder $statusQuery) => $statusQuery->where('name', $status)
             );
+        }
+
+        $search = trim((string) $request->input('search', ''));
+
+        if ($search !== '') {
+            $query->where(function (Builder $userQuery) use ($search) {
+                $userQuery
+                    ->where('email', 'like', "%{$search}%")
+                    ->orWhereHas(
+                        'memberProfile',
+                        function (Builder $profileQuery) use ($search) {
+                            $profileQuery
+                                ->where('name', 'like', "%{$search}%")
+                                ->orWhere('business_name', 'like', "%{$search}%");
+                        }
+                    );
+            });
         }
 
         $users = $query
