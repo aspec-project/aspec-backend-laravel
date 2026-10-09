@@ -138,6 +138,7 @@ class AppServiceProvider extends ServiceProvider
         $authActions = [
         'auth-login',
         'auth-token',
+        'auth-forgot-password',
         ];
 
         foreach ($authActions as $action) {
