@@ -9,6 +9,8 @@ use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
@@ -399,5 +401,29 @@ class UserModelTest extends TestCase
         $this->expectException(\ValueError::class);
 
         $user->deactivate('invalid-reason');
+    }
+
+    #[Test]
+    public function delete_password_reset_tokens_uses_given_email_or_current_email(): void
+    {
+        $user = User::factory()->create();
+        $other = User::factory()->create();
+        Password::broker()->createToken($user);
+        Password::broker()->createToken($other);
+        DB::table('password_reset_tokens')->insert([
+            'email' => 'antigo@exemplo.pt',
+            'token' => Hash::make('token'),
+            'created_at' => now(),
+        ]);
+
+        $user->deletePasswordResetTokens('antigo@exemplo.pt');
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'antigo@exemplo.pt']);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+
+        $user->deletePasswordResetTokens();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $other->email]);
     }
 }

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
 use RuntimeException;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -602,5 +603,55 @@ class UpdatePasswordTest extends TestCase
         Sanctum::actingAs($this->makeUser());
 
         $this->patchJson(self::URL, $this->validPayload())->assertMethodNotAllowed();
+    }
+
+    // Reposição de password pendente
+
+    private function createPasswordResetToken(User $user): string
+    {
+        return Password::broker()->createToken($user);
+    }
+
+    #[Test]
+    public function pending_password_reset_tokens_are_deleted_after_password_change(): void
+    {
+        $user = $this->makeUser();
+        $resetToken = $this->createPasswordResetToken($user);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, $this->validPayload())->assertOk();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->email]);
+        $this->assertFalse(Password::broker()->tokenExists($user->fresh(), $resetToken));
+    }
+
+    #[Test]
+    public function other_users_password_reset_tokens_are_kept_after_password_change(): void
+    {
+        $user = $this->makeUser();
+        $other = $this->makeUser();
+        $this->createPasswordResetToken($user);
+        $otherResetToken = $this->createPasswordResetToken($other);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, $this->validPayload())->assertOk();
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $other->email]);
+        $this->assertTrue(Password::broker()->tokenExists($other, $otherResetToken));
+    }
+
+    #[Test]
+    public function password_reset_tokens_are_kept_when_current_password_is_wrong(): void
+    {
+        $user = $this->makeUser();
+        $resetToken = $this->createPasswordResetToken($user);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, $this->validPayload(['current_password' => 'WrongSecret000']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['current_password']);
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
+        $this->assertTrue(Password::broker()->tokenExists($user, $resetToken));
     }
 }

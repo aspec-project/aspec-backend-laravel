@@ -174,6 +174,7 @@ class User extends Authenticatable
      * Anonimiza e apaga (soft delete) o utilizador e, se existir, o perfil de membro.
      * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
      * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
+     * Apaga os tokens de reposição de password do email original (dado pessoal).
      * Limpa os dados de faturação e o estado da subscrição; o motivo passa a Deleted (substitui
      * qualquer outro, mesmo Blocked, porque a conta deixa de existir).
      * Apaga o cliente no Stripe antes da transação (sem a prender à espera da rede; se a transação
@@ -211,6 +212,9 @@ class User extends Authenticatable
 
                 $profile->delete();
             }
+
+            // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
+            $this->deletePasswordResetTokens();
 
             $this->forceFill([
                 'email'                      => 'deleted_' . Str::uuid() . '@aspec.local',
@@ -260,6 +264,17 @@ class User extends Authenticatable
             Storage::disk('public')->deleteDirectory("logos/{$this->id}");
             Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
         });
+    }
+
+    /**
+     * Apaga os tokens de reposição de password do email indicado (por omissão, o atual).
+     * Recebe o email porque, numa mudança de email, os tokens a apagar são os do email antigo.
+     */
+    public function deletePasswordResetTokens(?string $email = null): void
+    {
+        DB::table(config('auth.passwords.users.table'))
+            ->where('email', $email ?? $this->email)
+            ->delete();
     }
 
     /**

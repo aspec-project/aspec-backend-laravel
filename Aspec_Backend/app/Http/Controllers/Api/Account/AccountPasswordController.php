@@ -17,6 +17,7 @@ class AccountPasswordController extends Controller
      * e revoga todos os seus tokens e sessões, incluindo a atual: tem de iniciar sessão novamente.
      * As outras sessões do browser terminam no pedido seguinte (AuthenticateSession do Sanctum
      * compara o hash da password); a sessão atual termina aqui.
+     * Invalida pedidos de reposição de password pendentes (um link de reposição deixa de valer).
      * Envia um email de aviso ao próprio utilizador; o limite de falhas está no Form Request.
      */
     public function update(UpdatePasswordRequest $request): JsonResponse
@@ -27,6 +28,7 @@ class AccountPasswordController extends Controller
         DB::transaction(function () use ($request, $user) {
             $user->update(['password' => $request->validated('password')]);
             $user->tokens()->delete();
+            $user->deletePasswordResetTokens();
         });
 
         // Pedidos SPA: termina a sessão atual. Sem isto, o AuthenticateSession guardava o hash
