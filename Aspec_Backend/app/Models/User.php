@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\ResetPasswordNotification;
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
@@ -325,6 +326,17 @@ class User extends Authenticatable
         });
     }
     
+
+    /**
+     * Envia a notificação de redefinição de password.
+     *
+     * @param string $token
+     */
+    
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
+    }
 
 
 

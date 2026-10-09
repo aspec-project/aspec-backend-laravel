@@ -18,6 +18,8 @@ use App\Http\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Laravel\Sanctum\PersonalAccessToken;
 use App\Enums\InactiveReason;
+use App\Http\Requests\ForgotPasswordRequest;
+use Illuminate\Support\Facades\Password;
 
 
 class AuthController extends Controller
@@ -289,6 +291,34 @@ class AuthController extends Controller
             new UserResource($user),
             'Utilizador autenticado obtido com sucesso.',
             Response::HTTP_OK
+        );
+    }
+
+
+
+    /**
+     * Envia um link de redefinição de password para o email fornecido, se a conta estiver ativa.
+     *
+     * @param ForgotPasswordRequest $request Pedido HTTP contendo o email do utilizador.
+     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso indicando que o link foi enviado.
+     */
+    
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $email = $request->validated('email');
+
+        $isActive = User::where('email', $email)
+            ->whereHas('accountStatus', fn ($q) => $q->where('name', 'Active'))
+            ->exists();
+
+        // Só gera token e envia email a contas Active; a resposta é igual em todos os casos.
+        if ($isActive) {
+            Password::broker()->sendResetLink(['email' => $email]);
+        }
+
+        return $this->successResponse(
+            null,
+            'Se o email estiver registado e a conta ativa, receberá um link para redefinir a password.'
         );
     }
 
