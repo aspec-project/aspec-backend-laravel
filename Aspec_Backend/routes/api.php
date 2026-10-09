@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
+use App\Http\Controllers\Api\Payments\SubscriptionController;
 
 
 
@@ -72,5 +73,6 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:portfolio-upload');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
+    Route::get('/subscription', [SubscriptionController::class, 'show']);
 });
 
