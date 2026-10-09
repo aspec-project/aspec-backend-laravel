@@ -6629,7 +6629,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/users?status=Pending&search=&page=1",
+              "raw": "{{base_url}}/api/admin/users?status=Pending&search=consultoria&page=1",
               "host": [
                 "{{base_url}}"
               ],
@@ -6645,7 +6645,7 @@
                 },
                 {
                   "key": "search",
-                  "value": ""
+                  "value": "consultoria"
                 },
                 {
                   "key": "page",
@@ -6653,8 +6653,46 @@
                 }
               ]
             },
-            "description": "Filtros opcionais: `status` (Pending, Active, Inactive), `search` (nome, nome comercial, email), `page`."
+            "description": "Lista utilizadores de forma paginada. Filtros opcionais: `status` (Pending, Approved, Active ou Inactive), `search` (email, nome ou nome comercial) e `page` (número da página). Cada página contém 15 utilizadores. Sem `status` ou `search`, devolve a lista sem esses filtros."
           },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status HTTP esperado\", function () {",
+                  "    pm.expect([200, 401, 403, 422]).to.include(pm.response.code);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test(\"Resposta contém lista paginada\", function () {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body.success).to.eql(true);",
+                  "        pm.expect(body.message).to.eql(\"Lista de utilizadores obtida com sucesso.\");",
+                  "        pm.expect(body.data).to.have.property(\"items\");",
+                  "        pm.expect(body.data).to.have.property(\"pagination\");",
+                  "        pm.expect(body.data.pagination.per_page).to.eql(15);",
+                  "    });",
+                  "",
+                  "    pm.test(\"Itens incluem role e estado da conta\", function () {",
+                  "        const items = pm.response.json().data.items;",
+                  "        if (items.length > 0) {",
+                  "            pm.expect(items[0]).to.have.property(\"role\");",
+                  "            pm.expect(items[0]).to.have.property(\"account_status\");",
+                  "        }",
+                  "    });",
+                  "} else if ([401, 403, 422].includes(pm.response.code)) {",
+                  "    pm.test(\"Erro usa o envelope JSON da API\", function () {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body.success).to.eql(false);",
+                  "        pm.expect(body).to.have.property(\"message\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
           "response": [
             {
               "name": "200 Utilizadores",
@@ -6667,7 +6705,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=&page=1",
+                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=consultoria&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -6683,7 +6721,7 @@
                     },
                     {
                       "key": "search",
-                      "value": ""
+                      "value": "consultoria"
                     },
                     {
                       "key": "page",
@@ -6702,7 +6740,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n        \"email\": \"joao.silva@silvaconsultoria.pt\",\n        \"phone\": \"912345678\",\n        \"status\": \"Pending\",\n        \"created_at\": \"2026-09-28T14:02:00+01:00\",\n        \"profile\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"João Silva\",\n          \"business_name\": \"Silva Consultoria Unipessoal\",\n          \"sector\": {\n            \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n            \"name\": \"Tecnologias de Informação (TI)\"\n          },\n          \"location\": {\n            \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 1,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n        \"email\": \"joao.silva@silvaconsultoria.pt\",\n        \"phone\": \"912345678\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Pending\"\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 1,\n      \"last_page\": 1\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -6715,7 +6753,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=&page=1",
+                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=consultoria&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -6731,7 +6769,7 @@
                     },
                     {
                       "key": "search",
-                      "value": ""
+                      "value": "consultoria"
                     },
                     {
                       "key": "page",
@@ -6763,7 +6801,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=&page=1",
+                  "raw": "{{base_url}}/api/admin/users?status=Pending&search=consultoria&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -6779,7 +6817,7 @@
                     },
                     {
                       "key": "search",
-                      "value": ""
+                      "value": "consultoria"
                     },
                     {
                       "key": "page",
@@ -6798,7 +6836,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
             }
           ]
         },
