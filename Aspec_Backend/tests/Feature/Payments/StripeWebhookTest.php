@@ -6,11 +6,13 @@ use App\Contracts\InvoiceService;
 use App\Enums\InactiveReason;
 use App\Enums\InvoiceStatus;
 use App\Jobs\IssueInvoiceJob;
+use App\Models\AccountStatus;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Notifications\SubscriptionActivatedNotification;
 use App\Services\Payments\StripeCustomerService;
 use App\Services\Payments\StripeSubscriptionService;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +29,9 @@ use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Stripe\ApiRequestor;
 use Stripe\Exception\ApiConnectionException;
+use Stripe\HttpClient\ClientInterface;
 use Tests\Concerns\SignsStripeWebhooks;
 use Tests\TestCase;
 
@@ -552,6 +556,62 @@ class StripeWebhookTest extends TestCase
         $this->assertSame(InactiveReason::Blocked, $fresh->inactive_reason);
     }
 
+    /**
+     * Simula o admin a bloquear a conta enquanto o webhook a lê: a decisão de ativar tem de usar o
+     * estado gravado na base de dados, senão a conta bloqueada ficava Active.
+     */
+    #[Test]
+    public function account_blocked_while_the_webhook_reads_it_is_not_activated_and_the_subscription_is_cancelled(): void
+    {
+        Notification::fake();
+        $this->expectCancellationOf('sub_test_1');
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+        $inactiveId = AccountStatus::where('name', 'Inactive')->value('id');
+        $blocked = false;
+        Event::listen('eloquent.retrieved: '.User::class, function () use (&$blocked, $user, $inactiveId) {
+            if ($blocked) {
+                return;
+            }
+            $blocked = true;
+            DB::table('users')->where('id', $user->id)->update([
+                'account_status_id' => $inactiveId,
+                'inactive_reason' => InactiveReason::Blocked->value,
+            ]);
+        });
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertSame('Inactive', $fresh->accountStatus->name);
+        $this->assertSame(InactiveReason::Blocked, $fresh->inactive_reason);
+        Notification::assertNotSentTo($fresh, SubscriptionActivatedNotification::class);
+    }
+
+    /**
+     * O utilizador tem de ser lido (com lock) antes de o Cashier inserir a subscrição: a chave
+     * estrangeira da subscrição também prende a linha do utilizador, e prendê-la depois disso
+     * podia dar deadlock com um bloqueio feito ao mesmo tempo.
+     */
+    #[Test]
+    public function user_is_read_before_the_subscription_is_inserted(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $this->customer(User::factory()->approved()->withBilling()->create());
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries) {
+            $queries[] = strtolower($query->sql);
+        });
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $firstUserSelect = collect($queries)->search(fn (string $sql) => str_starts_with($sql, 'select') && str_contains($sql, 'from "users"'));
+        $subscriptionInsert = collect($queries)->search(fn (string $sql) => str_starts_with($sql, 'insert into "subscriptions"'));
+        $this->assertIsInt($firstUserSelect);
+        $this->assertIsInt($subscriptionInsert);
+        $this->assertLessThan($subscriptionInsert, $firstUserSelect);
+    }
+
     public static function notEligibleAccounts(): array
     {
         return [
@@ -622,6 +682,61 @@ class StripeWebhookTest extends TestCase
 
         $this->assertSame('Active', $user->fresh()->accountStatus->name);
         Notification::assertNothingSent();
+    }
+
+    /**
+     * Checkout pago depois de a conta ser apagada (o cliente Stripe ficou porque a anonimização
+     * falhou no Stripe). O serviço do Stripe não é mockado: o erro estava no cancelamento do
+     * Cashier, que usa o dono da subscrição e não encontra utilizadores soft deleted.
+     */
+    #[Test]
+    public function subscription_of_a_soft_deleted_account_is_cancelled_in_stripe(): void
+    {
+        Notification::fake();
+        $http = $this->fakeStripeHttp();
+        $user = $this->customer(User::factory()->inactive(InactiveReason::Deleted)->withBilling()->create());
+        $user->delete();
+
+        $this->postStripeWebhook($this->subscriptionCreated('active'))->assertOk();
+
+        $this->assertDatabaseHas('subscriptions', ['stripe_id' => 'sub_test_1', 'stripe_status' => 'canceled']);
+        $cancellations = array_filter(
+            $http->requests,
+            fn (array $request) => $request['method'] === 'delete' && str_ends_with($request['url'], '/v1/subscriptions/sub_test_1'),
+        );
+        $this->assertCount(1, $cancellations);
+        $this->assertNotSame('Active', User::withTrashed()->find($user->id)->accountStatus->name);
+        Notification::assertNothingSent();
+    }
+
+    /**
+     * Troca o cliente HTTP do SDK do Stripe por um falso que regista os pedidos e responde
+     * a um cancelamento como o Stripe (reposto no tearDown).
+     */
+    private function fakeStripeHttp(): object
+    {
+        $http = new class implements ClientInterface
+        {
+            public array $requests = [];
+
+            public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
+            {
+                $this->requests[] = ['method' => $method, 'url' => $absUrl, 'params' => $params];
+
+                return [json_encode(['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'canceled']), 200, []];
+            }
+        };
+
+        ApiRequestor::setHttpClient($http);
+
+        return $http;
+    }
+
+    protected function tearDown(): void
+    {
+        ApiRequestor::setHttpClient(null);
+
+        parent::tearDown();
     }
 
     #[Test]

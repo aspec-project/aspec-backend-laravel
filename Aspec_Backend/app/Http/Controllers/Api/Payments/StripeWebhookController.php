@@ -87,14 +87,31 @@ class StripeWebhookController extends WebhookController
      *    e email de boas-vindas (depois do commit).
      * O trial_ends_at é gravado depois do handler do Cashier, que o põe a null.
      *
+     * O utilizador é bloqueado (lockForUpdate) antes do handler do Cashier, para serializar com um
+     * bloqueio feito pelo admin ao mesmo tempo: ou a ativação faz commit primeiro (e o cancel() do
+     * bloqueio já vê esta subscrição), ou o bloqueio faz commit primeiro (e aqui lê-se a conta
+     * bloqueada e cancela-se). Tem de ser antes: o insert da subscrição prende a linha do utilizador
+     * pela chave estrangeira, e pedir o lock exclusivo depois disso podia dar deadlock com o bloqueio.
+     * A decisão usa o utilizador relido depois do Cashier, também com lockForUpdate: uma leitura com
+     * lock devolve sempre a última versão commitada, enquanto uma leitura simples (ex.: fresh()) em
+     * REPEATABLE READ podia devolver um retrato antigo e ignorar um bloqueio já feito. O lock já é
+     * desta transação, por isso não espera. withTrashed() para decidir também sobre contas apagadas.
+     *
      * @param  array<string, mixed>  $payload
      */
     protected function handleCustomerSubscriptionCreated(array $payload)
     {
+        $data = $payload['data']['object'];
+
+        $locked = filled($data['customer'] ?? null)
+            ? User::withTrashed()->where('stripe_id', $data['customer'])->lockForUpdate()->first()
+            : null;
+
         $response = parent::handleCustomerSubscriptionCreated($payload);
 
-        $data = $payload['data']['object'];
-        $user = $this->getUserByStripeId($data['customer']);
+        $user = $locked
+            ? User::withTrashed()->with(['accountStatus', 'role'])->whereKey($locked->id)->lockForUpdate()->first()
+            : null;
 
         if (! $user || $user->role?->name === 'Admin') {
             return $response;
