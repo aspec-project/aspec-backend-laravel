@@ -7,9 +7,11 @@ use App\Models\User;
 use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Cashier\Subscription;
 use PHPUnit\Framework\Attributes\Test;
 use Stripe\ApiRequestor;
 use Stripe\Exception\ApiConnectionException;
+use Stripe\Exception\InvalidRequestException;
 use Stripe\HttpClient\ClientInterface;
 use Tests\TestCase;
 
@@ -48,9 +50,16 @@ class StripeSubscriptionServiceTest extends TestCase
                 'status' => 'open',
             ];
 
+            /** Resposta própria para um pedido: devolve [corpo, código] ou null para seguir o normal. */
+            public ?\Closure $respond = null;
+
             public function request($method, $absUrl, $headers, $params, $hasFile, $apiMode = 'v1', $maxNetworkRetries = null)
             {
                 $this->requests[] = ['method' => $method, 'url' => $absUrl, 'params' => $params];
+
+                if ($this->respond && ($response = ($this->respond)($method, $absUrl))) {
+                    return [json_encode($response[0]), $response[1], []];
+                }
 
                 if (str_contains($absUrl, '/v1/customers')) {
                     return [json_encode(['id' => 'cus_test_1', 'object' => 'customer']), 200, []];
@@ -164,6 +173,148 @@ class StripeSubscriptionServiceTest extends TestCase
         $session = $this->service()->retrieveCheckout('cs_test_gone');
 
         $this->assertSame('expired', $session->status);
+    }
+
+    private function subscriptionFor(User $user, string $status = 'active'): Subscription
+    {
+        return $user->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_test_1',
+            'stripe_status' => $status,
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+    }
+
+    private function stripeError(string $code, string $message): array
+    {
+        return [['error' => ['type' => 'invalid_request_error', 'code' => $code, 'message' => $message]], 400];
+    }
+
+    #[Test]
+    public function cancel_now_cancels_in_stripe_and_marks_the_local_row(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->subscriptionFor($user);
+        $this->http->respond = fn ($method, $url) => $method === 'delete'
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'canceled'], 200]
+            : null;
+
+        $this->service()->cancelNow($subscription);
+
+        $this->assertSame('delete', $this->http->requests[0]['method']);
+        $this->assertStringEndsWith('/v1/subscriptions/sub_test_1', $this->http->requests[0]['url']);
+        $this->assertSame('canceled', $subscription->fresh()->stripe_status);
+        $this->assertNotNull($subscription->fresh()->ends_at);
+    }
+
+    /**
+     * Com proração o Stripe dava crédito do tempo não usado, que entrava na 1.ª fatura depois de
+     * um desbloqueio e deixava a fatura fiscal diferente do valor pago.
+     */
+    #[Test]
+    public function cancel_now_does_not_prorate_the_unused_time(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->subscriptionFor($user);
+        $this->http->respond = fn ($method, $url) => $method === 'delete'
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'canceled'], 200]
+            : null;
+
+        $this->service()->cancelNow($subscription);
+
+        $request = $this->http->requests[0];
+        $this->assertSame('delete', $request['method']);
+        $this->assertSame('false', $request['params']['prorate'] ?? null);
+        $this->assertStringNotContainsString('prorate=true', $request['url']);
+    }
+
+    /**
+     * Um utilizador anonimizado está soft deleted, por isso a relação owner do Cashier é null:
+     * o cancelamento não pode depender dela (ex.: Checkout pago depois de a conta ser apagada).
+     */
+    #[Test]
+    public function cancel_now_works_when_the_owner_is_soft_deleted(): void
+    {
+        $user = User::factory()->withBilling()->create();
+        $this->subscriptionFor($user);
+        $user->delete();
+        $subscription = Subscription::where('stripe_id', 'sub_test_1')->firstOrFail();
+        $this->http->respond = fn ($method, $url) => $method === 'delete'
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'canceled'], 200]
+            : null;
+
+        $this->service()->cancelNow($subscription);
+
+        $this->assertCount(1, $this->http->requests);
+        $this->assertSame('delete', $this->http->requests[0]['method']);
+        $this->assertStringEndsWith('/v1/subscriptions/sub_test_1', $this->http->requests[0]['url']);
+        $this->assertSame('canceled', $subscription->fresh()->stripe_status);
+        $this->assertNotNull($subscription->fresh()->ends_at);
+    }
+
+    #[Test]
+    public function cancel_now_of_a_subscription_stripe_no_longer_knows_only_marks_the_local_row(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->subscriptionFor($user);
+        $this->http->respond = fn () => $this->stripeError('resource_missing', 'No such subscription');
+
+        $this->service()->cancelNow($subscription);
+
+        $this->assertSame('canceled', $subscription->fresh()->stripe_status);
+    }
+
+    #[Test]
+    public function cancel_now_rethrows_other_stripe_errors_and_keeps_the_local_row(): void
+    {
+        $user = User::factory()->create();
+        $subscription = $this->subscriptionFor($user);
+        $this->http->respond = fn () => $this->stripeError('parameter_invalid', 'Erro');
+
+        try {
+            $this->service()->cancelNow($subscription);
+            $this->fail('Devia ter propagado o erro do Stripe.');
+        } catch (InvalidRequestException) {
+        }
+
+        $this->assertSame('active', $subscription->fresh()->stripe_status);
+    }
+
+    #[Test]
+    public function expire_checkout_expires_the_session_in_stripe(): void
+    {
+        $this->http->session['status'] = 'expired';
+
+        $this->service()->expireCheckout('cs_test_1');
+
+        $this->assertSame('post', $this->http->requests[0]['method']);
+        $this->assertStringEndsWith('/v1/checkout/sessions/cs_test_1/expire', $this->http->requests[0]['url']);
+    }
+
+    #[Test]
+    public function expire_checkout_of_a_session_that_is_no_longer_open_does_nothing(): void
+    {
+        $this->http->respond = fn ($method, $url) => str_ends_with($url, '/expire')
+            ? $this->stripeError('checkout_session_not_open', 'Only open sessions can be expired.')
+            : null;
+        $this->http->session['status'] = 'complete';
+
+        $this->service()->expireCheckout('cs_test_1');
+
+        $this->assertCount(2, $this->http->requests);
+    }
+
+    #[Test]
+    public function expire_checkout_rethrows_when_the_session_is_still_open(): void
+    {
+        $this->http->respond = fn ($method, $url) => str_ends_with($url, '/expire')
+            ? $this->stripeError('parameter_invalid', 'Erro')
+            : null;
+
+        $this->expectException(InvalidRequestException::class);
+
+        $this->service()->expireCheckout('cs_test_1');
     }
 
     #[Test]

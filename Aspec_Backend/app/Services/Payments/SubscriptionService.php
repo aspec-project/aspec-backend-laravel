@@ -5,12 +5,16 @@ namespace App\Services\Payments;
 use App\Enums\ActivationType;
 use App\Exceptions\ActivationLinkNoLongerValidException;
 use App\Exceptions\SubscriptionInProgressException;
+use App\Jobs\CancelStripeSubscriptionJob;
 use App\Models\User;
 use App\Notifications\ActivationLinkNotification;
 use App\Notifications\ReactivationLinkNotification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
+use Laravel\Cashier\Subscription;
 use Stripe\Exception\ApiErrorException;
+use Stripe\Subscription as StripeSubscription;
 
 /**
  * Regras de domínio da subscrição: links de ativação/reativação e início do pagamento sem
@@ -18,6 +22,8 @@ use Stripe\Exception\ApiErrorException;
  */
 class SubscriptionService
 {
+    private const ENDED_STATUSES = [StripeSubscription::STATUS_CANCELED, StripeSubscription::STATUS_INCOMPLETE_EXPIRED];
+
     public function __construct(private StripeSubscriptionService $stripe) {}
 
     /**
@@ -55,6 +61,94 @@ class SubscriptionService
     public function sendReactivationLink(User $user): void
     {
         $user->notify(new ReactivationLinkNotification);
+    }
+
+    /**
+     * Deixa de cobrar a conta (usado no bloqueio): expira a sessão de Checkout guardada e cancela
+     * de imediato as subscrições não terminadas. Pré-condição: chamar depois do commit do
+     * deactivate(), porque é o estado já gravado que impede sessões novas depois do retrato.
+     *
+     * O que cancelar é lido da base de dados com o utilizador bloqueado (lockForUpdate), numa
+     * transação curta que termina antes de falar com o Stripe. Nunca lança por causa do Stripe:
+     * regista um aviso e agenda o CancelStripeSubscriptionJob (depois do commit) com o mesmo retrato.
+     */
+    public function cancel(User $user): void
+    {
+        [$subscriptionIds, $sessionId] = DB::transaction(function () use ($user) {
+            $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            $subscriptionIds = Subscription::where('user_id', $locked->id)
+                ->whereNotIn('stripe_status', self::ENDED_STATUSES)
+                ->pluck('stripe_id')
+                ->all();
+
+            return [$subscriptionIds, $locked->stripe_checkout_session_id];
+        });
+
+        if ($subscriptionIds === [] && $sessionId === null) {
+            return;
+        }
+
+        try {
+            $this->cancelOrFail($user->id, $subscriptionIds, $sessionId);
+        } catch (ApiErrorException $e) {
+            Log::warning('Falha ao cancelar a subscrição Stripe; job de recurso agendado.', [
+                'user_id' => $user->id,
+                'exception' => $e::class,
+                'stripe_request_id' => $e->getRequestId(),
+            ]);
+
+            // Closure sem return: o PendingDispatch tem de ser destruído (e despachado) dentro do
+            // rescue, senão com a fila sync o job falhado lançava fora dele.
+            rescue(function () use ($user, $subscriptionIds, $sessionId) {
+                CancelStripeSubscriptionJob::dispatch($user->id, $subscriptionIds, $sessionId)->afterCommit();
+            }, report: true);
+        }
+    }
+
+    /**
+     * Cancela exatamente o retrato recebido (usado pelo cancel() e pelo job, para a fila repetir).
+     * Sessão primeiro (ainda pode ser paga e criar uma subscrição nova), depois cada subscrição;
+     * os passos são independentes e a primeira falha só é relançada no fim. Idempotente:
+     * subscrições já terminadas localmente não voltam ao Stripe e a sessão só é esquecida se
+     * continuar a ser a guardada (nunca apaga uma sessão nova, ex. depois de um desbloqueio).
+     *
+     * @param  array<int, string>  $subscriptionStripeIds
+     *
+     * @throws ApiErrorException A primeira falha do Stripe.
+     */
+    public function cancelOrFail(string $userId, array $subscriptionStripeIds, ?string $checkoutSessionId): void
+    {
+        $firstError = null;
+
+        if ($checkoutSessionId !== null) {
+            try {
+                $this->stripe->expireCheckout($checkoutSessionId);
+
+                User::whereKey($userId)
+                    ->where('stripe_checkout_session_id', $checkoutSessionId)
+                    ->update(['stripe_checkout_session_id' => null]);
+            } catch (ApiErrorException $e) {
+                $firstError ??= $e;
+            }
+        }
+
+        $subscriptions = Subscription::where('user_id', $userId)
+            ->whereIn('stripe_id', $subscriptionStripeIds)
+            ->whereNotIn('stripe_status', self::ENDED_STATUSES)
+            ->get();
+
+        foreach ($subscriptions as $subscription) {
+            try {
+                $this->stripe->cancelNow($subscription);
+            } catch (ApiErrorException $e) {
+                $firstError ??= $e;
+            }
+        }
+
+        if ($firstError) {
+            throw $firstError;
+        }
     }
 
     /**
