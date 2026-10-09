@@ -4,20 +4,27 @@ namespace App\Http\Controllers\Api\Payments;
 
 use App\Enums\InvoiceStatus;
 use App\Jobs\IssueInvoiceJob;
+use App\Models\AccountStatus;
 use App\Models\ProcessedWebhookEvent;
+use App\Models\User;
+use App\Notifications\SubscriptionActivatedNotification;
+use App\Services\Payments\StripeSubscriptionService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController;
+use Stripe\Subscription as StripeSubscription;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
  * Webhook do Stripe. A assinatura é verificada pelo middleware do Cashier (aplicado no
  * construtor dele quando há STRIPE_WEBHOOK_SECRET); os handlers do Cashier sincronizam as
- * subscrições locais e este controller acrescenta a idempotência e a fatura de cada pagamento.
+ * subscrições locais e este controller acrescenta a idempotência, a ativação da conta quando a
+ * subscrição é criada e a fatura de cada pagamento.
  */
 class StripeWebhookController extends WebhookController
 {
@@ -65,6 +72,81 @@ class StripeWebhookController extends WebhookController
 
             return $this->serverError();
         }
+    }
+
+    /**
+     * Subscrição criada (normalmente pelo Checkout): ativa a conta. Só o webhook ativa, porque é
+     * assinado pelo Stripe e o regresso do browser pode ser forjado.
+     * Depois do handler do Cashier (grava a subscrição local), por esta ordem:
+     * 1. cliente desconhecido ou admin → nada;
+     * 2. estado que não é trialing/active (ex.: incomplete) → só fica sincronizada;
+     * 3. já existe outra subscrição em curso → cancela esta (duplicada);
+     * 4. conta que não pode pagar (bloqueada, recusada, apagada, pendente) → cancela esta;
+     * 5. conta já Active sem outra subscrição (ex.: criada no dashboard) → nada;
+     * 6. senão → Active, sem motivo de inatividade nem carência, com o fim do trial do Stripe,
+     *    e email de boas-vindas (depois do commit).
+     * O trial_ends_at é gravado depois do handler do Cashier, que o põe a null.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function handleCustomerSubscriptionCreated(array $payload)
+    {
+        $response = parent::handleCustomerSubscriptionCreated($payload);
+
+        $data = $payload['data']['object'];
+        $user = $this->getUserByStripeId($data['customer']);
+
+        if (! $user || $user->role?->name === 'Admin') {
+            return $response;
+        }
+
+        if (! in_array($data['status'], [StripeSubscription::STATUS_TRIALING, StripeSubscription::STATUS_ACTIVE], true)) {
+            return $response;
+        }
+
+        if ($user->hasOngoingSubscription(exceptStripeId: $data['id'])) {
+            $this->cancelSubscription($user, $data['id'], 'Subscrição duplicada cancelada.');
+
+            return $response;
+        }
+
+        if ($user->activationType() === null) {
+            if ($user->accountStatus?->name !== 'Active') {
+                $this->cancelSubscription($user, $data['id'], 'Subscrição de conta não elegível cancelada.');
+            }
+
+            return $response;
+        }
+
+        $trialEndsAt = isset($data['trial_end']) ? Carbon::createFromTimestamp($data['trial_end']) : null;
+
+        $user->forceFill([
+            'account_status_id' => AccountStatus::where('name', 'Active')->value('id'),
+            'inactive_reason' => null,
+            'grace_ends_at' => null,
+            'stripe_checkout_session_id' => null,
+            'trial_ends_at' => $trialEndsAt,
+        ])->save();
+
+        $user->notify(new SubscriptionActivatedNotification($trialEndsAt));
+
+        return $response;
+    }
+
+    /**
+     * Cancela já no Stripe uma subscrição que não devia existir e esquece a sessão de Checkout
+     * que a criou (senão, sempre "complete", impedia um pagamento futuro, ex. depois de um
+     * desbloqueio). O log leva só o id da subscrição (sem dados pessoais).
+     */
+    private function cancelSubscription(User $user, string $stripeSubscriptionId, string $reason): void
+    {
+        $subscription = $user->subscriptions()->where('stripe_id', $stripeSubscriptionId)->firstOrFail();
+
+        app(StripeSubscriptionService::class)->cancelNow($subscription);
+
+        $user->forceFill(['stripe_checkout_session_id' => null])->save();
+
+        Log::warning($reason, ['stripe_subscription_id' => $stripeSubscriptionId]);
     }
 
     /**

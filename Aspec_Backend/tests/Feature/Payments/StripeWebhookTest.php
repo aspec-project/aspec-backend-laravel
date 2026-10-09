@@ -3,22 +3,28 @@
 namespace Tests\Feature\Payments;
 
 use App\Contracts\InvoiceService;
+use App\Enums\InactiveReason;
 use App\Enums\InvoiceStatus;
 use App\Jobs\IssueInvoiceJob;
 use App\Models\Invoice;
 use App\Models\User;
+use App\Notifications\SubscriptionActivatedNotification;
 use App\Services\Payments\StripeCustomerService;
+use App\Services\Payments\StripeSubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Laravel\Cashier\Events\WebhookHandled;
 use Laravel\Cashier\Events\WebhookReceived;
+use Laravel\Cashier\Subscription;
 use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Stripe\Exception\ApiConnectionException;
@@ -27,7 +33,8 @@ use Tests\TestCase;
 
 /**
  * Webhook do Stripe: assinatura obrigatória (fail closed), idempotência pelo id do evento,
- * fatura por pagamento e sincronização das subscrições feita pelo Cashier.
+ * fatura por pagamento, sincronização das subscrições feita pelo Cashier e ativação da conta
+ * quando a subscrição é criada (só o webhook ativa: o redirecionamento do browser pode ser forjado).
  */
 class StripeWebhookTest extends TestCase
 {
@@ -340,10 +347,10 @@ class StripeWebhookTest extends TestCase
     }
 
     #[Test]
-    public function subscription_created_is_stored_locally_without_changing_the_account_state(): void
+    public function subscription_created_is_stored_locally_and_activates_the_account(): void
     {
+        Notification::fake();
         $user = $this->customer(User::factory()->approved()->withBilling()->create());
-        $user->forceFill(['trial_ends_at' => now()->addDays(30)])->save();
 
         $this->postStripeWebhook($this->stripeEvent(
             'customer.subscription.created',
@@ -355,10 +362,7 @@ class StripeWebhookTest extends TestCase
             'stripe_id' => 'sub_test_1',
             'stripe_status' => 'trialing',
         ]);
-        $fresh = $user->fresh();
-        $this->assertSame('Approved', $fresh->accountStatus->name);
-        // O Cashier termina o "trial genérico" do utilizador ao criar a subscrição.
-        $this->assertNull($fresh->trial_ends_at);
+        $this->assertSame('Active', $user->fresh()->accountStatus->name);
     }
 
     #[Test]
@@ -416,5 +420,266 @@ class StripeWebhookTest extends TestCase
 
         $this->assertNull(User::withTrashed()->find($user->id)->stripe_id);
         $this->assertDatabaseHas('subscriptions', ['stripe_id' => 'sub_test_1', 'stripe_status' => 'canceled']);
+    }
+
+    private function subscriptionCreated(string $status = 'trialing', string $subscriptionId = 'sub_test_1', ?string $eventId = null): array
+    {
+        return $this->stripeEvent(
+            'customer.subscription.created',
+            $this->stripeSubscription(self::CUSTOMER, $status, $subscriptionId),
+            $eventId,
+        );
+    }
+
+    private function expectNoCancellation(): void
+    {
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('cancelNow');
+        });
+    }
+
+    private function expectCancellationOf(string $subscriptionId): void
+    {
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) use ($subscriptionId) {
+            $mock->shouldReceive('cancelNow')
+                ->once()
+                ->withArgs(fn (Subscription $subscription) => $subscription->stripe_id === $subscriptionId);
+        });
+    }
+
+    #[Test]
+    public function trialing_subscription_activates_an_approved_account_with_the_trial_end(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+        $user->forceFill(['stripe_checkout_session_id' => 'cs_test_1'])->save();
+        $event = $this->subscriptionCreated('trialing');
+
+        $this->postStripeWebhook($event)->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertNull($fresh->inactive_reason);
+        $this->assertNull($fresh->grace_ends_at);
+        $this->assertNull($fresh->stripe_checkout_session_id);
+        $this->assertNotNull($fresh->trial_ends_at);
+        $this->assertSame($event['data']['object']['trial_end'], $fresh->trial_ends_at->timestamp);
+        Notification::assertSentToTimes($fresh, SubscriptionActivatedNotification::class, 1);
+    }
+
+    #[Test]
+    public function active_subscription_reactivates_an_unpaid_account_without_trial(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->inactive(InactiveReason::Unpaid)->withBilling()->create());
+        $user->forceFill(['grace_ends_at' => now()->subDay()])->save();
+
+        $this->postStripeWebhook($this->subscriptionCreated('active'))->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertNull($fresh->inactive_reason);
+        $this->assertNull($fresh->grace_ends_at);
+        $this->assertNull($fresh->trial_ends_at);
+        Notification::assertSentToTimes($fresh, SubscriptionActivatedNotification::class, 1);
+    }
+
+    #[Test]
+    public function same_subscription_created_event_twice_sends_one_welcome_email(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+        $event = $this->subscriptionCreated();
+
+        $this->postStripeWebhook($event)->assertOk();
+        $this->postStripeWebhook($event)->assertOk();
+
+        Notification::assertSentToTimes($user, SubscriptionActivatedNotification::class, 1);
+    }
+
+    #[Test]
+    public function another_event_for_the_same_subscription_keeps_the_account_active_without_a_second_email(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated(eventId: 'evt_test_primeiro'))->assertOk();
+        $this->postStripeWebhook($this->subscriptionCreated(eventId: 'evt_test_segundo'))->assertOk();
+
+        $this->assertSame('Active', $user->fresh()->accountStatus->name);
+        $this->assertDatabaseCount('subscriptions', 1);
+        Notification::assertSentToTimes($user, SubscriptionActivatedNotification::class, 1);
+    }
+
+    #[Test]
+    public function subscription_of_a_blocked_account_is_cancelled_and_the_account_stays_blocked(): void
+    {
+        // Ex.: Checkout aberto antes do bloqueio e pago depois; um bloqueado nunca volta a entrar pagando.
+        Notification::fake();
+        Log::spy();
+        $this->expectCancellationOf('sub_test_1');
+        $user = $this->customer(User::factory()->inactive(InactiveReason::Blocked)->withBilling()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertSame('Inactive', $fresh->accountStatus->name);
+        $this->assertSame(InactiveReason::Blocked, $fresh->inactive_reason);
+        Notification::assertNothingSent();
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message, array $context = []) => $message === 'Subscrição de conta não elegível cancelada.'
+                && $context === ['stripe_subscription_id' => 'sub_test_1'])
+            ->once();
+    }
+
+    #[Test]
+    public function cancelling_the_subscription_of_a_blocked_account_forgets_its_checkout_session(): void
+    {
+        // Senão a sessão paga ficava guardada e, depois do desbloqueio, a reativação dava sempre 409.
+        Notification::fake();
+        $this->expectCancellationOf('sub_test_1');
+        $user = $this->customer(User::factory()->inactive(InactiveReason::Blocked)->withBilling()->create());
+        $user->forceFill(['stripe_checkout_session_id' => 'cs_test_A'])->save();
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $fresh = $user->fresh();
+        $this->assertNull($fresh->stripe_checkout_session_id);
+        $this->assertSame(InactiveReason::Blocked, $fresh->inactive_reason);
+    }
+
+    public static function notEligibleAccounts(): array
+    {
+        return [
+            'pendente' => ['pending', null],
+            'recusada' => ['inactive', InactiveReason::Rejected],
+            'anonimizada' => ['inactive', InactiveReason::Deleted],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('notEligibleAccounts')]
+    public function subscription_of_an_account_that_cannot_pay_is_cancelled(string $state, ?InactiveReason $reason): void
+    {
+        Notification::fake();
+        $this->expectCancellationOf('sub_test_1');
+        $factory = User::factory()->withBilling();
+        $user = $this->customer(($state === 'pending' ? $factory->pending() : $factory->inactive($reason))->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $this->assertNotSame('Active', $user->fresh()->accountStatus->name);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function duplicate_subscription_is_cancelled_and_the_first_one_kept(): void
+    {
+        Notification::fake();
+        Log::spy();
+        $this->expectCancellationOf('sub_test_2');
+        $user = $this->customer(User::factory()->withBilling()->create());
+        $this->subscribe($user, 'trialing');
+
+        $this->postStripeWebhook($this->subscriptionCreated('trialing', 'sub_test_2'))->assertOk();
+
+        $this->assertDatabaseHas('subscriptions', ['stripe_id' => 'sub_test_1', 'stripe_status' => 'trialing']);
+        $this->assertSame('Active', $user->fresh()->accountStatus->name);
+        Notification::assertNothingSent();
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message, array $context = []) => $message === 'Subscrição duplicada cancelada.'
+                && $context === ['stripe_subscription_id' => 'sub_test_2'])
+            ->once();
+    }
+
+    #[Test]
+    public function incomplete_subscription_leaves_the_approved_account_waiting(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated('incomplete'))->assertOk();
+
+        $this->assertDatabaseHas('subscriptions', ['stripe_id' => 'sub_test_1', 'stripe_status' => 'incomplete']);
+        $this->assertSame('Approved', $user->fresh()->accountStatus->name);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function active_account_without_another_subscription_is_left_unchanged(): void
+    {
+        // Ex.: subscrição criada à mão no dashboard do Stripe para um membro já ativo.
+        Notification::fake();
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->withBilling()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated('active'))->assertOk();
+
+        $this->assertSame('Active', $user->fresh()->accountStatus->name);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function subscription_of_an_admin_changes_nothing(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $admin = $this->customer(User::factory()->admin()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertNull($fresh->trial_ends_at);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function subscription_of_an_unknown_customer_is_accepted_and_ignored(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+
+        $this->postStripeWebhook($this->stripeEvent(
+            'customer.subscription.created',
+            $this->stripeSubscription('cus_desconhecido'),
+        ))->assertOk();
+
+        $this->assertDatabaseCount('subscriptions', 0);
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function welcome_email_is_delivered_after_the_webhook_commits(): void
+    {
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+
+        $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
+
+        $messages = app('mailer')->getSymfonyTransport()->messages();
+        $this->assertCount(1, $messages);
+        $this->assertSame($user->email, $messages->first()->getEnvelope()->getRecipients()[0]->getAddress());
+    }
+
+    #[Test]
+    public function rollback_after_activation_sends_no_welcome_email_and_keeps_the_account_approved(): void
+    {
+        $this->expectNoCancellation();
+        $user = $this->customer(User::factory()->approved()->withBilling()->create());
+        Event::listen(WebhookHandled::class, fn () => throw new RuntimeException('falha depois do handler'));
+
+        $this->postStripeWebhook($this->subscriptionCreated())
+            ->assertStatus(500)
+            ->assertJsonPath('message', self::SERVER_ERROR);
+
+        $this->assertCount(0, app('mailer')->getSymfonyTransport()->messages());
+        $this->assertSame('Approved', $user->fresh()->accountStatus->name);
+        $this->assertDatabaseCount('processed_webhook_events', 0);
     }
 }
