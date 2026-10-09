@@ -73,11 +73,42 @@ class StripeSubscriptionService
 
     /**
      * Cancela de imediato a subscrição no Stripe e atualiza a linha local.
+     * Chama o Stripe diretamente e não o cancelNow() do Cashier, que passa pelo dono da subscrição:
+     * para um utilizador anonimizado (soft deleted) o dono é null e o cancelamento falhava.
+     * Sem proração: o tempo não usado não fica como crédito no cliente, que entraria na fatura
+     * de uma futura reativação. Uma subscrição que o Stripe já não conhece conta como cancelada
+     * (só se atualiza a linha local), para repetir a operação sem erro.
      *
-     * @throws ApiErrorException Se o Stripe falhar.
+     * @throws ApiErrorException Se o Stripe falhar por outro motivo (a linha local não é alterada).
      */
     public function cancelNow(Subscription $subscription): void
     {
-        $subscription->cancelNow();
+        try {
+            Cashier::stripe()->subscriptions->cancel($subscription->stripe_id, ['prorate' => false]);
+            $subscription->markAsCanceled();
+        } catch (InvalidRequestException $e) {
+            if ($e->getStripeCode() !== 'resource_missing') {
+                throw $e;
+            }
+
+            $subscription->markAsCanceled();
+        }
+    }
+
+    /**
+     * Expira uma sessão de Checkout para já não poder ser paga. O Stripe recusa expirar uma sessão
+     * que já não está aberta (paga, expirada ou inexistente): nesse caso não há nada a fazer.
+     *
+     * @throws ApiErrorException Se o Stripe falhar e a sessão continuar aberta.
+     */
+    public function expireCheckout(string $sessionId): void
+    {
+        try {
+            Cashier::stripe()->checkout->sessions->expire($sessionId);
+        } catch (InvalidRequestException $e) {
+            if ($this->retrieveCheckout($sessionId)->status === 'open') {
+                throw $e;
+            }
+        }
     }
 }
