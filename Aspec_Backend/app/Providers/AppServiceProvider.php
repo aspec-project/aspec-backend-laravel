@@ -156,5 +156,12 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perMinute(5)
                 ->by($request->ip())
         );
+
+        // Links de ativação: 20/min por IP. Corre antes da verificação da assinatura, por isso
+        // links forjados também contam; protege sobretudo as chamadas ao Stripe de cada POST.
+        RateLimiter::for(
+            'account-activation',
+            fn (Request $request) => Limit::perMinute(20)->by($request->ip())
+        );
     }
 }

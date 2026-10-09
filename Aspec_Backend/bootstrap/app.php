@@ -8,7 +8,10 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\CheckAccountActive;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use Stripe\Exception\ApiErrorException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\MethodNotAllowedHttpException;
 use App\Http\Middleware\EnsureAdmin;
@@ -41,6 +44,16 @@ return Application::configure(basePath: dirname(__DIR__))
             fn (Request $request, Throwable $e) => $request->is('api/*') || $request->expectsJson()
         );
 
+        // O false impede o registo por omissão, que incluiria a mensagem do Stripe.
+        $exceptions->report(function (ApiErrorException $e) {
+            Log::error('Falha ao contactar o Stripe.', [
+                'exception' => $e::class,
+                'stripe_request_id' => $e->getRequestId(),
+            ]);
+
+            return false;
+        });
+
         // Os callbacks são testados por ordem: os tipos mais específicos vêm antes dos genéricos.
         $exceptions->render(fn (ValidationException $e, Request $request) => $request->is('api/*')
             ? app(ApiExceptionRenderer::class)->validation($e)
@@ -58,8 +71,16 @@ return Application::configure(basePath: dirname(__DIR__))
             ? app(ApiExceptionRenderer::class)->withGenericMessage($e)
             : null);
 
+        $exceptions->render(fn (InvalidSignatureException $e, Request $request) => $request->is('api/*')
+            ? app(ApiExceptionRenderer::class)->invalidSignature($e)
+            : null);
+
         $exceptions->render(fn (HttpExceptionInterface $e, Request $request) => $request->is('api/*')
             ? app(ApiExceptionRenderer::class)->httpException($e, $request)
+            : null);
+
+        $exceptions->render(fn (ApiErrorException $e, Request $request) => $request->is('api/*')
+            ? app(ApiExceptionRenderer::class)->paymentGatewayUnavailable($e)
             : null);
 
         $exceptions->render(fn (Throwable $e, Request $request) => $request->is('api/*')

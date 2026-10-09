@@ -7,7 +7,9 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Validation\ValidationException;
+use Stripe\Exception\ApiErrorException;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -88,6 +90,26 @@ class ApiExceptionRenderer
 
         return $this->errorResponse($this->httpMessage($e, $request), $code)
             ->withHeaders($e->getHeaders());
+    }
+
+    /**
+     * 403 de um link assinado (ativação da conta) com assinatura inválida, alterada ou expirada.
+     */
+    public function invalidSignature(InvalidSignatureException $e): JsonResponse
+    {
+        return $this->errorResponse('O link é inválido ou expirou.', Response::HTTP_FORBIDDEN);
+    }
+
+    /**
+     * 502 quando o Stripe falha. Também com APP_DEBUG=true: a mensagem do Stripe nunca vai na
+     * resposta (o registo no log é feito à parte, só com a classe e o request_id).
+     */
+    public function paymentGatewayUnavailable(ApiErrorException $e): JsonResponse
+    {
+        return $this->errorResponse(
+            'Não foi possível contactar o serviço de pagamentos. Tente novamente.',
+            Response::HTTP_BAD_GATEWAY
+        );
     }
 
     /**
