@@ -52,10 +52,10 @@
                 "register"
               ]
             },
-            "description": "Candidatura de novo membro. A conta fica **Pending** até aprovação do admin.\n\nObrigatórios: `email`, `password`, `phone`, `name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `address`. Opcionais: `description`, `website_url`.\n\n- `password`: mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo.\n- `phone`: só números portugueses, `+351` opcional; guardado com 9 dígitos (como em *Atualizar o meu perfil*).\n\nResponsável: colega da auth.",
+            "description": "Candidatura de novo membro. A conta fica **Pending** até aprovação do admin.\n\nObrigatórios: `email`, `password`, `phone`, `name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `address`. Opcionais: `description`, `website_url`.\n\n- `password`: mín. 8 caracteres, maiúsculas e minúsculas, um número e um símbolo.\n- `phone`: só números portugueses, `+351` opcional; guardado com 9 dígitos (como em *Atualizar o meu perfil*).\n\nResponsável: colega da auth.\n\nAntes de enviar, correr \"Listas de referência → Setores\" e \"Localizações\": guardam no environment ids reais desta base de dados (`sector_id`, `location_id`).",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
+              "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"{{sector_id}}\",\n  \"location_id\": \"{{location_id}}\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"description\": \"Consultoria em TI para pequenas e médias empresas.\",\n  \"website_url\": \"https://www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100, 1250-146 Lisboa\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1253,6 +1253,22 @@
               "cookie": [],
               "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n      \"name\": \"Tecnologias de Informação (TI)\"\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"name\": \"Arquitetura e Design\"\n    }\n  ]\n}"
             }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda um id real desta base de dados em sector_id (os UUIDs mudam em cada seed)",
+                  "if (pm.response.code === 200) {",
+                  "  const items = pm.response.json().data;",
+                  "  const item = items[0];",
+                  "  if (item) pm.environment.set('sector_id', item.id);",
+                  "}"
+                ]
+              }
+            }
           ]
         },
         {
@@ -1308,6 +1324,22 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    {\n      \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n      \"name\": \"Porto\"\n    }\n  ]\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda um id real desta base de dados em location_id (os UUIDs mudam em cada seed)",
+                  "if (pm.response.code === 200) {",
+                  "  const items = pm.response.json().data;",
+                  "  const item = items.find(i => i.name === 'Lisboa') || items[0];",
+                  "  if (item) pm.environment.set('location_id', item.id);",
+                  "}"
+                ]
+              }
             }
           ]
         },
@@ -3338,7 +3370,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/members?search=consultoria&sector_id=f47ac10b-58cc-4372-a567-0e02b2c3d479&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b&min_rating=4&page=1",
+              "raw": "{{base_url}}/api/members?search=consultoria&sector_id={{sector_id}}&location_id={{location_id}}&min_rating=4&page=1",
               "host": [
                 "{{base_url}}"
               ],
@@ -3353,11 +3385,11 @@
                 },
                 {
                   "key": "sector_id",
-                  "value": "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  "value": "{{sector_id}}"
                 },
                 {
                   "key": "location_id",
-                  "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                  "value": "{{location_id}}"
                 },
                 {
                   "key": "min_rating",
@@ -3957,7 +3989,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/events?category_id=d1e2f3a4-3333-4b33-8333-333333333333&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b&page=1",
+              "raw": "{{base_url}}/api/events?category_id=d1e2f3a4-3333-4b33-8333-333333333333&location_id={{location_id}}&page=1",
               "host": [
                 "{{base_url}}"
               ],
@@ -3972,7 +4004,7 @@
                 },
                 {
                   "key": "location_id",
-                  "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                  "value": "{{location_id}}"
                 },
                 {
                   "key": "page",
@@ -8757,7 +8789,7 @@
             "description": "Cria uma instância de evento numa localização. Para replicar o mesmo formato noutra localização, criar outra instância com a mesma categoria.\n\n`event_end_time` > `event_start_time`; `registration_deadline` ≤ início do evento; `latitude` -90..90, `longitude` -180..180; `max_attendees` ≥ 1.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
