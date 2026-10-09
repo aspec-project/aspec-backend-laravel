@@ -17,6 +17,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -533,5 +534,64 @@ class AnonymizeAndDeleteTest extends TestCase
             'number' => 'LOG-2026-AAAAAAAA',
             'status' => 'issued',
         ]);
+    }
+
+    private function createPasswordResetToken(User $user): void
+    {
+        Password::broker()->createToken($user);
+    }
+
+    #[Test]
+    public function password_reset_tokens_of_the_original_email_are_deleted(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $originalEmail = $user->email;
+        $this->createPasswordResetToken($user);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $originalEmail]);
+        $this->assertDatabaseCount('password_reset_tokens', 0);
+    }
+
+    #[Test]
+    public function other_users_password_reset_tokens_are_kept(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $other = $this->memberWithFullProfile();
+        $this->createPasswordResetToken($user);
+        $this->createPasswordResetToken($other);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $other->email]);
+        $this->assertDatabaseCount('password_reset_tokens', 1);
+    }
+
+    #[Test]
+    public function password_reset_tokens_are_kept_when_an_outer_transaction_rolls_back(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $originalEmail = $user->email;
+        $this->createPasswordResetToken($user);
+
+        DB::beginTransaction();
+        $user->anonymizeAndDelete();
+        DB::rollBack();
+
+        $this->assertDatabaseHas('password_reset_tokens', ['email' => $originalEmail]);
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    #[Test]
+    public function user_without_profile_has_password_reset_tokens_deleted(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $originalEmail = $admin->email;
+        $this->createPasswordResetToken($admin);
+
+        $admin->anonymizeAndDelete();
+
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => $originalEmail]);
     }
 }
