@@ -33,52 +33,74 @@ trait SignsStripeWebhooks
         ], $json);
     }
 
-    protected function stripeEvent(string $type, array $object, ?string $id = null): array
+    /**
+     * Evento do Stripe. $previousAttributes vai para data.previous_attributes (só nos eventos
+     * *.updated, e só se não for vazio), com os valores antes da alteração.
+     */
+    protected function stripeEvent(string $type, array $object, ?string $id = null, array $previousAttributes = []): array
     {
+        $data = ['object' => $object];
+
+        if ($previousAttributes !== []) {
+            $data['previous_attributes'] = $previousAttributes;
+        }
+
         return [
             'id' => $id ?? 'evt_test_'.Str::random(14),
             'object' => 'event',
             'api_version' => self::STRIPE_API_VERSION,
             'created' => time(),
             'type' => $type,
-            'data' => ['object' => $object],
+            'data' => $data,
         ];
     }
 
     /**
-     * Fatura paga de uma subscrição. Sem o metadata is_on_session_checkout: com ele, o handler
-     * do Cashier chamaria a API do Stripe.
+     * Fatura de uma subscrição (paga por omissão). Sem o metadata is_on_session_checkout: com ele,
+     * o handler do Cashier chamaria a API do Stripe.
+     *
+     * Numa fatura não paga (ex. "open" num invoice.payment_failed) o valor fica em amount_due e o
+     * amount_paid é 0, como no Stripe. Sem subscrição (null) é uma fatura avulsa: parent null.
      */
-    protected function stripeInvoice(string $customer, int $amountPaid = 6000, ?string $id = null): array
-    {
+    protected function stripeInvoice(
+        string $customer,
+        int $amountPaid = 6000,
+        ?string $id = null,
+        string $status = 'paid',
+        ?string $subscription = 'sub_test_1',
+    ): array {
+        $paid = $status === 'paid';
+
         return [
             'id' => $id ?? 'in_test_'.Str::random(14),
             'object' => 'invoice',
             'customer' => $customer,
-            'amount_paid' => $amountPaid,
+            'amount_due' => $amountPaid,
+            'amount_paid' => $paid ? $amountPaid : 0,
             'currency' => 'eur',
-            'status' => 'paid',
-            'billing_reason' => 'subscription_cycle',
+            'status' => $status,
+            'billing_reason' => $subscription ? 'subscription_cycle' : 'manual',
             'created' => time(),
-            'parent' => [
+            'parent' => $subscription ? [
                 'type' => 'subscription_details',
                 'subscription_details' => [
-                    'subscription' => 'sub_test_1',
+                    'subscription' => $subscription,
                     'metadata' => [],
                 ],
-            ],
+            ] : null,
         ];
     }
 
     /**
      * Subscrição no formato do evento. O id do item deriva do id da subscrição, porque
      * subscription_items.stripe_id é único (duas subscrições precisam de itens diferentes).
+     * $overrides substitui chaves de topo (ex. cancel_at_period_end, cancellation_details, trial_end).
      */
-    protected function stripeSubscription(string $customer, string $status = 'trialing', ?string $id = null): array
+    protected function stripeSubscription(string $customer, string $status = 'trialing', ?string $id = null, array $overrides = []): array
     {
         $id ??= 'sub_test_1';
 
-        return [
+        return array_merge([
             'id' => $id,
             'object' => 'subscription',
             'customer' => $customer,
@@ -93,6 +115,6 @@ trait SignsStripeWebhooks
                 ]],
             ],
             'metadata' => [],
-        ];
+        ], $overrides);
     }
 }
