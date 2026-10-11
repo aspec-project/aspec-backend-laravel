@@ -4,7 +4,7 @@ namespace App\Enums;
 
 /**
  * Motivo pelo qual uma conta está Inactive (coluna users.inactive_reason).
- * Só o motivo Unpaid permite reativar a conta pagando; null numa conta Inactive
+ * Só Unpaid e Cancelled permitem reativar a conta pagando; null numa conta Inactive
  * (contas antigas) é tratado como desconhecido, ou seja, não reativável.
  */
 enum InactiveReason: string
@@ -17,6 +17,9 @@ enum InactiveReason: string
 
     /** Fim do período de carência sem pagamento da subscrição. */
     case Unpaid = 'unpaid';
+
+    /** Subscrição cancelada pelo membro (terminou no fim do período pago). */
+    case Cancelled = 'cancelled';
 
     /** Conta anonimizada e apagada (User::anonymizeAndDelete()). */
     case Deleted = 'deleted';

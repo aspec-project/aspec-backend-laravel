@@ -29,7 +29,8 @@ use Throwable;
  * Webhook do Stripe. A assinatura é verificada pelo middleware do Cashier (aplicado no
  * construtor dele quando há STRIPE_WEBHOOK_SECRET); os handlers do Cashier sincronizam as
  * subscrições locais e este controller acrescenta a idempotência, a ativação da conta quando a
- * subscrição é criada e a fatura de cada pagamento.
+ * subscrição é criada ou passa a ativa, a fatura de cada pagamento, o período de carência quando
+ * a cobrança falha e a desativação quando a subscrição termina.
  */
 class StripeWebhookController extends WebhookController
 {
@@ -217,10 +218,12 @@ class StripeWebhookController extends WebhookController
     }
 
     /**
-     * Subscrição terminada no Stripe. Rede de segurança do comando subscriptions:end-grace (ex.:
-     * scheduler parado): depois do handler do Cashier (marca a linha local cancelada), uma conta
-     * Active sem outra subscrição em curso fica Inactive por falta de pagamento e recebe o link
-     * de reativação, se estava em carência ou se o Stripe cancelou por falta de pagamento.
+     * Subscrição terminada no Stripe: fim de um cancelamento pedido pelo membro (ou feito no
+     * dashboard), ou rede de segurança do comando subscriptions:end-grace (ex.: scheduler parado).
+     * Depois do handler do Cashier (marca a linha local cancelada), uma conta Active sem outra
+     * subscrição em curso fica Inactive e recebe o link de reativação. Motivo: unpaid se estava em
+     * carência (o nosso estado, fiável) ou se o Stripe cancelou por falta de pagamento (cobre um
+     * payment_failed perdido); senão cancelled, sem acusar o membro de não pagar.
      * Nada muda para contas que não estão Active (bloqueadas, já desativadas pelo comando,
      * apagadas), admins, nem quando há outra subscrição em curso (era um duplicado cancelado pelo
      * webhook created; sem esta guarda o membro perdia o acesso).
@@ -245,14 +248,11 @@ class StripeWebhookController extends WebhookController
             return $response;
         }
 
+        // A carência é lida antes do deactivate(), que a limpa.
         $unpaid = $user->grace_ends_at !== null
             || ($data['cancellation_details']['reason'] ?? null) === 'payment_failed';
 
-        if (! $unpaid) {
-            return $response;
-        }
-
-        $user->deactivate(InactiveReason::Unpaid->value);
+        $user->deactivate($unpaid ? InactiveReason::Unpaid->value : InactiveReason::Cancelled->value);
         app(SubscriptionService::class)->sendReactivationLink($user);
 
         return $response;

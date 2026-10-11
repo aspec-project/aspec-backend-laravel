@@ -140,6 +140,29 @@ class StripeSubscriptionService
     }
 
     /**
+     * Agenda o cancelamento no fim do período (cancel_at_period_end) e grava o fim na linha local:
+     * fim do trial, ou fim do período pago (o Cashier pede-o ao Stripe). Usa o Cashier, que passa
+     * pelo dono: aqui é sempre o membro autenticado, nunca uma conta anonimizada.
+     *
+     * @throws ApiErrorException Se o Stripe falhar (a linha local não é alterada).
+     */
+    public function cancelAtPeriodEnd(Subscription $subscription): void
+    {
+        $subscription->cancel();
+    }
+
+    /**
+     * Retoma uma subscrição com cancelamento agendado (cancel_at_period_end=false) e limpa o
+     * ends_at local. Pré-condição: o ends_at ainda está no futuro.
+     *
+     * @throws ApiErrorException Se o Stripe falhar (a linha local não é alterada).
+     */
+    public function resume(Subscription $subscription): void
+    {
+        $subscription->resume();
+    }
+
+    /**
      * Expira uma sessão de Checkout para já não poder ser paga. O Stripe recusa expirar uma sessão
      * que já não está aberta (paga, expirada ou inexistente): nesse caso não há nada a fazer.
      *

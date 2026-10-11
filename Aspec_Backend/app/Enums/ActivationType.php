@@ -10,6 +10,6 @@ enum ActivationType: string
     /** Conta Approved: primeira subscrição, com período experimental. */
     case Activation = 'activation';
 
-    /** Conta Inactive por falta de pagamento: nova subscrição, sem período experimental. */
+    /** Conta Inactive por falta de pagamento ou cancelamento: nova subscrição, sem período experimental. */
     case Reactivation = 'reactivation';
 }

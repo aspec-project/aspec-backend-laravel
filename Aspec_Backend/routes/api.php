@@ -76,5 +76,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
     Route::get('/subscription', [SubscriptionController::class, 'show']);
     Route::post('/subscription/billing-portal', [BillingPortalSessionController::class, 'store'])->middleware('throttle:billing-portal');
+    Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel'])->middleware('throttle:subscription-change');
+    Route::post('/subscription/resume', [SubscriptionController::class, 'resume'])->middleware('throttle:subscription-change');
 });
 

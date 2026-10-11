@@ -108,16 +108,18 @@ class User extends Authenticatable
 
     /**
      * Regra única de quem pode pagar pelo link do email: Approved ativa (com trial) e
-     * Inactive por falta de pagamento reativa (sem trial). Bloqueadas, recusadas, apagadas,
-     * pendentes, ativas e Inactive sem motivo devolvem null.
+     * Inactive por falta de pagamento ou por cancelamento do membro reativa (sem trial; reativar é
+     * igual nos dois casos). Bloqueadas, recusadas, apagadas, pendentes, ativas e Inactive sem
+     * motivo devolvem null.
      */
     public function activationType(): ?ActivationType
     {
         $status = $this->accountStatus?->name;
+        $reactivatable = in_array($this->inactive_reason, [InactiveReason::Unpaid, InactiveReason::Cancelled], true);
 
         return match (true) {
             $status === 'Approved' => ActivationType::Activation,
-            $status === 'Inactive' && $this->inactive_reason === InactiveReason::Unpaid => ActivationType::Reactivation,
+            $status === 'Inactive' && $reactivatable => ActivationType::Reactivation,
             default => null,
         };
     }
