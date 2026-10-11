@@ -4760,7 +4760,7 @@
     },
     {
       "name": "Subscrição",
-      "description": "Ativação da conta com pagamento (Stripe, modo de teste) e faturação (InvoiceExpress). Pedido do cliente, fase 1. Responsável: Mário.\n\n**Fluxo:** candidatura (**Pending**) → admin aprova (**Approved**, sem acesso, recebe email de ativação com link assinado) → o membro preenche os dados de faturação e insere o cartão no Stripe Checkout → webhook do Stripe → **Active** em período experimental → cobrança mensal automática. Pagamento falhado → período de carência de 7 dias com acesso total e email para atualizar o cartão. Sem pagamento no fim da carência → **Inactive** (sem login, fora do diretório) + email de reativação → novo pagamento, sem novo período experimental → **Active**.\n\nValores (preço, período experimental, carência, validade dos links) são configuráveis no backend e ainda por confirmar com o cliente.\n\nOs links de ativação/reativação não precisam de login: a segurança vem da assinatura e do prazo no URL. Os dados do cartão nunca passam pelo backend nem pelo frontend. Erros do Stripe → 502.",
+      "description": "Ativação da conta com pagamento (Stripe, modo de teste) e faturação (InvoiceExpress). Pedido do cliente, fase 1. Responsável: Mário.\n\n**Fluxo:** candidatura (**Pending**) → admin aprova (**Approved**, sem acesso, recebe email de ativação com link assinado) → o membro preenche os dados de faturação e insere o cartão no Stripe Checkout → webhook do Stripe → **Active** em período experimental → cobrança mensal automática. Pagamento falhado → período de carência de 7 dias com acesso total e email para atualizar o cartão. Sem pagamento no fim da carência → **Inactive** (sem login, fora do diretório) + email de reativação → novo pagamento, sem novo período experimental → **Active**. O membro pode cancelar a subscrição no fim do período pago (e retomá-la até lá); no fim, a conta fica **Inactive** e recebe o mesmo email de reativação.\n\nValores (preço, período experimental, carência, validade dos links) são configuráveis no backend e ainda por confirmar com o cliente.\n\nOs links de ativação/reativação não precisam de login: a segurança vem da assinatura e do prazo no URL. Os dados do cartão nunca passam pelo backend nem pelo frontend. Erros do Stripe → 502.",
       "item": [
         {
           "name": "Validar link de ativação",
@@ -5888,7 +5888,7 @@
                 "subscription"
               ]
             },
-            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem limite de pedidos (só lê a base de dados).\n\nEstado da subscrição do membro autenticado, para a página \"Conta → Subscrição\" (`/conta/subscricao`). Responde só com **dados locais** (mantidos pelos webhooks do Stripe), **sem chamar o Stripe**: rápido e funciona mesmo com o Stripe em baixo.\n\nSubscrição mostrada: a **mais recente em curso** (trial, ativa ou em carência); se não houver nenhuma em curso, a mais recente de todas (ex.: só uma cancelada).\n\n- `status`: estado no Stripe: `trialing` (período experimental), `active` (pago), `past_due` (pagamento falhou: período de carência com acesso total), `canceled`;\n- `trial_ends_at`: fim do período experimental **desta subscrição** (ou `null`);\n- `grace_ends_at`: fim do período de carência (só com `past_due`). Se não houver pagamento até esta data, a conta passa a **Inactive**. **Por agora é sempre `null`** (o período de carência ainda não está implementado): o frontend deve mostrar o aviso para atualizar o cartão pelo **`status === 'past_due'`**, não por esta data;\n- `ends_at`: data de fim de uma subscrição cancelada (normalmente `null`);\n- `price` e `billing` (dados de faturação do próprio membro).\n\nDatas em ISO 8601. Não inclui a data da próxima cobrança nem o cartão (o portal de faturação mostra-o). Nunca expõe ids do Stripe nem ids internos.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador)."
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem limite de pedidos (só lê a base de dados).\n\nEstado da subscrição do membro autenticado, para a página \"Conta → Subscrição\" (`/conta/subscricao`). Responde só com **dados locais** (mantidos pelos webhooks do Stripe), **sem chamar o Stripe**: rápido e funciona mesmo com o Stripe em baixo.\n\nSubscrição mostrada: a **mais recente em curso** (trial, ativa ou em carência); se não houver nenhuma em curso, a mais recente de todas (ex.: só uma cancelada).\n\n- `status`: estado no Stripe: `trialing` (período experimental), `active` (pago), `past_due` (pagamento falhou: período de carência com acesso total), `canceled`;\n- `trial_ends_at`: fim do período experimental **desta subscrição** (ou `null`);\n- `grace_ends_at`: fim do período de carência (preenchido depois da 1.ª cobrança falhada, normalmente com `past_due`). Se não houver pagamento até esta data, a conta passa a **Inactive**. O frontend mostra o aviso \"Pagamento em atraso: atualize o cartão até {data}\" com o botão do portal;\n- `ends_at`: fim do acesso de uma subscrição com cancelamento agendado (fim do período pago ou do trial) ou data de fim de uma subscrição terminada (normalmente `null`);\n- `cancel_at_period_end`: `true` se o cancelamento está agendado e ainda não chegou ao fim (o frontend mostra \"Termina a {ends_at}\" e o botão **Retomar**); `false` caso contrário (com `trialing`/`active` mostra o botão **Cancelar subscrição**);\n- `price` e `billing` (dados de faturação do próprio membro).\n\nDatas em ISO 8601. Não inclui a data da próxima cobrança nem o cartão (o portal de faturação mostra-o). Nunca expõe ids do Stripe nem ids internos.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador)."
           },
           "response": [
             {
@@ -5922,7 +5922,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"trialing\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"trialing\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "200 Em período de carência",
@@ -5955,7 +5955,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"past_due\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": \"2026-11-16T10:20:00+00:00\",\n    \"ends_at\": null,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"past_due\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": \"2026-11-16T10:20:00+00:00\",\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -6288,6 +6288,668 @@
           ]
         },
         {
+          "name": "Cancelar subscrição",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/cancel",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "cancel"
+              ]
+            },
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`: é um POST porque muda o estado no Stripe.\n\nAgenda o cancelamento da subscrição para o **fim do período já pago** (no período experimental, para o fim do trial, sem cobrança). Sem reembolso. O membro **mantém o acesso até `ends_at`** e pode retomar até lá (\"Retomar subscrição\"). Recebe um email de confirmação (com o aviso \"Se não foi você, altere a password e retome a subscrição\"). No fim do período o Stripe termina a subscrição e a conta passa a **Inactive**, com o email \"A sua subscrição ASPEC terminou\" e o link de reativação (sem novo período experimental).\n\nSó com `status` `trialing`/`active` e sem cancelamento agendado. Com um pagamento em atraso (`past_due`/`unpaid`) é recusado: a subscrição já termina no fim do período de carência se não for paga. O portal de faturação **não** permite cancelar: este é o único caminho.\n\nResposta: a subscrição atualizada (mesmo formato de \"Ver a minha subscrição\"), com `cancel_at_period_end: true` e `ends_at`.\n\n**Limite:** `subscription-change`, 10 pedidos por minuto por utilizador, partilhado com \"Retomar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou cancelamento já agendado, pagamento em atraso ou estado que não permite cancelar · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
+          },
+          "response": [
+            {
+              "name": "200 Cancelamento agendado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cancelamento agendado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cancelamento agendado. Mantém o acesso até 20/11/2026.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_ends_at\": null,\n    \"grace_ends_at\": null,\n    \"ends_at\": \"2026-11-20T10:15:00+00:00\",\n    \"cancel_at_period_end\": true,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Sem subscrição",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Sem subscrição"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não existe subscrição.\"\n}"
+            },
+            {
+              "name": "409 Conta já não está ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Conta já não está ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta já não está ativa.\"\n}"
+            },
+            {
+              "name": "409 Cancelamento já agendado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Cancelamento já agendado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O cancelamento da subscrição já está agendado.\"\n}"
+            },
+            {
+              "name": "409 Pagamento em atraso",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Pagamento em atraso"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Tem um pagamento em atraso. Atualize o cartão ou, se não pagar, a subscrição termina no fim do período de carência.\"\n}"
+            },
+            {
+              "name": "409 Estado não permite cancelar",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Estado não permite cancelar"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A subscrição não pode ser cancelada no estado atual.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
+              "name": "502 Serviço de pagamentos indisponível",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "502 Serviço de pagamentos indisponível"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/cancel",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "cancel"
+                  ]
+                }
+              },
+              "status": "Bad Gateway",
+              "code": 502,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não foi possível contactar o serviço de pagamentos. Tente novamente.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Retomar subscrição",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/subscription/resume",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "subscription",
+                "resume"
+              ]
+            },
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`.\n\nAnula um cancelamento agendado: a subscrição continua e a renovação mantém-se na data em que ia terminar (`ends_at` anterior), com a cobrança da quota. Só funciona antes de `ends_at`. O membro recebe um email de confirmação (com o aviso \"Se não foi você, altere a password e cancele de novo a subscrição\"); se o Stripe falhar, nada muda e não há email.\n\nResposta: a subscrição atualizada, com `cancel_at_period_end: false` e `ends_at: null`.\n\n**Limite:** `subscription-change`, 10 pedidos por minuto por utilizador, partilhado com \"Cancelar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou sem cancelamento agendado (ou o período já terminou) · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
+          },
+          "response": [
+            {
+              "name": "200 Subscrição retomada",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Subscrição retomada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"A subscrição foi retomada.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_ends_at\": null,\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Sem subscrição",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Sem subscrição"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não existe subscrição.\"\n}"
+            },
+            {
+              "name": "409 Conta já não está ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Conta já não está ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta já não está ativa.\"\n}"
+            },
+            {
+              "name": "409 Sem cancelamento agendado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Sem cancelamento agendado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A subscrição não tem um cancelamento agendado.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
+              "name": "502 Serviço de pagamentos indisponível",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "502 Serviço de pagamentos indisponível"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/subscription/resume",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "subscription",
+                    "resume"
+                  ]
+                }
+              },
+              "status": "Bad Gateway",
+              "code": 502,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não foi possível contactar o serviço de pagamentos. Tente novamente.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Webhook Stripe (não usar no frontend)",
           "request": {
             "method": "POST",
@@ -6312,7 +6974,7 @@
                 "webhook"
               ]
             },
-            "description": "**Estado:** ASPEC-129 implementa assinatura, fail closed, idempotência, sincronização do Cashier e fatura no `invoice.payment_succeeded`. ASPEC-133 implementa `customer.subscription.created` (ativação e reativação, com cancelamento de subscrições duplicadas ou de contas que não podem pagar). Carência (`invoice.payment_failed`, `customer.subscription.updated`), `customer.subscription.deleted` e a tarefa agendada chegam no S7.\n\n**Não usar no frontend.** Chamado apenas pelo Stripe; incluído só como documentação. Sem login e sem limite de pedidos.\n\n**Segurança:** o pedido só é aceite com o header `Stripe-Signature` válido (assinado com `STRIPE_WEBHOOK_SECRET`); assinatura inválida ou ausente → 403. Se o servidor não tiver `STRIPE_WEBHOOK_SECRET` configurado, recusa tudo com 500 sem processar (*fail closed*): sem segredo, qualquer pessoa podia ativar contas com um POST. Em desenvolvimento usar o Stripe CLI: `stripe listen --forward-to localhost:8000/api/stripe/webhook`.\n\n**Idempotente:** numa transação, o `id` do evento é registado **antes** de o processar. Um evento repetido (o Stripe pode entregar o mesmo evento mais de uma vez) encontra o `id` e responde 200 sem fazer nada. Se o processamento falhar, a transação é desfeita (o `id` não fica registado) e o Stripe volta a tentar. Os emails só saem depois de a transação ser confirmada. Eventos sem tratamento também respondem 200. O corpo do 200 é texto simples (o Stripe só lê o código HTTP).\n\n**Eventos tratados e mudanças de estado:**\n- `customer.subscription.created` (`trialing`/`active`): conta **Approved** → **Active** (com período experimental) ou **Inactive** por falta de pagamento → **Active** (reativação); email de boas-vindas. Se a conta não puder ser ativada (ex.: bloqueada) ou já tiver outra subscrição válida, a nova subscrição é cancelada no Stripe e a conta não muda;\n- `customer.subscription.updated`: sincroniza a subscrição; com `active` termina o período de carência;\n- `invoice.payment_failed` (ignorado se a fatura já estiver paga): 1.ª falha → início do período de carência (7 dias, configurável) + email para atualizar o cartão; a conta continua **Active**;\n- `invoice.payment_succeeded` (valor > 0): cria a fatura `pending` e emite-a em fila (driver log ou InvoiceExpress), enviada por email; termina a carência;\n- `customer.subscription.deleted`: conta **Active** → **Inactive** por falta de pagamento + email de reativação.\n\nO fim da carência sem pagamento também é tratado por uma tarefa agendada diária (Active → Inactive por falta de pagamento). Contas de administrador são ignoradas.",
+            "description": "**Estado:** completo (ASPEC-129, ASPEC-133, ASPEC-235, ASPEC-236, ASPEC-237, ASPEC-250).\n\n**Não usar no frontend.** Chamado apenas pelo Stripe; incluído só como documentação. Sem login e sem limite de pedidos.\n\n**Segurança:** o pedido só é aceite com o header `Stripe-Signature` válido (assinado com `STRIPE_WEBHOOK_SECRET`); assinatura inválida ou ausente → 403. Se o servidor não tiver `STRIPE_WEBHOOK_SECRET` configurado, recusa tudo com 500 sem processar (*fail closed*): sem segredo, qualquer pessoa podia ativar contas com um POST. Em desenvolvimento usar o Stripe CLI: `stripe listen --forward-to localhost:8000/api/stripe/webhook`.\n\n**Idempotente:** numa transação, o `id` do evento é registado **antes** de o processar. Um evento repetido (o Stripe pode entregar o mesmo evento mais de uma vez) encontra o `id` e responde 200 sem fazer nada. Se o processamento falhar, a transação é desfeita (o `id` não fica registado) e o Stripe volta a tentar. Os emails só saem depois de a transação ser confirmada. Eventos sem tratamento também respondem 200. O corpo do 200 é texto simples (o Stripe só lê o código HTTP).\n\n**Eventos tratados e mudanças de estado** (só contas de membro; administradores e contas bloqueadas nunca mudam nem recebem estes emails):\n- `customer.subscription.created` (`trialing`/`active`): conta **Approved** → **Active** (com período experimental) ou **Inactive** por falta de pagamento/cancelamento → **Active** (reativação, sem trial); email de boas-vindas. Se a conta não puder ser ativada (ex.: bloqueada) ou já tiver outra subscrição válida, a nova subscrição é cancelada no Stripe e a conta não muda;\n- `customer.subscription.updated`: sincroniza a subscrição. Ao passar a `trialing`/`active`: conta **Active** → termina o período de carência; conta que pode pagar → ativação igual ao `created` (ex.: 3-D Secure confirmado depois do Checkout). Subscrições já terminadas (`canceled`) são ignoradas (estado terminal);\n- `invoice.payment_failed` (subscrição, fatura não paga): 1.ª falha numa conta **Active** → período de carência (7 dias, configurável) + email para atualizar o cartão; a conta continua **Active**. As novas tentativas do Stripe não prolongam o prazo;\n- `invoice.payment_succeeded` (valor > 0): termina a carência; cria a fatura `pending` e emite-a em fila (driver log ou InvoiceExpress), enviada por email;\n- `customer.subscription.deleted`: conta **Active** sem outra subscrição em curso → **Inactive** + email de reativação. Motivo `unpaid` se estava em carência ou o Stripe cancelou por falta de pagamento; senão `cancelled` (cancelamento pedido pelo membro ou feito no dashboard).\n\nO fim da carência é decidido pela tarefa agendada `subscriptions:end-grace` (de hora a hora): confirma no Stripe e, sem pagamento, passa a conta a **Inactive** (`unpaid`), envia o email de reativação e cancela a subscrição. O `customer.subscription.deleted` é a rede de segurança.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"id\": \"evt_1Q2w3E4r5T6y7U8i\",\n  \"type\": \"customer.subscription.created\",\n  \"data\": {\n    \"object\": {\n      \"id\": \"sub_1Q2w3E4r5T6y7U8i\",\n      \"object\": \"subscription\",\n      \"customer\": \"cus_Q2w3E4r5T6y7U8\",\n      \"status\": \"trialing\",\n      \"trial_end\": 1794738900\n    }\n  }\n}",
