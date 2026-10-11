@@ -124,14 +124,26 @@ class StripeWebhookController extends WebhookController
             return $response;
         }
 
-        if (! in_array($data['status'], self::RUNNING_STATUSES, true)) {
-            return $response;
+        if (in_array($data['status'], self::RUNNING_STATUSES, true)) {
+            $this->applySubscriptionToAccount($user, $data);
         }
 
+        return $response;
+    }
+
+    /**
+     * Regra única de ativação, usada pelo created e pelo updated (subscrição incomplete que passa
+     * a ativa, ex.: 3-D Secure confirmado depois do Checkout). Recebe uma subscrição trialing/
+     * active, já sincronizada pelo Cashier, e o utilizador relido com lock (passos 3–6 do created).
+     *
+     * @param  array<string, mixed>  $data  Objeto subscrição do evento.
+     */
+    private function applySubscriptionToAccount(User $user, array $data): void
+    {
         if ($user->hasOngoingSubscription(exceptStripeId: $data['id'])) {
             $this->cancelSubscription($user, $data['id'], 'Subscrição duplicada cancelada.');
 
-            return $response;
+            return;
         }
 
         if ($user->activationType() === null) {
@@ -139,7 +151,7 @@ class StripeWebhookController extends WebhookController
                 $this->cancelSubscription($user, $data['id'], 'Subscrição de conta não elegível cancelada.');
             }
 
-            return $response;
+            return;
         }
 
         $trialEndsAt = isset($data['trial_end']) ? Carbon::createFromTimestamp($data['trial_end']) : null;
@@ -153,16 +165,15 @@ class StripeWebhookController extends WebhookController
         ])->save();
 
         $user->notify(new SubscriptionActivatedNotification($trialEndsAt));
-
-        return $response;
     }
 
     /**
-     * Subscrição alterada no Stripe. Ativa (trialing/active) numa conta Active termina o período
-     * de carência, mas só numa passagem real de past_due/unpaid (previous_attributes), a única
-     * que prova que a dívida foi paga (um updated antigo, ex. só metadata, entregue depois da
-     * falha não pode limpar a carência). Os outros estados só ficam sincronizados pelo handler
-     * do Cashier.
+     * Subscrição alterada no Stripe. Quando fica trialing/active: numa conta Active termina o
+     * período de carência, mas só numa passagem real de past_due/unpaid (previous_attributes),
+     * a única que prova que a dívida foi paga (um updated antigo, ex. só metadata, entregue depois
+     * da falha não pode limpar a carência); noutra conta aplica a mesma regra de ativação do
+     * created (subscrição incomplete que passa a ativa, ex.: 3-D Secure). Os outros estados só
+     * ficam sincronizados pelo handler do Cashier.
      *
      * Uma subscrição local já terminada (canceled/incomplete_expired) é ignorada sem chamar o
      * Cashier: "canceled" é terminal no Stripe, e um evento antigo que chegasse depois do
@@ -190,10 +201,16 @@ class StripeWebhookController extends WebhookController
             return $response;
         }
 
-        if (in_array($data['status'] ?? null, self::RUNNING_STATUSES, true)
-            && $user->accountStatus?->name === 'Active'
-            && in_array($payload['data']['previous_attributes']['status'] ?? null, self::OVERDUE_STATUSES, true)) {
-            $this->endGracePeriod($user);
+        if (! in_array($data['status'] ?? null, self::RUNNING_STATUSES, true)) {
+            return $response;
+        }
+
+        if ($user->accountStatus?->name === 'Active') {
+            if (in_array($payload['data']['previous_attributes']['status'] ?? null, self::OVERDUE_STATUSES, true)) {
+                $this->endGracePeriod($user);
+            }
+        } else {
+            $this->applySubscriptionToAccount($user, $data);
         }
 
         return $response;
