@@ -473,4 +473,44 @@ class StripeSubscriptionServiceTest extends TestCase
 
         $this->service()->retrieveCheckout('cs_test_1');
     }
+
+    #[Test]
+    public function retrieve_status_reads_the_subscription_status_from_stripe(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn ($method, $url) => $method === 'get' && str_ends_with($url, '/v1/subscriptions/sub_test_1')
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'active'], 200]
+            : null;
+
+        $status = $this->service()->retrieveStatus($subscription);
+
+        $this->assertSame('active', $status);
+        $this->assertCount(1, $this->http->requests);
+        $this->assertSame('get', $this->http->requests[0]['method']);
+        $this->assertStringEndsWith('/v1/subscriptions/sub_test_1', $this->http->requests[0]['url']);
+    }
+
+    #[Test]
+    public function retrieve_status_of_a_subscription_stripe_no_longer_knows_is_canceled(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn () => $this->stripeError('resource_missing', 'No such subscription');
+
+        $this->assertSame('canceled', $this->service()->retrieveStatus($subscription));
+    }
+
+    /**
+     * Sem resposta fiável do Stripe a conta não pode ser desativada: o erro sobe para o comando
+     * saltar a conta e tentar na hora seguinte.
+     */
+    #[Test]
+    public function retrieve_status_rethrows_other_stripe_errors(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn () => $this->stripeError('parameter_invalid', 'Erro');
+
+        $this->expectException(InvalidRequestException::class);
+
+        $this->service()->retrieveStatus($subscription);
+    }
 }

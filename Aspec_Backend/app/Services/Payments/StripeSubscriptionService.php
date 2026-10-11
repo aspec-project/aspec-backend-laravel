@@ -9,6 +9,7 @@ use Laravel\Cashier\Subscription;
 use RuntimeException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
+use Stripe\Subscription as StripeSubscription;
 
 /**
  * Único sítio que fala com o Stripe sobre subscrições e Checkout. As regras de negócio
@@ -115,6 +116,26 @@ class StripeSubscriptionService
             }
 
             $subscription->markAsCanceled();
+        }
+    }
+
+    /**
+     * Estado atual da subscrição no Stripe (ex.: "active", "past_due"), usado para confirmar uma
+     * falta de pagamento antes de desativar a conta. Chama o Stripe diretamente, sem passar pelo
+     * dono, como o cancelNow(). Uma subscrição que o Stripe já não conhece conta como cancelada.
+     *
+     * @throws ApiErrorException Se o Stripe falhar por outro motivo.
+     */
+    public function retrieveStatus(Subscription $subscription): string
+    {
+        try {
+            return Cashier::stripe()->subscriptions->retrieve($subscription->stripe_id)->status;
+        } catch (InvalidRequestException $e) {
+            if ($e->getStripeCode() !== 'resource_missing') {
+                throw $e;
+            }
+
+            return StripeSubscription::STATUS_CANCELED;
         }
     }
 

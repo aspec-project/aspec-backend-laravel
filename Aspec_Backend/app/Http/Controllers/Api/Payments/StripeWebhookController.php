@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\Payments;
 
+use App\Enums\InactiveReason;
 use App\Enums\InvoiceStatus;
 use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use App\Notifications\SubscriptionActivatedNotification;
 use App\Services\Payments\StripeSubscriptionService;
+use App\Services\Payments\SubscriptionService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -193,6 +195,48 @@ class StripeWebhookController extends WebhookController
             && in_array($payload['data']['previous_attributes']['status'] ?? null, self::OVERDUE_STATUSES, true)) {
             $this->endGracePeriod($user);
         }
+
+        return $response;
+    }
+
+    /**
+     * Subscrição terminada no Stripe. Rede de segurança do comando subscriptions:end-grace (ex.:
+     * scheduler parado): depois do handler do Cashier (marca a linha local cancelada), uma conta
+     * Active sem outra subscrição em curso fica Inactive por falta de pagamento e recebe o link
+     * de reativação, se estava em carência ou se o Stripe cancelou por falta de pagamento.
+     * Nada muda para contas que não estão Active (bloqueadas, já desativadas pelo comando,
+     * apagadas), admins, nem quando há outra subscrição em curso (era um duplicado cancelado pelo
+     * webhook created; sem esta guarda o membro perdia o acesso).
+     * O utilizador é bloqueado antes do Cashier e relido depois, como no created.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function handleCustomerSubscriptionDeleted(array $payload)
+    {
+        $data = $payload['data']['object'];
+
+        $locked = $this->lockUserByCustomer($data['customer'] ?? null);
+
+        $response = parent::handleCustomerSubscriptionDeleted($payload);
+
+        $user = $this->relockUser($locked);
+
+        if (! $user
+            || $user->role?->name === 'Admin'
+            || $user->accountStatus?->name !== 'Active'
+            || $user->hasOngoingSubscription()) {
+            return $response;
+        }
+
+        $unpaid = $user->grace_ends_at !== null
+            || ($data['cancellation_details']['reason'] ?? null) === 'payment_failed';
+
+        if (! $unpaid) {
+            return $response;
+        }
+
+        $user->deactivate(InactiveReason::Unpaid->value);
+        app(SubscriptionService::class)->sendReactivationLink($user);
 
         return $response;
     }
