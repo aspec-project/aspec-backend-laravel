@@ -24,7 +24,7 @@ class SubscriptionShowTest extends TestCase
 
     private const NOT_FOUND = 'Não existe subscrição.';
 
-    private const DATA_KEYS = ['status', 'trial_ends_at', 'grace_ends_at', 'ends_at', 'price', 'billing'];
+    private const DATA_KEYS = ['status', 'trial_ends_at', 'grace_ends_at', 'ends_at', 'cancel_at_period_end', 'price', 'billing'];
 
     private const BILLING_KEYS = ['billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city'];
 
@@ -78,6 +78,7 @@ class SubscriptionShowTest extends TestCase
             ->assertJsonPath('data.trial_ends_at', $this->iso($trialEndsAt))
             ->assertJsonPath('data.grace_ends_at', null)
             ->assertJsonPath('data.ends_at', null)
+            ->assertJsonPath('data.cancel_at_period_end', false)
             ->assertJsonPath('data.price.currency', 'eur')
             ->assertJsonPath('data.price.interval', 'month')
             ->assertJsonPath('data.billing', [
@@ -180,6 +181,63 @@ class SubscriptionShowTest extends TestCase
         $this->getJson(self::URL)
             ->assertOk()
             ->assertJsonPath('data.status', 'trialing');
+    }
+
+    /**
+     * O frontend decide entre "Cancelar" e "Retomar" por esta flag, sem interpretar o ends_at.
+     */
+    #[Test]
+    public function scheduled_cancellation_is_flagged_while_the_period_has_not_ended(): void
+    {
+        $this->freezeSecond();
+        $endsAt = now()->addDays(20);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active', ['ends_at' => $endsAt]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.ends_at', $this->iso($endsAt))
+            ->assertJsonPath('data.cancel_at_period_end', true);
+    }
+
+    #[Test]
+    public function scheduled_cancellation_during_the_trial_is_flagged(): void
+    {
+        $this->freezeSecond();
+        $trialEndsAt = now()->addDays(10);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => $trialEndsAt, 'ends_at' => $trialEndsAt]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.cancel_at_period_end', true);
+    }
+
+    #[Test]
+    public function running_subscription_without_end_date_is_not_flagged(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.cancel_at_period_end', false);
+    }
+
+    #[Test]
+    public function ended_subscription_is_not_flagged_as_a_scheduled_cancellation(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member, 'canceled', ['ends_at' => now()->subDay()]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.cancel_at_period_end', false);
     }
 
     #[Test]

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 use Illuminate\Support\Facades\DB;
@@ -99,13 +100,39 @@ class UserModelTest extends TestCase
     }
 
     #[Test]
-    public function inactive_reason_enum_has_the_four_reasons(): void
+    public function inactive_reason_enum_has_the_five_reasons(): void
     {
         $this->assertSame('rejected', InactiveReason::Rejected->value);
         $this->assertSame('blocked', InactiveReason::Blocked->value);
         $this->assertSame('unpaid', InactiveReason::Unpaid->value);
+        $this->assertSame('cancelled', InactiveReason::Cancelled->value);
         $this->assertSame('deleted', InactiveReason::Deleted->value);
-        $this->assertCount(4, InactiveReason::cases());
+        $this->assertCount(5, InactiveReason::cases());
+    }
+
+    public static function inactiveReasonsAndActivationTypes(): array
+    {
+        return [
+            'sem pagamento' => ['unpaid', 'reactivation'],
+            'cancelada pelo membro' => ['cancelled', 'reactivation'],
+            'bloqueada' => ['blocked', null],
+            'recusada' => ['rejected', null],
+            'apagada' => ['deleted', null],
+            'sem motivo' => [null, null],
+        ];
+    }
+
+    /**
+     * Reativar pagando só é possível depois de falta de pagamento ou de um cancelamento pelo
+     * membro; os outros motivos são decisões do admin (ou a conta já não existe).
+     */
+    #[Test]
+    #[DataProvider('inactiveReasonsAndActivationTypes')]
+    public function only_unpaid_and_cancelled_inactive_accounts_can_reactivate(?string $reason, ?string $expected): void
+    {
+        $user = User::factory()->inactive($reason === null ? null : InactiveReason::from($reason))->create();
+
+        $this->assertSame($expected, $user->fresh()->activationType()?->value);
     }
 
     #[Test]

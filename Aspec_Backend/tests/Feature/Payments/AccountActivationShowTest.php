@@ -89,6 +89,17 @@ class AccountActivationShowTest extends TestCase
     }
 
     #[Test]
+    public function account_whose_subscription_was_cancelled_gets_reactivation_details_without_trial(): void
+    {
+        $user = User::factory()->inactive(InactiveReason::Cancelled)->withBilling()->create();
+
+        $this->getJson($this->activationPath($user))
+            ->assertOk()
+            ->assertJsonPath('data.type', 'reactivation')
+            ->assertJsonPath('data.trial_days', 0);
+    }
+
+    #[Test]
     public function tampered_signature_is_forbidden(): void
     {
         $user = User::factory()->approved()->create();

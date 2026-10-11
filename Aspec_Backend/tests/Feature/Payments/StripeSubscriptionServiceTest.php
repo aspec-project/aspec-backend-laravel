@@ -473,4 +473,97 @@ class StripeSubscriptionServiceTest extends TestCase
 
         $this->service()->retrieveCheckout('cs_test_1');
     }
+
+    #[Test]
+    public function retrieve_status_reads_the_subscription_status_from_stripe(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn ($method, $url) => $method === 'get' && str_ends_with($url, '/v1/subscriptions/sub_test_1')
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'active'], 200]
+            : null;
+
+        $status = $this->service()->retrieveStatus($subscription);
+
+        $this->assertSame('active', $status);
+        $this->assertCount(1, $this->http->requests);
+        $this->assertSame('get', $this->http->requests[0]['method']);
+        $this->assertStringEndsWith('/v1/subscriptions/sub_test_1', $this->http->requests[0]['url']);
+    }
+
+    #[Test]
+    public function retrieve_status_of_a_subscription_stripe_no_longer_knows_is_canceled(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn () => $this->stripeError('resource_missing', 'No such subscription');
+
+        $this->assertSame('canceled', $this->service()->retrieveStatus($subscription));
+    }
+
+    /**
+     * Sem resposta fiável do Stripe a conta não pode ser desativada: o erro sobe para o comando
+     * saltar a conta e tentar na hora seguinte.
+     */
+    #[Test]
+    public function retrieve_status_rethrows_other_stripe_errors(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->create(), 'past_due');
+        $this->http->respond = fn () => $this->stripeError('parameter_invalid', 'Erro');
+
+        $this->expectException(InvalidRequestException::class);
+
+        $this->service()->retrieveStatus($subscription);
+    }
+
+    #[Test]
+    public function cancel_at_period_end_asks_stripe_and_stores_the_end_of_the_paid_period(): void
+    {
+        $periodEnd = now()->addDays(20)->startOfSecond()->timestamp;
+        $subscription = $this->subscriptionFor(User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']));
+        $subscription->items()->create([
+            'stripe_id' => 'si_test_1',
+            'stripe_product' => 'prod_test',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+        $this->http->respond = fn ($method, $url) => match (true) {
+            $method === 'post' && str_ends_with($url, '/v1/subscriptions/sub_test_1') => [[
+                'id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'active', 'cancel_at_period_end' => true,
+            ], 200],
+            str_contains($url, '/v1/subscription_items/si_test_1') => [[
+                'id' => 'si_test_1', 'object' => 'subscription_item', 'current_period_end' => $periodEnd,
+            ], 200],
+            default => null,
+        };
+
+        $this->service()->cancelAtPeriodEnd($subscription);
+
+        $update = collect($this->http->requests)->first(fn (array $request) => $request['method'] === 'post'
+            && str_ends_with($request['url'], '/v1/subscriptions/sub_test_1'));
+        $this->assertNotNull($update);
+        $this->assertContains($update['params']['cancel_at_period_end'] ?? null, ['true', true]);
+        $fresh = $subscription->fresh();
+        $this->assertSame('active', $fresh->stripe_status);
+        $this->assertNotNull($fresh->ends_at);
+        $this->assertSame($periodEnd, $fresh->ends_at->timestamp);
+    }
+
+    #[Test]
+    public function resume_asks_stripe_to_keep_the_subscription_and_clears_the_end_date(): void
+    {
+        $subscription = $this->subscriptionFor(User::factory()->withBilling()->create(['stripe_id' => 'cus_test_1']));
+        $subscription->forceFill(['ends_at' => now()->addDays(20)])->save();
+        $this->http->respond = fn ($method, $url) => $method === 'post' && str_ends_with($url, '/v1/subscriptions/sub_test_1')
+            ? [['id' => 'sub_test_1', 'object' => 'subscription', 'status' => 'active', 'cancel_at_period_end' => false], 200]
+            : null;
+
+        $this->service()->resume($subscription);
+
+        $update = collect($this->http->requests)->first(fn (array $request) => $request['method'] === 'post'
+            && str_ends_with($request['url'], '/v1/subscriptions/sub_test_1'));
+        $this->assertNotNull($update);
+        $this->assertContains($update['params']['cancel_at_period_end'] ?? null, ['false', false]);
+        $fresh = $subscription->fresh();
+        $this->assertNull($fresh->ends_at);
+        $this->assertSame('active', $fresh->stripe_status);
+    }
 }

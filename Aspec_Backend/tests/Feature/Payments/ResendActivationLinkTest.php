@@ -81,6 +81,17 @@ class ResendActivationLinkTest extends TestCase
     }
 
     #[Test]
+    public function cancelled_inactive_account_receives_a_new_reactivation_link(): void
+    {
+        $user = User::factory()->inactive(InactiveReason::Cancelled)->withBilling()->create();
+
+        $this->resend($user->email)->assertOk()->assertJsonPath('message', self::MESSAGE);
+
+        Notification::assertSentToTimes($user, ReactivationLinkNotification::class, 1);
+        Notification::assertNotSentTo($user, ActivationLinkNotification::class);
+    }
+
+    #[Test]
     public function unknown_email_gets_the_same_answer_and_nothing_is_sent(): void
     {
         $this->resend('ninguem@exemplo.pt')

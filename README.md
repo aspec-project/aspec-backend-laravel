@@ -27,6 +27,7 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
   stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed
   ```
   Copiar o `whsec_…` mostrado para `STRIPE_WEBHOOK_SECRET`. Mantém-se enquanto o login da CLI for válido; se mudar, atualizar o `.env` e `php artisan config:clear` (senão os webhooks locais dão 403). Para gerar eventos: `stripe trigger invoice.payment_failed`.
+- **Versão da API dos webhooks:** o código lê os eventos no formato **`2025-06-30.basil`** (a versão do Cashier 16.8). Ao criar o endpoint no dashboard (servidor), escolher essa versão. O `stripe listen` usa a versão por omissão da conta: confirmar em Developers → versão da API e verificar o `api_version` de um evento no `stripe listen`. Com uma versão anterior, as cobranças falhadas não abrem o período de carência e o log mostra "Falha de pagamento num formato antigo da API do Stripe; carência não aberta.".
 - **`stripe trigger invoice.payment_succeeded`:** prova a assinatura e a idempotência (aparece uma linha em `processed_webhook_events`), mas o cliente é criado pela CLI e não é nosso, por isso não há fatura (só um aviso no log). É normal.
 - **Ver uma fatura** (com `stripe listen` e `php artisan queue:work` a correr), em `php artisan tinker`:
   ```php
@@ -35,7 +36,7 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
   ```
   A linha em `invoices` passa a `issued` e o `storage/logs/laravel.log` tem "Fatura emitida (driver log)". Para limpar: `$u->subscription('default')->cancelNow(); $u->anonymizeAndDelete();` (a fatura fica: obrigação fiscal).
 - **Fila:** com `QUEUE_CONNECTION=database`, sem `php artisan queue:work` as faturas ficam `pending`.
-- **Pagamentos falhados (dashboard do Stripe → Billing → definições de pagamentos falhados):** depois das tentativas automáticas (Smart Retries, ≥ 7 dias), escolher **cancelar a subscrição**. Assim o Stripe deixa de cobrar e o webhook `customer.subscription.deleted` atualiza a subscrição local.
+- **Pagamentos falhados (dashboard do Stripe → Billing → definições de pagamentos falhados):** Smart Retries com janela de **2 semanas** e, no fim, **cancelar a subscrição**. Porquê 2 semanas: quem termina a carência é o nosso comando `subscriptions:end-grace` (7 dias), que chega sempre primeiro; o cancelamento do Stripe só atua como rede de segurança se o scheduler não estiver a correr (o webhook `customer.subscription.deleted` desativa então a conta).
 - **Billing Portal (atualizar o cartão):** `STRIPE_BILLING_PORTAL_CONFIGURATION` é **obrigatória fora de `local`/`testing`** (sem ela o portal responde 500 e a exceção fica no log); em `local` é opcional (usa a configuração por omissão do dashboard), mas convém configurá-la para a demo mostrar só "atualizar cartão". O membro abre o portal com `POST /api/subscription/billing-portal` e volta a `{FRONTEND_URL}/conta/subscricao`. Passo a passo (modo de teste; repetir em live com as chaves live, porque as configurações não são partilhadas entre modos):
   - **Opção A — Stripe CLI (recomendada, cria uma configuração própria):**
     ```bash
@@ -51,10 +52,11 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
   - **Opção B — dashboard:** Settings → Billing → Customer portal: ligar só **atualizar o método de pagamento**; desligar **cancelar subscrição**, **mudar de plano**, **editar dados do cliente** (email, morada, NIF) e **histórico de faturas**; guardar. Obter o id com `stripe billing_portal configurations list` (a que tem `"is_default": true`). Nota: se alguém mudar a configuração por omissão no dashboard, este id muda de opções também, por isso é preferível a opção A.
   - Pôr `STRIPE_BILLING_PORTAL_CONFIGURATION=bpc_…` no `.env` e correr `php artisan config:clear`.
   - Confirmar: `stripe billing_portal configurations retrieve bpc_…` → só `payment_method_update.enabled = true`.
-  - Porquê desligar o resto: as faturas fiscais saem da InvoiceExpress com os dados de faturação guardados na plataforma, por isso alterá-los no Stripe não mudava as faturas; o cancelamento pelo próprio membro está à espera da resposta do cliente.
+  - Porquê desligar o resto: as faturas fiscais saem da InvoiceExpress com os dados de faturação guardados na plataforma, por isso alterá-los no Stripe não mudava as faturas; o cancelamento é feito na plataforma (`POST /api/subscription/cancel`), um só caminho com as nossas regras e emails.
+  - Cartão novo (verificado a 11/10 em modo de teste): o portal muda o cartão predefinido do **cliente** (`invoice_settings.default_payment_method`); a subscrição fica com `default_payment_method: null` e por isso a próxima cobrança usa o cartão novo. Nada a fazer do nosso lado.
 - **Cartões de teste:** `4242 4242 4242 4242` (sucesso), `4000 0000 0000 0341` (é aceite mas a cobrança falha → período de carência); qualquer data futura e qualquer CVC.
-- **Test clocks** (dashboard do Stripe) para avançar o trial e a carência numa demonstração.
-- **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e `php artisan schedule:work` (fim da carência).
+- **Test clocks:** só servem para clientes criados dentro de um clock; os clientes criados pelo Checkout não estão, por isso a demo usa o guião "Ciclo de vida da subscrição" abaixo.
+- **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e o scheduler (fim da carência, de hora a hora): `php artisan schedule:work` em local; no servidor, um cron `* * * * * php artisan schedule:run`. Para a demo, `php artisan subscriptions:end-grace` corre o fim da carência à mão.
 - **Depois de `git pull`:** `composer install` e `php artisan migrate`.
 
 ### Ativação da conta (demo ponta a ponta)
@@ -67,4 +69,23 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 
 O link vale 7 dias (`ACTIVATION_LINK_DAYS` / `REACTIVATION_LINK_DAYS`) e pode ser aberto várias vezes: repetir o pedido com um Checkout ainda aberto devolve o mesmo pagamento. Desbloquear uma conta também envia o link (ativação, se nunca subscreveu; reativação, sem novo período experimental, se já subscreveu).
 
-**Reenviar o link:** se o link expirou ou o email se perdeu, a página `/ativacao/novo-link` do frontend pede o email e chama `POST /api/account-activations/resend` (público). Contas Approved recebem um novo link de ativação e contas inativas por falta de pagamento um de reativação; a resposta é sempre a mesma, exista a conta ou não. Limites: no máximo 5 reenvios por email por dia (de qualquer IP), 3 em 15 min por email+IP e 10/h por IP. Para testar: pedir o reenvio para o email de uma conta Approved e abrir o novo link no `storage/logs/laravel.log` (com `php artisan queue:work` a correr); com um email inexistente a resposta é igual e nada aparece no log.
+**Reenviar o link:** se o link expirou ou o email se perdeu, a página `/ativacao/novo-link` do frontend pede o email e chama `POST /api/account-activations/resend` (público). Contas Approved recebem um novo link de ativação e contas inativas por falta de pagamento ou com a subscrição cancelada um de reativação; a resposta é sempre a mesma, exista a conta ou não. Limites: no máximo 5 reenvios por email por dia (de qualquer IP), 3 em 15 min por email+IP e 10/h por IP. Para testar: pedir o reenvio para o email de uma conta Approved e abrir o novo link no `storage/logs/laravel.log` (com `php artisan queue:work` a correr); com um email inexistente a resposta é igual e nada aparece no log.
+
+### Período de carência e cancelamento
+
+- **Carência:** a 1.ª cobrança falhada (`invoice.payment_failed`) abre um período de carência de `SUBSCRIPTION_GRACE_DAYS` dias (7 por omissão) em `users.grace_ends_at` e envia um email com o prazo e o botão "Atualizar cartão" (`/conta/subscricao`). O membro mantém o acesso total. As novas tentativas do Stripe não prolongam o prazo. Um pagamento recebido (`invoice.payment_succeeded` ou subscrição de volta a `active`) termina a carência.
+- **Fim da carência:** o comando `subscriptions:end-grace` (agendado de hora a hora) confirma no Stripe o estado de cada conta com o prazo expirado. Se estiver paga, só limpa a carência; senão a conta fica **Inactive** (`unpaid`): sem login, fora do diretório, com email de reativação (Checkout sem novo período experimental). Depois, a subscrição é cancelada no Stripe. Se o Stripe não responder, a conta fica como está e é tentada na hora seguinte.
+- **Cancelamento pelo membro:** em `/conta/subscricao` (`POST /api/subscription/cancel`) o cancelamento fica agendado para o fim do período pago (ou do trial), sem reembolso; o acesso mantém-se até lá e pode ser retomado (`POST /api/subscription/resume`). Os dois pedidos enviam um email de confirmação. No fim, o webhook `customer.subscription.deleted` passa a conta a **Inactive** (`cancelled`) e envia o email "A sua subscrição ASPEC terminou" com o link de reativação. Com um pagamento em atraso o cancelamento é recusado (409): a subscrição já termina no fim da carência se não for paga.
+- **Bloqueio:** uma conta bloqueada nunca recebe estes emails nem muda de motivo (os handlers só mexem em contas Active).
+
+### Ciclo de vida da subscrição (teste manual)
+
+Com `php artisan serve`, `php artisan queue:work`, o `stripe listen` acima e `MAIL_MAILER=log`:
+
+1. Ativar um membro (guião acima) com o cartão `4000 0000 0000 0341` (aceite no Checkout; a cobrança falha).
+2. Terminar o trial já: `stripe subscriptions update sub_… -d trial_end=now` → `invoice.payment_failed` → `GET /api/subscription` mostra `past_due` e `grace_ends_at`; email de falha no log.
+3. Portal (`POST /api/subscription/billing-portal`) → mudar para `4242 4242 4242 4242`. Ver no dashboard se a fatura em atraso é cobrada logo ou só na tentativa seguinte; para não esperar, `stripe invoices pay in_…` → `invoice.payment_succeeded` → `grace_ends_at` null e fatura `issued`.
+4. Repetir 1–2; em `php artisan tinker` pôr `grace_ends_at` no passado (`User::where('email', '…')->first()->forceFill(['grace_ends_at' => now()->subDay()])->save();`) e correr `php artisan subscriptions:end-grace` → conta Inactive (`unpaid`), login 403, email de reativação no log; no Stripe a subscrição fica cancelada.
+5. Abrir o link de reativação → Checkout sem trial com `4242…` → conta Active, sem trial.
+6. `POST /api/subscription/cancel` → `cancel_at_period_end: true` + email; `POST /api/subscription/resume` → `false` + email; cancelar outra vez e terminar já (`stripe subscriptions cancel sub_…` ou "cancelar já" no dashboard) → `customer.subscription.deleted` → conta Inactive (`cancelled`), email "A sua subscrição ASPEC terminou"; reativar pelo link → Active.
+7. Bloquear um membro em carência → continua `blocked`, sem email de reativação (o `customer.subscription.deleted` do cancelamento é ignorado).

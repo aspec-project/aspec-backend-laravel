@@ -104,7 +104,7 @@ class AccountActivationController extends Controller
     }
 
     /**
-     * 409 para contas que não podem pagar pelo link (só Approved e Inactive por falta de pagamento podem).
+     * 409 para contas que não podem pagar pelo link (só Approved e Inactive por falta de pagamento ou cancelamento podem).
      */
     private function ineligibleResponse(User $user): ?JsonResponse
     {

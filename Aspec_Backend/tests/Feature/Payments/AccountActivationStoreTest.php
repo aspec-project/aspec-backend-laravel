@@ -231,6 +231,21 @@ class AccountActivationStoreTest extends TestCase
     }
 
     #[Test]
+    public function cancelled_account_reactivates_without_trial_and_keeps_the_stored_billing(): void
+    {
+        $user = User::factory()->inactive(InactiveReason::Cancelled)->withBilling()->create();
+        $this->subscribe($user, 'canceled');
+        $stored = $user->only(['billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city']);
+        $this->expectCheckoutCreated(fn (User $customer, bool $withTrial) => $customer->is($user) && $withTrial === false);
+
+        $this->postJson($this->activationPath($user), $this->billing(['nif' => '123456780']))
+            ->assertOk()
+            ->assertJsonPath('data.checkout_url', self::CHECKOUT_URL);
+
+        $this->assertDatabaseHas('users', array_merge(['id' => $user->id], $stored));
+    }
+
+    #[Test]
     public function reactivation_with_an_empty_body_is_accepted(): void
     {
         $user = User::factory()->inactive(InactiveReason::Unpaid)->withBilling()->create();
