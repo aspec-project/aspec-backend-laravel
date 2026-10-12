@@ -88,6 +88,7 @@ class AppServiceProvider extends ServiceProvider
             'password-update',
             'billing-portal',
             'subscription-change',
+            'invoice-download',
         ];
 
         foreach ($actions as $action) {

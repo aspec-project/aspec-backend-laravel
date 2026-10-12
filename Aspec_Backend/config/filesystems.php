@@ -33,7 +33,8 @@ return [
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app/private'),
-            'serve' => true,
+            // Desligado: nada usa os URLs assinados de ficheiros locais e o disco guarda faturas (NIF, morada).
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],
