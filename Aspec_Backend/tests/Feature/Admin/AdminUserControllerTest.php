@@ -1234,6 +1234,35 @@ public function blocking_user_expires_an_open_checkout_session(): void
 }
 
 #[Test]
+public function blocking_user_with_active_subscription_cancels_it_in_stripe(): void
+{
+    $admin = User::factory()->admin()->create();
+    $user = User::factory()->withBilling()->create();
+
+    $user->subscriptions()->create([
+        'type' => 'default',
+        'stripe_id' => 'sub_test_active',
+        'stripe_status' => 'active',
+        'stripe_price' => 'price_test',
+        'quantity' => 1,
+    ]);
+
+    $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+        $mock->shouldReceive('cancelNow')
+            ->once()
+            ->withArgs(fn ($subscription) => $subscription->stripe_id === 'sub_test_active');
+    });
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$user->id}/block")
+        ->assertOk()
+        ->assertJsonPath('data.account_status.name', 'Inactive');
+
+    $this->assertSame(InactiveReason::Blocked, $user->fresh()->inactive_reason);
+}
+
+#[Test]
 public function stripe_failure_does_not_prevent_blocking_and_queues_a_retry(): void
 {
     Queue::fake();
