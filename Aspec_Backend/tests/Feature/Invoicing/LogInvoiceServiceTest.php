@@ -136,4 +136,13 @@ class LogInvoiceServiceTest extends TestCase
         $this->assertSame($withoutDraft->number, $withDraft->number);
         $this->assertNull($withDraft->providerInvoiceId);
     }
+
+    #[Test]
+    public function pdf_is_never_available(): void
+    {
+        Http::fake();
+
+        $this->assertNull($this->service()->pdf('x'));
+        Http::assertNothingSent();
+    }
 }

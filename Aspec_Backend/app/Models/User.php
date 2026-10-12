@@ -200,6 +200,7 @@ class User extends Authenticatable
      * As sessões são apagadas na ligação por omissão, dentro da transação (SESSION_CONNECTION tem de
      * ficar vazio); os ficheiros só depois do commit, para não se perderem num rollback.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
+     * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
      */
     public function anonymizeAndDelete(): void

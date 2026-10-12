@@ -4,14 +4,18 @@ namespace Tests\Feature\Invoicing;
 
 use App\Contracts\InvoiceService;
 use App\Exceptions\InvoiceIssuingFailed;
+use App\Exceptions\InvoicePdfUnavailable;
 use App\Services\Invoicing\Data\IssuedInvoice;
 use App\Services\Invoicing\InvoiceExpressInvoiceService;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsInvoiceData;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * Driver InvoiceExpress: rascunho → finalizar → enviar por email.
@@ -636,5 +640,267 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
         }
 
         Http::assertNothingSent();
+    }
+
+    // --- PDF (proxy do documento) ---
+
+    private const PDF_URL = '*aspec-test.app.invoicexpress.com/api/pdf/42.json*';
+
+    private const DOWNLOAD_URL = 'https://cdn.invoicexpress.test/documents/42.pdf';
+
+    private const PDF_BYTES = '%PDF-1.4 fatura de teste';
+
+    private function pdfReady(string $pdfUrl = self::DOWNLOAD_URL)
+    {
+        return Http::response(['output' => ['pdfUrl' => $pdfUrl]], 200);
+    }
+
+    private function pdfExpectingFailure(string $documentId = '42'): InvoicePdfUnavailable
+    {
+        try {
+            $this->service()->pdf($documentId);
+        } catch (InvoicePdfUnavailable $e) {
+            return $e;
+        }
+
+        $this->fail('Era esperada uma InvoicePdfUnavailable.');
+    }
+
+    private function countPdfRequests(): int
+    {
+        return $this->countRequests('GET', '/api/pdf/42.json');
+    }
+
+    #[Test]
+    public function pdf_asks_for_the_document_and_downloads_it_from_the_returned_url(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response(self::PDF_BYTES, 200, ['Content-Type' => 'application/pdf']),
+        ]);
+
+        $pdf = $this->service()->pdf('42');
+
+        $this->assertSame(self::PDF_BYTES, $pdf);
+        Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+            && str_starts_with($request->url(), self::BASE_URL.'/api/pdf/42.json')
+            && str_contains($request->url(), 'api_key='.self::API_KEY));
+        Http::assertSent(fn (Request $request) => $request->method() === 'GET'
+            && $request->url() === self::DOWNLOAD_URL);
+        Http::assertSentCount(2);
+    }
+
+    #[Test]
+    public function pdf_still_being_generated_after_three_attempts_fails(): void
+    {
+        Sleep::fake();
+        Http::fake([
+            self::PDF_URL => Http::sequence()
+                ->push([], 202)
+                ->push([], 202)
+                ->push([], 202),
+        ]);
+
+        $this->pdfExpectingFailure();
+
+        $this->assertSame(3, $this->countPdfRequests());
+        Http::assertNotSent(fn (Request $request) => $request->url() === self::DOWNLOAD_URL);
+    }
+
+    #[Test]
+    public function pdf_generated_on_a_later_attempt_is_downloaded(): void
+    {
+        Sleep::fake();
+        Http::fake([
+            self::PDF_URL => Http::sequence()
+                ->push([], 202)
+                ->pushResponse($this->pdfReady()),
+            self::DOWNLOAD_URL => Http::response(self::PDF_BYTES, 200),
+        ]);
+
+        $this->assertSame(self::PDF_BYTES, $this->service()->pdf('42'));
+        $this->assertSame(2, $this->countPdfRequests());
+    }
+
+    public static function pdfErrorStatuses(): array
+    {
+        return [
+            '404' => [404],
+            '422' => [422],
+            '500' => [500],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('pdfErrorStatuses')]
+    public function pdf_error_response_fails_without_the_api_key(int $status): void
+    {
+        Http::fake([
+            self::PDF_URL => Http::response(['errors' => [['error' => 'erro com '.self::API_KEY]]], $status),
+        ]);
+
+        $e = $this->pdfExpectingFailure();
+
+        $this->assertSame($status, $e->httpStatus);
+        $this->assertStringNotContainsString(self::API_KEY, $e->getMessage());
+        $this->assertNull($e->getPrevious());
+    }
+
+    #[Test]
+    public function pdf_connection_failure_hides_the_url_and_the_api_key(): void
+    {
+        Http::fake([
+            '*' => Http::failedConnection(
+                'cURL error 28: Operation timed out for '.self::BASE_URL.'/api/pdf/42.json?api_key='.self::API_KEY
+            ),
+        ]);
+
+        $e = $this->pdfExpectingFailure();
+
+        $this->assertNull($e->httpStatus);
+        $this->assertStringNotContainsString(self::API_KEY, $e->getMessage());
+        $this->assertStringNotContainsString('invoicexpress.com', $e->getMessage());
+        $this->assertNull($e->getPrevious());
+    }
+
+    #[Test]
+    public function pdf_download_error_fails(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response('', 404),
+        ]);
+
+        $this->pdfExpectingFailure();
+    }
+
+    public static function nonNumericDocumentIds(): array
+    {
+        return [
+            'sobe um nível' => ['../1'],
+            'com query' => ['1?x=2'],
+            'com barra' => ['1/2'],
+            'vazio' => [''],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('nonNumericDocumentIds')]
+    public function non_numeric_document_id_is_rejected_before_any_request(string $documentId): void
+    {
+        // O id entra no caminho do URL: só dígitos, para não mudar o pedido feito com a api_key.
+        Http::fake();
+
+        try {
+            $this->service()->pdf($documentId);
+            $this->fail('Era esperada uma exceção.');
+        } catch (Throwable $e) {
+            $this->assertStringNotContainsString(self::API_KEY, $e->getMessage());
+        }
+
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function pdf_url_without_https_is_never_requested(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady('http://cdn.invoicexpress.test/documents/42.pdf'),
+            '*' => Http::response(self::PDF_BYTES, 200),
+        ]);
+
+        $this->pdfExpectingFailure();
+
+        Http::assertSentCount(1);
+    }
+
+    #[Test]
+    public function downloaded_body_that_is_not_a_pdf_is_rejected(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response('<html>Página de login</html>', 200),
+        ]);
+
+        $this->pdfExpectingFailure();
+    }
+
+    #[Test]
+    public function pdf_request_is_not_retried_on_a_server_error(): void
+    {
+        // Corre dentro de um pedido do membro: as novas tentativas automáticas alongavam a espera.
+        Http::fake([
+            self::PDF_URL => Http::response([], 500),
+        ]);
+
+        $this->pdfExpectingFailure();
+
+        $this->assertSame(1, $this->countPdfRequests());
+    }
+
+    #[Test]
+    public function pdf_download_redirect_is_not_followed(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response('', 302, ['Location' => 'https://evil.example/x.pdf']),
+            'https://evil.example/*' => Http::response(self::PDF_BYTES, 200),
+        ]);
+
+        $e = $this->pdfExpectingFailure();
+
+        $this->assertSame(302, $e->httpStatus);
+        Http::assertNotSent(fn (Request $request) => str_starts_with($request->url(), 'https://evil.example'));
+        Http::assertSentCount(2);
+    }
+
+    #[Test]
+    public function pdf_download_declared_larger_than_10_mb_is_rejected(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response(self::PDF_BYTES, 200, ['Content-Length' => (string) (10 * 1024 * 1024 + 1)]),
+        ]);
+
+        $this->pdfExpectingFailure();
+    }
+
+    #[Test]
+    public function pdf_download_body_larger_than_10_mb_is_rejected(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => Http::response('%PDF-'.str_repeat('x', 10 * 1024 * 1024), 200),
+        ]);
+
+        $this->pdfExpectingFailure();
+    }
+
+    #[Test]
+    public function pdf_download_unexpected_error_hides_the_url(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL => fn () => throw new \RuntimeException('Erro inesperado em '.self::DOWNLOAD_URL),
+        ]);
+
+        $e = $this->pdfExpectingFailure();
+
+        $this->assertNull($e->getPrevious());
+        $this->assertStringNotContainsString(self::DOWNLOAD_URL, $e->getMessage());
+    }
+
+    #[Test]
+    public function pdf_download_never_sends_the_api_key(): void
+    {
+        Http::fake([
+            self::PDF_URL => $this->pdfReady(),
+            self::DOWNLOAD_URL.'*' => Http::response(self::PDF_BYTES, 200),
+        ]);
+
+        $this->service()->pdf('42');
+
+        Http::assertNotSent(fn (Request $request) => str_starts_with($request->url(), self::DOWNLOAD_URL)
+            && (str_contains($request->url(), 'api_key') || str_contains(json_encode($request->headers()), self::API_KEY)));
     }
 }

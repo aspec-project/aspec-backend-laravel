@@ -14,7 +14,7 @@ use RuntimeException;
 class InvoiceIssuingFailed extends RuntimeException
 {
     /**
-     * @param  string  $step  Passo que falhou: create, finalize ou currency.
+     * @param  string  $step  Passo que falhou: create, finalize, currency ou store.
      * @param  int|null  $httpStatus  Código HTTP da resposta, ou null quando não houve resposta.
      * @param  string|null  $providerInvoiceId  Id do rascunho já criado (falhas a finalizar), para a nova
      *                                          tentativa retomar a partir dele em vez de criar outro.
@@ -50,5 +50,13 @@ class InvoiceIssuingFailed extends RuntimeException
     public static function unsupportedCurrency(string $currency): self
     {
         return new self("Moeda não suportada na faturação: {$currency}.", 'currency');
+    }
+
+    /**
+     * Não foi possível gravar o PDF da fatura no disco (driver demo). A nova tentativa do job volta a gerá-lo.
+     */
+    public static function storageFailed(): self
+    {
+        return new self('Falha ao gravar o PDF da fatura (passo: store).', 'store');
     }
 }
