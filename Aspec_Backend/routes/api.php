@@ -58,6 +58,8 @@ Route::prefix('admin')
         Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
         Route::patch('/users/{id}/block',[AdminUserController::class, 'block']);
         Route::patch('/users/{id}/unblock',[AdminUserController::class, 'unblock']);
+        Route::patch('/users/{id}/promote', [AdminUserController::class, 'promote']);
+        Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
         Route::get('/users', [AdminUserController::class, 'index']);
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);

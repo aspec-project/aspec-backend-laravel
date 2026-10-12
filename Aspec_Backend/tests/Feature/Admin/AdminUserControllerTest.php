@@ -1297,6 +1297,145 @@ public function stripe_failure_does_not_prevent_blocking_and_queues_a_retry(): v
     );
 }
 
+#[Test]
+public function admin_can_promote_an_active_member(): void
+{
+    $admin = User::factory()->admin()->create();
+    $member = User::factory()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$member->id}/promote")
+        ->assertOk()
+        ->assertJsonPath('data.role.name', 'Admin')
+        ->assertJsonPath('data.account_status.name', 'Active');
+
+    $this->assertSame('Admin', $member->fresh()->role->name);
+}
+
+#[Test]
+public function admin_cannot_promote_themselves(): void
+{
+    $admin = User::factory()->admin()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$admin->id}/promote")
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Não pode alterar o seu próprio papel.');
+
+    $this->assertSame('Admin', $admin->fresh()->role->name);
+}
+
+#[Test]
+public function admin_cannot_promote_a_non_active_member(): void
+{
+    $admin = User::factory()->admin()->create();
+    $members = [
+        User::factory()->pending()->create(),
+        User::factory()->approved()->create(),
+        User::factory()->inactive()->create(),
+    ];
+
+    Sanctum::actingAs($admin);
+
+    foreach ($members as $member) {
+        $this->patchJson("/api/admin/users/{$member->id}/promote")
+            ->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'Apenas contas ativas podem ser promovidas a administrador.'
+            );
+
+        $this->assertSame('Member', $member->fresh()->role->name);
+    }
+}
+
+#[Test]
+public function admin_cannot_promote_another_admin(): void
+{
+    $admin = User::factory()->admin()->create();
+    $anotherAdmin = User::factory()->admin()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$anotherAdmin->id}/promote")
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'O utilizador já é administrador.');
+}
+
+#[Test]
+public function admin_can_demote_another_admin_and_leave_one_admin(): void
+{
+    $admin = User::factory()->admin()->create();
+    $anotherAdmin = User::factory()->admin()->create();
+    $adminRoleId = $admin->role_id;
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$anotherAdmin->id}/demote")
+        ->assertOk()
+        ->assertJsonPath('data.role.name', 'Member')
+        ->assertJsonPath('data.account_status.name', 'Active');
+
+    $this->assertSame('Member', $anotherAdmin->fresh()->role->name);
+    $this->assertSame(1, User::where('role_id', $adminRoleId)->count());
+}
+
+#[Test]
+public function admin_cannot_demote_themselves(): void
+{
+    $admin = User::factory()->admin()->create();
+    User::factory()->admin()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$admin->id}/demote")
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'Não pode alterar o seu próprio papel.');
+
+    $this->assertSame('Admin', $admin->fresh()->role->name);
+}
+
+#[Test]
+public function admin_cannot_demote_a_member(): void
+{
+    $admin = User::factory()->admin()->create();
+    $member = User::factory()->create();
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$member->id}/demote")
+        ->assertStatus(409)
+        ->assertJsonPath('message', 'O utilizador não é administrador.');
+
+    $this->assertSame('Member', $member->fresh()->role->name);
+}
+
+#[Test]
+public function regular_member_cannot_promote_or_demote_users(): void
+{
+    $member = User::factory()->create();
+    $target = User::factory()->create();
+
+    Sanctum::actingAs($member);
+
+    $this->patchJson("/api/admin/users/{$target->id}/promote")->assertForbidden();
+    $this->patchJson("/api/admin/users/{$target->id}/demote")->assertForbidden();
+}
+
+#[Test]
+public function unknown_user_returns_404_for_promote_and_demote(): void
+{
+    $admin = User::factory()->admin()->create();
+    $unknownId = '00000000-0000-4000-8000-000000000000';
+
+    Sanctum::actingAs($admin);
+
+    $this->patchJson("/api/admin/users/{$unknownId}/promote")->assertNotFound();
+    $this->patchJson("/api/admin/users/{$unknownId}/demote")->assertNotFound();
+}
+
 
 
 

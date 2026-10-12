@@ -13,6 +13,7 @@ use App\Enums\InactiveReason;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
+use App\Models\Role;
 
 class AdminUserController extends Controller
 {
@@ -255,6 +256,117 @@ class AdminUserController extends Controller
                 ? 'Utilizador desbloqueado. Foi enviado o email de ativação.'
                 : 'Utilizador desbloqueado. Foi enviado o email de reativação.',
             Response::HTTP_OK
+        );
+    }
+
+
+
+
+    /**
+     * Promotes a user to the Admin role.
+     *
+     * @param Request $request The incoming HTTP request.
+     * @param string $id The ID of the user to promote.
+     * @return JsonResponse A JSON response indicating the result of the promotion.
+     */
+    public function promote(Request $request, string $id): JsonResponse
+    {
+        $user = User::with(['role', 'accountStatus'])->findOrFail($id);
+
+        if ($user->id === $request->user()->id) {
+            return $this->errorResponse(
+                'Não pode alterar o seu próprio papel.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        if ($user->role?->name === 'Admin') {
+            return $this->errorResponse(
+                'O utilizador já é administrador.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        if ($user->accountStatus?->name !== 'Active') {
+            return $this->errorResponse(
+                'Apenas contas ativas podem ser promovidas a administrador.',
+                Response::HTTP_CONFLICT
+            );
+        }
+
+        $user->forceFill([
+            'role_id' => Role::where('name', 'Admin')->value('id'),
+        ])->save();
+
+        $user = $this->loadUserRelations($user->fresh());
+
+        return $this->successResponse(
+            new UserResource($user),
+            'Utilizador promovido a administrador.'
+        );
+    }
+
+
+
+    /**
+     * Demotes a user from the Admin role to the Member role.
+     *
+     * @param Request $request The incoming HTTP request.
+     * @param string $id The ID of the user to demote.
+     * @return JsonResponse A JSON response indicating the result of the demotion.
+     */
+    public function demote(Request $request, string $id): JsonResponse
+    {
+        $adminRoleId = Role::where('name', 'Admin')->value('id');
+        $memberRoleId = Role::where('name', 'Member')->value('id');
+
+        $error = DB::transaction(function () use ($request, $id, $adminRoleId, $memberRoleId) {
+            // Bloqueia os admins em ordem consistente para serializar despromoções simultâneas.
+            $admins = User::where('role_id', $adminRoleId)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+
+            $user = User::with(['role', 'accountStatus'])
+                ->lockForUpdate()
+                ->findOrFail($id);
+
+            if ($user->id === $request->user()->id) {
+                return 'self';
+            }
+
+            if ($user->role_id !== $adminRoleId) {
+                return 'not_admin';
+            }
+
+            if ($admins->count() <= 1) {
+                return 'last_admin';
+            }
+
+            $user->forceFill([
+                'role_id' => $memberRoleId,
+            ])->save();
+
+            return null;
+        });
+
+        if ($error !== null) {
+            $message = match ($error) {
+                'self' => 'Não pode alterar o seu próprio papel.',
+                'not_admin' => 'O utilizador não é administrador.',
+                'last_admin' => 'Tem de existir pelo menos um administrador.',
+            };
+
+            return $this->errorResponse($message, Response::HTTP_CONFLICT);
+        }
+
+        $user = $this->loadUserRelations(
+            User::with(['role', 'accountStatus'])->findOrFail($id)
+        );
+
+        return $this->successResponse(
+            new UserResource($user),
+            'Administrador despromovido a membro.'
         );
     }
 
