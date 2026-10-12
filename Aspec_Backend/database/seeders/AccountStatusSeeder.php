@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\AccountStatus;
 
 class AccountStatusSeeder extends Seeder
 {
@@ -12,12 +12,11 @@ class AccountStatusSeeder extends Seeder
      */
     public function run(): void
     {
-        $statuses = ['active', 'inactive', 'pending'];
+        $statuses = ['Pending', 'Approved', 'Active', 'Inactive'];
 
         foreach ($statuses as $status) {
             AccountStatus::firstOrCreate(
-                ['name' => $status],
-                ['id' => Str::uuid()]
+                ['name' => $status]
             );
         }
     }

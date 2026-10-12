@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -20,6 +19,9 @@ class DatabaseSeeder extends Seeder
             AccountStatusSeeder::class,
             SectorSeeder::class,
             LocationSeeder::class,
+            WeekDaySeeder::class,
+            SocialPlatformSeeder::class,
+            EventCategorySeeder::class,
         ]);
     }
 }
