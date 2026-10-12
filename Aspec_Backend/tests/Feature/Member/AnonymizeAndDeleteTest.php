@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Stripe\Exception\ApiConnectionException;
@@ -534,6 +535,49 @@ class AnonymizeAndDeleteTest extends TestCase
             'number' => 'LOG-2026-AAAAAAAA',
             'status' => 'issued',
         ]);
+    }
+
+    #[Test]
+    public function demo_invoice_pdfs_and_rows_are_kept_after_anonymization(): void
+    {
+        // Documento fiscal conservado 10 anos: a obrigação legal prevalece sobre o direito ao apagamento.
+        Storage::fake('local');
+        $user = User::factory()->withBilling()->create();
+        $invoice = Invoice::factory()->for($user)->demo()->issued()->create();
+        $path = $invoice->provider_invoice_id;
+        Storage::disk('local')->put($path, '%PDF-1.4 fatura demo');
+
+        $user->anonymizeAndDelete();
+
+        Storage::disk('local')->assertExists($path);
+        $this->assertSame('%PDF-1.4 fatura demo', Storage::disk('local')->get($path));
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice->id,
+            'user_id' => $user->id,
+            'provider' => 'demo',
+            'provider_invoice_id' => $path,
+            'number' => $invoice->number,
+            'status' => 'issued',
+        ]);
+    }
+
+    #[Test]
+    public function anonymized_owner_can_no_longer_download_the_kept_pdf(): void
+    {
+        // Sem login real possível (tokens e sessões apagados); actingAs simula um pedido que ainda chegasse.
+        Storage::fake('local');
+        $user = User::factory()->withBilling()->create();
+        $invoice = Invoice::factory()->for($user)->demo()->issued()->create();
+        Storage::disk('local')->put($invoice->provider_invoice_id, '%PDF-1.4 fatura demo');
+
+        $user->anonymizeAndDelete();
+        Sanctum::actingAs(User::withTrashed()->find($user->id));
+
+        $response = $this->getJson("/api/invoices/{$invoice->id}/pdf");
+
+        $response->assertForbidden();
+        $this->assertStringNotContainsString('%PDF-', $response->getContent());
+        Storage::disk('local')->assertExists($invoice->provider_invoice_id);
     }
 
     private function createPasswordResetToken(User $user): void

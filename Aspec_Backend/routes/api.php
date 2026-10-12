@@ -16,6 +16,8 @@ use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
+use App\Http\Controllers\Api\Payments\InvoiceController;
+use App\Http\Controllers\Api\Payments\InvoicePdfController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
 use App\Http\Controllers\Api\Payments\SubscriptionController;
 
@@ -87,5 +89,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/subscription/billing-portal', [BillingPortalSessionController::class, 'store'])->middleware('throttle:billing-portal');
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel'])->middleware('throttle:subscription-change');
     Route::post('/subscription/resume', [SubscriptionController::class, 'resume'])->middleware('throttle:subscription-change');
+    Route::get('/invoices', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{invoice}/pdf', [InvoicePdfController::class, 'show'])
+        ->whereUuid('invoice')->middleware('throttle:invoice-download');
 });
 
