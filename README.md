@@ -16,6 +16,19 @@ No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão d
 
 Se o teu `.env` tem `APP_URL=http://localhost` (sem a porta), muda para `http://localhost:8000`, corre `php artisan config:clear` e confirma que existe `public/storage` (senão, `php artisan storage:link`). Sem isto, os logótipos e as imagens do portfólio aparecem partidos no frontend.
 
+## Primeiro administrador
+
+Na instalação inicial, a partir de `Aspec_Backend`:
+
+1. Execute `php artisan migrate --seed` para criar as tabelas e os dados iniciais.
+2. Defina `ASPEC_ADMIN_EMAIL` e `ASPEC_ADMIN_PASSWORD` no `.env`.(caso precise elas se encontram no .env.example) A password deve cumprir as regras de password da aplicação.
+3. Execute `php artisan aspec:create-admin`.
+4. Remova `ASPEC_ADMIN_PASSWORD` do `.env`.
+
+Se a configuração estiver em cache, gere-a novamente depois de definir as variáveis e antes de executar o comando. Depois de remover a password, gere o cache outra vez para não a manter no ficheiro de configuração em cache.
+
+O comando cria uma conta **Admin Active**, sem perfil de membro. Pode ser executado novamente sem criar outro administrador com o mesmo email. Se o email já pertencer a uma conta que não seja um administrador ativo, o comando recusa a criação e não altera essa conta.
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
