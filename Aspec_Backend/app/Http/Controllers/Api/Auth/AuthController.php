@@ -62,6 +62,10 @@ class AuthController extends Controller
                     && $user->inactive_reason === InactiveReason::Unpaid =>
                     'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
 
+                $user->accountStatus?->name === 'Inactive'
+                    && $user->inactive_reason === InactiveReason::Cancelled =>
+                    'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+
                 $user->accountStatus?->name === 'Pending' =>
                     'A sua conta está pendente de aprovação pelo administrador.',
 

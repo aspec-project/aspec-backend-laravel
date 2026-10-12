@@ -594,6 +594,46 @@ class AuthControllerTest extends TestCase
         ]);
     }
 
+
+    #[Test]
+    public function cancelled_user_cannot_login(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Cancelled)
+            ->create();
+
+        $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function cancelled_user_cannot_create_a_bearer_token(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Cancelled)
+            ->create();
+
+        $this
+            ->postJson('/api/auth/token', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+            ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
+    }
+
     #[Test]
     public function login_without_origin_returns_400_without_authenticating(): void
     {
