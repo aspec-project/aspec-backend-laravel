@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             LocationSeeder::class,
             WeekDaySeeder::class,
             SocialPlatformSeeder::class,
+            EventCategorySeeder::class,
         ]);
     }
 }
