@@ -8,10 +8,12 @@ use App\Http\Controllers\Api\Lists\SectorController;
 use App\Http\Controllers\Api\Lists\LocationController;
 use App\Http\Controllers\Api\Lists\SocialPlatformController;
 use App\Http\Controllers\Api\Lists\WeekDayController;
+use App\Http\Controllers\Api\Lists\EventCategoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
@@ -32,6 +34,7 @@ Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
+Route::get('/event-categories', [EventCategoryController::class, 'index']);
 
 Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
     ->middleware('throttle:activation-resend')->name('account-activations.resend');
@@ -57,6 +60,12 @@ Route::prefix('admin')
         Route::patch('/users/{id}/unblock',[AdminUserController::class, 'unblock']);
         Route::get('/users', [AdminUserController::class, 'index']);
         // rotas administrativas
+        Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
+        Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
+        Route::put('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'update'])
+            ->whereUuid('eventCategory');
+        Route::delete('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'destroy'])
+            ->whereUuid('eventCategory');
     });
 
 
