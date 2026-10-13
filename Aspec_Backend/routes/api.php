@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
+use App\Http\Controllers\Api\Events\EventInstanceController;
 use App\Http\Controllers\Api\Lists\EventCategoryController;
 use App\Http\Controllers\Api\Lists\LocationController;
 use App\Http\Controllers\Api\Lists\SectorController;
@@ -35,6 +36,7 @@ Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
+Route::get('/events', [EventInstanceController::class, 'index']);
 Route::get('/event-categories', [EventCategoryController::class, 'index']);
 
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.
