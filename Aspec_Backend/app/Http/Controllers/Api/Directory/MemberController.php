@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api\Directory;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexMemberRequest;
+use App\Http\Resources\MemberDetailResource;
 use App\Http\Resources\MemberSummaryResource;
 use App\Models\MemberProfile;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class MemberController extends Controller
@@ -48,5 +50,38 @@ class MemberController extends Controller
                 'last_page' => $members->lastPage(),
             ],
         ], 'Membros obtidos com sucesso.', Response::HTTP_OK);
+    }
+
+    /**
+     * Perfil público de um membro do diretório. Rota pública com utilizador opcional:
+     * só quem consulta com conta Active (qualquer papel) recebe telefone e contactos comerciais.
+     * Perfil inexistente ou fora do diretório dá o mesmo 404, para não confirmar que o id existe.
+     */
+    public function show(Request $request, string $member): JsonResponse
+    {
+        $profile = MemberProfile::listedInDirectory()
+            ->with([
+                'sector:id,name',
+                'location:id,name',
+                'weekDays',
+                'socialPlatforms',
+                'portfolios' => fn ($query) => $query->orderBy('created_at')->orderBy('id'),
+                'user:id,phone',
+            ])
+            ->find($member);
+
+        if (! $profile) {
+            return $this->errorResponse('Membro não encontrado.', Response::HTTP_NOT_FOUND);
+        }
+
+        // Guard sanctum explícito: sem auth:sanctum o guard por omissão é o web, que ignora tokens Bearer.
+        $viewer = $request->user('sanctum');
+        $showContacts = $viewer?->accountStatus?->name === 'Active';
+
+        return $this->successResponse(
+            new MemberDetailResource($profile, $showContacts),
+            'Perfil do membro obtido com sucesso.',
+            Response::HTTP_OK
+        );
     }
 }

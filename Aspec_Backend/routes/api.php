@@ -42,6 +42,7 @@ Route::get('/event-categories', [EventCategoryController::class, 'index']);
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.
 Route::middleware('throttle:member-directory')->group(function () {
     Route::get('/members', [MemberController::class, 'index']);
+    Route::get('/members/{member}', [MemberController::class, 'show'])->whereUuid('member');
 });
 
 Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])

@@ -4,7 +4,6 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 
 class MemberProfileResource extends JsonResource
@@ -39,17 +38,8 @@ class MemberProfileResource extends JsonResource
                 'name' => $this->location->name,
             ],
             'logo_url' => $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null,
-            'business_hours' => $this->weekDays->map(fn ($weekDay) => [
-                'week_day_id' => $weekDay->id,
-                'week_day' => $weekDay->name,
-                'open_time' => Carbon::parse($weekDay->pivot->open_time)->format('H:i'),
-                'close_time' => Carbon::parse($weekDay->pivot->close_time)->format('H:i'),
-            ])->values(),
-            'social_links' => $this->socialPlatforms->map(fn ($platform) => [
-                'platform_id' => $platform->id,
-                'platform' => $platform->name,
-                'url' => $platform->pivot->url,
-            ])->values(),
+            'business_hours' => BusinessHourResource::collection($this->weekDays),
+            'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             'portfolio' => PortfolioResource::collection($this->portfolios),
         ];
     }
