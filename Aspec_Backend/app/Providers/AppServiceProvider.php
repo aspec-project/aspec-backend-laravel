@@ -147,5 +147,11 @@ class AppServiceProvider extends ServiceProvider
             'auth-reset-password',
             fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );
+
+        // Diretório público: 60/min por IP, partilhado por lista e perfil; trava a recolha automática de perfis.
+        RateLimiter::for(
+            'member-directory',
+            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+        );
     }
 }

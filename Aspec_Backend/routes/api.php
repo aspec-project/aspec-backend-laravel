@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Directory\MemberController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\PortfolioController;
@@ -37,6 +38,11 @@ Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
 Route::get('/event-categories', [EventCategoryController::class, 'index']);
+
+// Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.
+Route::middleware('throttle:member-directory')->group(function () {
+    Route::get('/members', [MemberController::class, 'index']);
+});
 
 Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
     ->middleware('throttle:activation-resend')->name('account-activations.resend');

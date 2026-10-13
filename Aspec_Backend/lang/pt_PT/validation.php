@@ -220,6 +220,9 @@ return [
         'billing_address' => 'morada de faturação',
         'billing_postal_code' => 'código postal',
         'billing_city' => 'localidade',
+        'search' => 'pesquisa',
+        'min_rating' => 'avaliação mínima',
+        'per_page' => 'resultados por página',
     ],
 
 ];
