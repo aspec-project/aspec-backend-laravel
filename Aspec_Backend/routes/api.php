@@ -1,28 +1,26 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
+use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
+use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
+use App\Http\Controllers\Api\Lists\EventCategoryController;
+use App\Http\Controllers\Api\Lists\LocationController;
+use App\Http\Controllers\Api\Lists\SectorController;
+use App\Http\Controllers\Api\Lists\SocialPlatformController;
+use App\Http\Controllers\Api\Lists\WeekDayController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\PortfolioController;
-use App\Http\Controllers\Api\Lists\SectorController;
-use App\Http\Controllers\Api\Lists\LocationController;
-use App\Http\Controllers\Api\Lists\SocialPlatformController;
-use App\Http\Controllers\Api\Lists\WeekDayController;
-use App\Http\Controllers\Api\Lists\EventCategoryController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\Auth\AuthController;
-use App\Http\Controllers\Api\Admin\AdminUserController;
-use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
 use App\Http\Controllers\Api\Payments\InvoiceController;
 use App\Http\Controllers\Api\Payments\InvoicePdfController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
 use App\Http\Controllers\Api\Payments\SubscriptionController;
-
-
+use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
 
@@ -59,14 +57,13 @@ Route::middleware('throttle:account-activation')->group(function () {
 // Público e sem throttle: protegido pela assinatura do Stripe, que envia eventos em rajada.
 Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])->name('stripe.webhook');
 
-
 Route::prefix('admin')
-    ->middleware(['auth:sanctum','account.active', 'admin'])
+    ->middleware(['auth:sanctum', 'account.active', 'admin'])
     ->group(function () {
-        Route::patch('/users/{id}/approve',[AdminUserController::class, 'approve']);
-        Route::patch('/users/{id}/reject',[AdminUserController::class, 'reject']);
-        Route::patch('/users/{id}/block',[AdminUserController::class, 'block']);
-        Route::patch('/users/{id}/unblock',[AdminUserController::class, 'unblock']);
+        Route::patch('/users/{id}/approve', [AdminUserController::class, 'approve']);
+        Route::patch('/users/{id}/reject', [AdminUserController::class, 'reject']);
+        Route::patch('/users/{id}/block', [AdminUserController::class, 'block']);
+        Route::patch('/users/{id}/unblock', [AdminUserController::class, 'unblock']);
         Route::patch('/users/{id}/promote', [AdminUserController::class, 'promote']);
         Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
         Route::get('/users', [AdminUserController::class, 'index']);
@@ -77,15 +74,20 @@ Route::prefix('admin')
             ->whereUuid('eventCategory');
         Route::delete('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'destroy'])
             ->whereUuid('eventCategory');
+        Route::get('/events', [AdminEventInstanceController::class, 'index']);
+        Route::post('/events', [AdminEventInstanceController::class, 'store']);
+        Route::get('/events/{eventInstance}', [AdminEventInstanceController::class, 'show'])
+            ->whereUuid('eventInstance');
+        Route::put('/events/{eventInstance}', [AdminEventInstanceController::class, 'update'])
+            ->whereUuid('eventInstance');
+        Route::delete('/events/{eventInstance}', [AdminEventInstanceController::class, 'destroy'])
+            ->whereUuid('eventInstance');
     });
-
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 });
-
-
 
 Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/member-profile', [MemberProfileController::class, 'show']);
@@ -102,4 +104,3 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/invoices/{invoice}/pdf', [InvoicePdfController::class, 'show'])
         ->whereUuid('invoice')->middleware('throttle:invoice-download');
 });
-
