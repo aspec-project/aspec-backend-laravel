@@ -36,7 +36,7 @@ return new class extends Migration
 
             $table->timestamps();
             $table->index(['event_date', 'event_start_time']);
-});
+        });
     }
 
     /**

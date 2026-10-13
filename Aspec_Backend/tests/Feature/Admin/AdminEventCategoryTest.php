@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\EventCategory;
+use App\Models\EventInstance;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -368,11 +369,9 @@ class AdminEventCategoryTest extends TestCase
     #[Test]
     public function cannot_delete_a_category_with_events(): void
     {
-        $this->markTestSkipped('À espera da tabela event_instances (ASPEC-195, Guilherme).');
-
         $this->actingAsAdmin();
         $formacoes = $this->category('Formações');
-        $event = \App\Models\EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        $event = EventInstance::factory()->create(['category_id' => $formacoes->id]);
 
         $this->deleteJson(self::URL."/{$formacoes->id}")
             ->assertStatus(409)

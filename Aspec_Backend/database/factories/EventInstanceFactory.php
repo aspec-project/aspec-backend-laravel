@@ -18,7 +18,7 @@ class EventInstanceFactory extends Factory
         $registrationDeadline = (clone $eventDate)->modify('-1 day')->setTime(23, 59, 0);
 
         return [
-            'category_id' => fn () => EventCategory::query()->firstOrFail()->id,
+            'category_id' => EventCategory::factory(),
             'location_id' => fn () => Location::query()->firstOrFail()->id,
             'name' => fake()->sentence(4),
             'event_date' => $eventDate->format('Y-m-d'),
