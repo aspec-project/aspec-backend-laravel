@@ -201,4 +201,32 @@ class RateLimitingTest extends TestCase
             ->postJson('/api/auth/register', $payload)
             ->assertTooManyRequests();
     }
+
+    #[Test]
+    public function member_directory_is_limited_to_sixty_requests_per_minute_per_ip(): void
+    {
+        for ($i = 1; $i <= 60; $i++) {
+            $this->getJson('/api/members')->assertOk();
+        }
+        $this->getJson('/api/members')->assertTooManyRequests();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->getJson('/api/members')
+            ->assertOk();
+    }
+
+    #[Test]
+    public function member_directory_list_and_profile_share_the_same_counter(): void
+    {
+        $profile = $this->activeMember()->memberProfile;
+
+        for ($i = 1; $i <= 30; $i++) {
+            $this->getJson('/api/members')->assertOk();
+            $this->getJson("/api/members/{$profile->id}")->assertOk();
+        }
+
+        $this->getJson('/api/members')->assertTooManyRequests();
+        $this->getJson("/api/members/{$profile->id}")->assertTooManyRequests();
+        $this->getJson('/api/sectors')->assertOk();
+    }
 }
