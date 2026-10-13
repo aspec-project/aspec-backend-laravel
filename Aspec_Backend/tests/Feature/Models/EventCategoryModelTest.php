@@ -13,12 +13,11 @@ class EventCategoryModelTest extends TestCase
 {
     use RefreshDatabase;
 
-    // T29 — enquanto a tabela event_instances não existir, hasEvents() devolve false sem rebentar.
-    // Quando a tabela chegar (módulo de eventos), o primeiro assert falha de propósito para rever este teste.
+    // T29 — uma categoria sem eventos não tem eventos associados.
     #[Test]
-    public function category_has_no_events_while_event_instances_table_does_not_exist(): void
+    public function category_has_no_events_when_event_instances_table_exists(): void
     {
-        $this->assertFalse(Schema::hasTable('event_instances'));
+        $this->assertTrue(Schema::hasTable('event_instances'));
 
         $category = EventCategory::factory()->create();
 
