@@ -1,0 +1,54 @@
+<?php
+
+namespace App\Http\Controllers\Api\Events;
+
+use App\Http\Controllers\Controller;
+use App\Http\Resources\EventInstanceResource;
+use App\Models\EventInstance;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+class EventInstanceController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $filters = $request->validate([
+            'category_id' => ['sometimes', 'uuid', 'exists:event_categories,id'],
+        ]);
+
+        $today = today()->toDateString();
+        $currentTime = now()->format('H:i:s');
+
+        $events = EventInstance::query()
+            ->with(['category', 'location'])
+            ->where(function (Builder $query) use ($today, $currentTime) {
+                $query
+                    ->where('event_date', '>', $today)
+                    ->orWhere(function (Builder $query) use ($today, $currentTime) {
+                        $query
+                            ->where('event_date', $today)
+                            ->where('event_start_time', '>=', $currentTime);
+                    });
+            })
+            ->when(
+                isset($filters['category_id']),
+                fn (Builder $query) => $query->where('category_id', $filters['category_id'])
+            )
+            ->orderBy('event_date')
+            ->orderBy('event_start_time')
+            ->paginate(15);
+
+        return $this->successResponse([
+            'items' => EventInstanceResource::collection(
+                $events->getCollection()
+            )->resolve($request),
+            'pagination' => [
+                'current_page' => $events->currentPage(),
+                'per_page' => $events->perPage(),
+                'total' => $events->total(),
+                'last_page' => $events->lastPage(),
+            ],
+        ], 'Agenda de eventos obtida com sucesso.');
+    }
+}
