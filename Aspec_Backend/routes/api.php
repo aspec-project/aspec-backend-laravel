@@ -37,6 +37,8 @@ Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
 Route::get('/events', [EventInstanceController::class, 'index']);
+Route::get('/events/{eventInstance}', [EventInstanceController::class, 'show'])
+    ->whereUuid('eventInstance');
 Route::get('/event-categories', [EventCategoryController::class, 'index']);
 
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.

@@ -11,6 +11,9 @@ use Illuminate\Http\Request;
 
 class EventInstanceController extends Controller
 {
+    /**
+     * Display a listing of the event instances.
+     */
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
@@ -50,5 +53,18 @@ class EventInstanceController extends Controller
                 'last_page' => $events->lastPage(),
             ],
         ], 'Agenda de eventos obtida com sucesso.');
+    }
+
+    /**
+     * Display the specified event instance.
+     */
+    public function show(EventInstance $eventInstance): JsonResponse
+    {
+        $eventInstance->load(['category', 'location']);
+
+        return $this->successResponse(
+            new EventInstanceResource($eventInstance),
+            'Evento obtido com sucesso.'
+        );
     }
 }
