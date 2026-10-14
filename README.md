@@ -29,6 +29,30 @@ Se a configuração estiver em cache, gere-a novamente depois de definir as vari
 
 O comando cria uma conta **Admin Active**, sem perfil de membro. Pode ser executado novamente sem criar outro administrador com o mesmo email. Se o email já pertencer a uma conta que não seja um administrador ativo, o comando recusa a criação e não altera essa conta.
 
+## Dados de demonstração
+
+**Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.
+
+Na pasta `Aspec_Backend/`:
+
+1. `php artisan migrate:fresh --seed` (apaga a base de dados local e cria os dados de referência).
+2. `php artisan db:seed --class=DemoSeeder`
+3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
+
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 10 eventos futuros nas quatro categorias, com datas a partir do dia em que corre. Pode correr outra vez: repõe as contas, os perfis e os eventos (as datas avançam) sem duplicar nada. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+
+Password de todas as contas: `Demo#2026`
+
+| Email | Papel | Estado |
+|---|---|---|
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório) |
+| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
+| `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
+| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
+| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) |
+| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) |
+| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) |
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
