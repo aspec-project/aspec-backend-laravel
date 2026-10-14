@@ -20,6 +20,7 @@ class EventInstanceController extends Controller
             'category_id' => ['sometimes', 'uuid', 'exists:event_categories,id'],
             'location_id' => ['sometimes', 'uuid', 'exists:locations,id'],
             'page' => ['nullable', 'integer', 'between:1,10000'],
+            'per_page' => ['sometimes', 'nullable', 'integer', 'between:1,100'],
         ]);
 
         $now = now(config('app.event_timezone', 'Europe/Lisbon'));
@@ -47,7 +48,7 @@ class EventInstanceController extends Controller
             )
             ->orderBy('event_date')
             ->orderBy('event_start_time')
-            ->paginate(15);
+            ->paginate((int) ($filters['per_page'] ?? 9));
 
         return $this->successResponse([
             'items' => EventInstanceResource::collection(
