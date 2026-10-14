@@ -1513,7 +1513,7 @@
                 "event-categories"
               ]
             },
-            "description": "Para os filtros da agenda.\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "**Público** (sem login e sem limite de pedidos).\n\nTodas as categorias de eventos, **ordenadas por nome** e sem paginação. Usado nos filtros da agenda e no formulário de eventos do backoffice.\n\n- `color`: cor da categoria no formato `#RRGGBB` ou `null` (sem cor; o frontend usa `#0D1F35`).\n\nNunca devolve `created_at`/`updated_at`.",
             "auth": {
               "type": "noauth"
             }
@@ -1550,7 +1550,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequenos-almoços de Negócios\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categorias de eventos obtidas com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formações\",\n      \"color\": \"#315A79\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\",\n      \"color\": \"#8A7043\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequenos-almoços de Negócios\",\n      \"color\": \"#C5A46B\"\n    },\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Reuniões\",\n      \"color\": \"#0D1F35\"\n    }\n  ]\n}"
             }
           ]
         }
@@ -9509,7 +9509,7 @@
                 "event-categories"
               ]
             },
-            "description": "Todas as categorias, com número de eventos."
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nTodas as categorias, **ordenadas por nome** e sem paginação, para a gestão de categorias e o formulário de eventos do backoffice. Cada categoria: `{id, name, color}` (`color` pode ser `null`).\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa."
           },
           "response": [
             {
@@ -9544,7 +9544,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\",\n      \"events_count\": 6\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de categorias obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formações\",\n      \"color\": \"#315A79\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\",\n      \"color\": \"#8A7043\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequenos-almoços de Negócios\",\n      \"color\": \"#C5A46B\"\n    },\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Reuniões\",\n      \"color\": \"#0D1F35\"\n    }\n  ]\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -9612,7 +9612,41 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
@@ -9637,10 +9671,10 @@
                 "event-categories"
               ]
             },
-            "description": "Nome único.",
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nCria uma categoria de eventos.\n\n- `name`: obrigatório, texto, até 100 caracteres, **único sem distinguir maiúsculas** (`formações` colide com `Formações`). Espaços no início e no fim são removidos.\n- `color`: opcional, formato `#RRGGBB` (ex.: `#8A7043`); ausente ou `null` → categoria sem cor.\n- Outros campos são ignorados.\n\nGuarda o `id` da categoria criada em `event_category_id`, usado por \"Atualizar categoria\" e \"Eliminar categoria\".\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Formações\"\n}",
+              "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -9672,7 +9706,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9690,16 +9724,16 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n    \"name\": \"Formações\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops\",\n    \"color\": \"#315A79\"\n  }\n}"
             },
             {
-              "name": "422 Validação",
+              "name": "422 Nome em falta",
               "originalRequest": {
                 "method": "POST",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "422 Validação"
+                    "value": "422 Nome em falta"
                   }
                 ],
                 "url": {
@@ -9715,7 +9749,93 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "raw": "{\n  \"color\": \"#315A79\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"O campo nome é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Nome demasiado longo",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Nome demasiado longo"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"O campo nome não pode ter mais de 100 caracteres.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Nome repetido",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Nome repetido"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"formações\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9734,6 +9854,49 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"Já existe uma categoria com este nome.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Cor inválida",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cor inválida"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"vermelho\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"A cor tem de estar no formato #RRGGBB (ex.: #8A7043).\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -9758,7 +9921,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9801,7 +9964,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9819,7 +9982,64 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda em event_category_id a categoria criada, para \"Atualizar categoria\" e \"Eliminar categoria\"",
+                  "if (pm.response.code === 201) {",
+                  "  pm.environment.set('event_category_id', pm.response.json().data.id);",
+                  "}"
+                ]
+              }
             }
           ]
         },
@@ -9847,14 +10067,15 @@
               "variable": [
                 {
                   "key": "id",
-                  "value": "d1e2f3a4-3333-4b33-8333-333333333333"
+                  "value": "{{event_category_id}}",
+                  "description": "Id da categoria (preenchido por \"Criar categoria\")."
                 }
               ]
             },
-            "description": "Altera o nome.",
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos. Correr antes \"Criar categoria\" para preencher `event_category_id`.\n\nAltera o nome e/ou a cor. As regras são as de \"Criar categoria\"; a unicidade ignora a própria categoria (pode manter o nome ou mudar só as maiúsculas).\n\n- `name`: **obrigatório** também na edição.\n- `color`: **ausente → mantém a cor atual**; `null` → remove a cor.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (id inexistente ou que não é UUID) · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Jantares de Networking\"\n}",
+              "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -9874,7 +10095,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -9882,12 +10103,12 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Jantares de Networking\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9905,7 +10126,183 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n    \"name\": \"Jantares de Networking\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops de Liderança\",\n    \"color\": \"#8A7043\"\n  }\n}"
+            },
+            {
+              "name": "200 Cor removida",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cor removida"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": null\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops de Liderança\",\n    \"color\": null\n  }\n}"
+            },
+            {
+              "name": "404 Não encontrado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/00000000-0000-0000-0000-000000000000",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "00000000-0000-0000-0000-000000000000"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            },
+            {
+              "name": "422 Nome em falta",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Nome em falta"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"color\": \"#8A7043\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"O campo nome é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Nome repetido",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Nome repetido"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"Já existe uma categoria com este nome.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -9918,7 +10315,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -9926,12 +10323,12 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Jantares de Networking\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9962,7 +10359,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -9970,12 +10367,12 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Jantares de Networking\"\n}",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -9993,7 +10390,51 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
@@ -10016,11 +10457,12 @@
               "variable": [
                 {
                   "key": "id",
-                  "value": "d1e2f3a4-3333-4b33-8333-333333333333"
+                  "value": "{{event_category_id}}",
+                  "description": "Id da categoria (preenchido por \"Criar categoria\")."
                 }
               ]
             },
-            "description": "Só é possível eliminar categorias sem eventos."
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos. Correr antes \"Criar categoria\" para preencher `event_category_id`.\n\nElimina a categoria (eliminação definitiva). **Só é possível se não tiver eventos associados**; caso contrário responde 409 e nada é apagado.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (id inexistente ou que não é UUID) · 409 categoria com eventos."
           },
           "response": [
             {
@@ -10034,7 +10476,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -10042,7 +10484,7 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 }
               },
@@ -10057,6 +10499,41 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": true,\n  \"message\": \"Categoria eliminada com sucesso.\",\n  \"data\": null\n}"
+            },
+            {
+              "name": "404 Não encontrado",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/00000000-0000-0000-0000-000000000000",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "00000000-0000-0000-0000-000000000000"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
             },
             {
               "name": "409 Tem eventos",
@@ -10104,7 +10581,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -10112,7 +10589,7 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 }
               },
@@ -10139,7 +10616,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-3333-4b33-8333-333333333333",
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -10147,7 +10624,7 @@
                     "api",
                     "admin",
                     "event-categories",
-                    "d1e2f3a4-3333-4b33-8333-333333333333"
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
                   ]
                 }
               },
@@ -10161,7 +10638,42 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
