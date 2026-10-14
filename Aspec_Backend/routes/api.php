@@ -36,10 +36,14 @@ Route::get('/sectors', [SectorController::class, 'index']);
 Route::get('/locations', [LocationController::class, 'index']);
 Route::get('/social-platforms', [SocialPlatformController::class, 'index']);
 Route::get('/week-days', [WeekDayController::class, 'index']);
-Route::get('/events', [EventInstanceController::class, 'index']);
-Route::get('/events/{eventInstance}', [EventInstanceController::class, 'show'])
-    ->whereUuid('eventInstance');
 Route::get('/event-categories', [EventCategoryController::class, 'index']);
+
+// Públicas: eventos acessíveis por qualquer utilizador, com limite de taxa.
+Route::middleware('throttle:public-events')->group(function () {
+    Route::get('/events', [EventInstanceController::class, 'index']);
+    Route::get('/events/{eventInstance}', [EventInstanceController::class, 'show'])
+        ->whereUuid('eventInstance');
+});
 
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.
 Route::middleware('throttle:member-directory')->group(function () {

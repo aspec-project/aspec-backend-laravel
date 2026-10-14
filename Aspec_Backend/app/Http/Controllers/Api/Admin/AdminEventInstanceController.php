@@ -14,6 +14,10 @@ class AdminEventInstanceController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
+        $request->validate([
+            'page' => ['nullable', 'integer', 'between:1,10000'],
+        ]);
+
         $events = EventInstance::query()
             ->with(['category', 'location'])
             ->orderBy('event_date')

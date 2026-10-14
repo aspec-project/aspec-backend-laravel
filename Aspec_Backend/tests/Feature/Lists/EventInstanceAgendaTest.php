@@ -4,6 +4,7 @@ namespace Tests\Feature\Lists;
 
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\Location;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
@@ -19,18 +20,25 @@ class EventInstanceAgendaTest extends TestCase
         EventCategory $category,
         string $date,
         string $startTime,
-        string $name
+        string $name,
+        ?Location $location = null
     ): EventInstance {
         $eventStartsAt = Carbon::parse($date.' '.$startTime);
 
-        return EventInstance::factory()->create([
+        $attributes = [
             'category_id' => $category->id,
             'name' => $name,
             'event_date' => $date,
             'event_start_time' => $startTime,
             'event_end_time' => $eventStartsAt->copy()->addHour()->format('H:i:s'),
             'registration_deadline' => $eventStartsAt->copy()->subDay(),
-        ]);
+        ];
+
+        if ($location !== null) {
+            $attributes['location_id'] = $location->id;
+        }
+
+        return EventInstance::factory()->create($attributes);
     }
 
     #[Test]
@@ -91,12 +99,94 @@ class EventInstanceAgendaTest extends TestCase
     }
 
     #[Test]
+    public function public_agenda_can_be_filtered_by_location(): void
+    {
+        $locations = Location::query()->orderBy('name')->take(2)->get();
+        $this->assertCount(2, $locations);
+
+        $category = EventCategory::factory()->create();
+
+        $matchingEvent = $this->createEvent(
+            $category,
+            today()->addDays(2)->toDateString(),
+            '10:00',
+            'Evento no local escolhido',
+            $locations[0]
+        );
+
+        $this->createEvent(
+            $category,
+            today()->addDays(3)->toDateString(),
+            '10:00',
+            'Evento noutro local',
+            $locations[1]
+        );
+
+        $this->getJson(self::URL.'?location_id='.$locations[0]->id)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $matchingEvent->id);
+    }
+
+    #[Test]
+    public function public_agenda_can_combine_category_and_location_filters(): void
+    {
+        $locations = Location::query()->orderBy('name')->take(2)->get();
+        $this->assertCount(2, $locations);
+
+        $category = EventCategory::factory()->create();
+        $otherCategory = EventCategory::factory()->create();
+        $eventDate = today()->addDays(2)->toDateString();
+
+        $matchingEvent = $this->createEvent(
+            $category,
+            $eventDate,
+            '10:00',
+            'Evento correspondente aos filtros',
+            $locations[0]
+        );
+
+        $this->createEvent(
+            $category,
+            $eventDate,
+            '12:00',
+            'Mesma categoria, outro local',
+            $locations[1]
+        );
+
+        $this->createEvent(
+            $otherCategory,
+            $eventDate,
+            '14:00',
+            'Outro categoria, mesmo local',
+            $locations[0]
+        );
+
+        $this->getJson(
+            self::URL.'?category_id='.$category->id.'&location_id='.$locations[0]->id
+        )
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $matchingEvent->id);
+    }
+
+    #[Test]
     public function category_filter_must_be_a_valid_existing_uuid(): void
     {
         $this->getJson(self::URL.'?category_id=invalid')
             ->assertUnprocessable()
             ->assertJsonStructure([
                 'errors' => ['category_id'],
+            ]);
+    }
+
+    #[Test]
+    public function location_filter_must_be_a_valid_existing_uuid(): void
+    {
+        $this->getJson(self::URL.'?location_id=invalid')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['location_id'],
             ]);
     }
 
@@ -121,5 +211,49 @@ class EventInstanceAgendaTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data.items')
             ->assertJsonPath('data.pagination.current_page', 2);
+    }
+
+    #[Test]
+    public function public_agenda_rejects_an_excessively_large_page_number(): void
+    {
+        $this->getJson(self::URL.'?page=9223372036854775807')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['page'],
+            ]);
+    }
+
+    #[Test]
+    public function public_agenda_uses_lisbon_time_during_summer(): void
+    {
+        config(['app.event_timezone' => 'Europe/Lisbon']);
+
+        $this->travelTo(Carbon::parse('2026-07-01 10:30:00', 'UTC'));
+
+        $category = EventCategory::factory()->create();
+
+        $this->createEvent(
+            $category,
+            '2026-07-01',
+            '11:00',
+            'Evento que já começou em Lisboa'
+        );
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonCount(0, 'data.items');
+    }
+
+    #[Test]
+    public function public_event_routes_share_a_sixty_requests_per_minute_ip_limit(): void
+    {
+        $event = EventInstance::factory()->create();
+
+        for ($i = 1; $i <= 60; $i++) {
+            $this->getJson(self::URL)->assertOk();
+        }
+
+        $this->getJson('/api/events/'.$event->id)
+            ->assertTooManyRequests();
     }
 }
