@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AccountStatus;
 use App\Models\User;
 use App\Http\Resources\UserResource;
+use App\Http\Resources\AdminUserSummaryResource;
+use App\Http\Requests\IndexAdminUserRequest;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use App\Enums\InactiveReason;
@@ -17,6 +19,8 @@ use App\Models\Role;
 
 class AdminUserController extends Controller
 {
+    private const USERS_PER_PAGE = 12;
+
     private function loadUserRelations(User $user): User
     {
         return $user->load([
@@ -372,77 +376,121 @@ class AdminUserController extends Controller
 
 
     /**
-     * List users with optional filtering by status and search term.
+     * Lista os utilizadores do backoffice, paginada (12 por página) e por ordem alfabética do nome
+     * profissional (email se não houver perfil), com desempate pelo id. Admins só com include_admins,
+     * e nesse caso primeiro. As contagens por separador seguem a pesquisa e o include_admins.
      *
-     * @param Request $request The incoming HTTP request containing optional filters.
-     * @return JsonResponse A JSON response containing the list of users and pagination details.
+     * @param IndexAdminUserRequest $request Filtros validados.
+     * @return JsonResponse 200 com items, pagination e counts.
      */
-    public function index(Request $request): JsonResponse
+    public function index(IndexAdminUserRequest $request): JsonResponse
     {
-        $request->validate([
-            'status' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'exists:account_statuses,name',
-            ],
-            'search' => [
-                'sometimes',
-                'nullable',
-                'string',
-                'max:255',
-            ],
-            'page' => [
-                'sometimes',
-                'integer',
-                'min:1',
-            ],
-        ]);
-
-        $query = User::query()
-            ->with(['role', 'accountStatus']);
-
-        if ($request->filled('status')) {
-            $status = $request->input('status');
-
-            $query->whereHas(
-                'accountStatus',
-                fn (Builder $statusQuery) => $statusQuery->where('name', $status)
-            );
-        }
-
+        $includeAdmins = $request->boolean('include_admins');
         $search = trim((string) $request->input('search', ''));
 
-        if ($search !== '') {
-            $query->where(function (Builder $userQuery) use ($search) {
-                $userQuery
-                    ->where('email', 'like', "%{$search}%")
-                    ->orWhereHas(
-                        'memberProfile',
-                        function (Builder $profileQuery) use ($search) {
-                            $profileQuery
-                                ->where('name', 'like', "%{$search}%")
-                                ->orWhere('business_name', 'like', "%{$search}%");
-                        }
-                    );
-            });
-        }
+        $base = User::query()
+            ->when(! $includeAdmins, fn (Builder $query) => $query->whereDoesntHave(
+                'role',
+                fn (Builder $roleQuery) => $roleQuery->where('name', 'Admin')
+            ))
+            ->when($search !== '', fn (Builder $query) => $this->applySearch($query, $search));
 
-        $users = $query
-            ->orderBy('email')
-            ->paginate(15);
+        $users = $this->applyStatusFilter(
+            (clone $base)->with(['role', 'accountStatus', 'memberProfile.sector', 'memberProfile.location']),
+            $request->input('status'),
+            $request->filled('blocked') ? $request->boolean('blocked') : null
+        )
+            ->when($includeAdmins, fn (Builder $query) => $query->orderByRaw(
+                'CASE WHEN users.role_id = ? THEN 0 ELSE 1 END',
+                [Role::where('name', 'Admin')->value('id')]
+            ))
+            ->orderByRaw('LOWER(COALESCE((SELECT member_profiles.name FROM member_profiles WHERE member_profiles.user_id = users.id AND member_profiles.deleted_at IS NULL LIMIT 1), users.email))')
+            ->orderBy('users.id')
+            ->paginate(self::USERS_PER_PAGE);
 
         return $this->successResponse([
-            'items' => UserResource::collection(
-                $users->getCollection()
-            )->resolve($request),
+            'items' => AdminUserSummaryResource::collection($users->getCollection())->resolve($request),
             'pagination' => [
                 'current_page' => $users->currentPage(),
                 'per_page' => $users->perPage(),
                 'total' => $users->total(),
                 'last_page' => $users->lastPage(),
             ],
+            'counts' => $this->countByTab($base),
         ], 'Lista de utilizadores obtida com sucesso.');
+    }
+
+    /**
+     * Restringe a consulta aos utilizadores cujo email, nome profissional ou nome do negócio
+     * contêm o texto pesquisado.
+     *
+     * @param Builder $query Consulta de utilizadores.
+     * @param string $search Texto pesquisado, já sem espaços nas pontas.
+     * @return void
+     */
+    private function applySearch(Builder $query, string $search): void
+    {
+        $query->where(function (Builder $userQuery) use ($search) {
+            $userQuery
+                ->where('email', 'like', "%{$search}%")
+                ->orWhereHas(
+                    'memberProfile',
+                    function (Builder $profileQuery) use ($search) {
+                        $profileQuery
+                            ->where('name', 'like', "%{$search}%")
+                            ->orWhere('business_name', 'like', "%{$search}%");
+                    }
+                );
+        });
+    }
+
+    /**
+     * Aplica o filtro de um separador: estado da conta e, com Inactive, bloqueados ou não.
+     * Os inativos não bloqueados incluem os que não têm motivo (NULL).
+     *
+     * @param Builder $query Consulta de utilizadores.
+     * @param string|null $status Nome do estado da conta, ou null para todos.
+     * @param bool|null $blocked true só bloqueados, false só não bloqueados, null sem filtro.
+     * @return Builder A mesma consulta, filtrada.
+     */
+    private function applyStatusFilter(Builder $query, ?string $status, ?bool $blocked): Builder
+    {
+        if ($status !== null && $status !== '') {
+            $query->whereHas(
+                'accountStatus',
+                fn (Builder $statusQuery) => $statusQuery->where('name', $status)
+            );
+        }
+
+        if ($blocked === true) {
+            $query->where('users.inactive_reason', InactiveReason::Blocked->value);
+        }
+
+        if ($blocked === false) {
+            $query->where(fn (Builder $reasonQuery) => $reasonQuery
+                ->whereNull('users.inactive_reason')
+                ->orWhere('users.inactive_reason', '!=', InactiveReason::Blocked->value));
+        }
+
+        return $query;
+    }
+
+    /**
+     * Conta os utilizadores de cada separador sobre a mesma consulta base (pesquisa e include_admins).
+     *
+     * @param Builder $base Consulta base, sem filtro de estado.
+     * @return array<string, int> Uma contagem por separador.
+     */
+    private function countByTab(Builder $base): array
+    {
+        return [
+            'all' => (clone $base)->count(),
+            'active' => $this->applyStatusFilter(clone $base, 'Active', null)->count(),
+            'pending' => $this->applyStatusFilter(clone $base, 'Pending', null)->count(),
+            'approved' => $this->applyStatusFilter(clone $base, 'Approved', null)->count(),
+            'blocked' => $this->applyStatusFilter(clone $base, 'Inactive', true)->count(),
+            'inactive' => $this->applyStatusFilter(clone $base, 'Inactive', false)->count(),
+        ];
     }
 
     
