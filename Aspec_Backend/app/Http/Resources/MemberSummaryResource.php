@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Storage;
 class MemberSummaryResource extends JsonResource
 {
     /**
-     * Item da lista pública do diretório: identificação, setor, distrito, logótipo e avaliações.
+     * Item da lista pública do diretório: identificação, descrição completa, setor, distrito, logótipo e avaliações.
      * Nunca inclui contactos, email nem congregação. Espera as relações sector e location carregadas.
      * Sem avaliações ainda, average_rating é null e reviews_count é 0.
      *
@@ -21,6 +21,7 @@ class MemberSummaryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'business_name' => $this->business_name,
+            'description' => $this->description,
             'sector' => [
                 'id' => $this->sector->id,
                 'name' => $this->sector->name,
