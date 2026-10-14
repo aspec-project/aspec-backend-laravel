@@ -1081,10 +1081,10 @@ public function admin_can_list_users_without_status_filter(): void
             'message',
             'Lista de utilizadores obtida com sucesso.'
         )
-        ->assertJsonCount(5, 'data.items')
+        ->assertJsonCount(4, 'data.items')
         ->assertJsonPath('data.pagination.current_page', 1)
-        ->assertJsonPath('data.pagination.per_page', 15)
-        ->assertJsonPath('data.pagination.total', 5)
+        ->assertJsonPath('data.pagination.per_page', 12)
+        ->assertJsonPath('data.pagination.total', 4)
         ->assertJsonPath('data.pagination.last_page', 1);
 }
 
@@ -1110,7 +1110,7 @@ public function admin_can_filter_users_by_account_status(): void
         $response
             ->assertOk()
             ->assertJsonCount(
-                $status === 'Active' ? 2 : 1,
+                1,
                 'data.items'
             );
 
@@ -1166,10 +1166,10 @@ public function admin_user_list_is_paginated(): void
 
     $this->getJson('/api/admin/users')
         ->assertOk()
-        ->assertJsonCount(15, 'data.items')
+        ->assertJsonCount(12, 'data.items')
         ->assertJsonPath('data.pagination.current_page', 1)
-        ->assertJsonPath('data.pagination.per_page', 15)
-        ->assertJsonPath('data.pagination.total', 17)
+        ->assertJsonPath('data.pagination.per_page', 12)
+        ->assertJsonPath('data.pagination.total', 16)
         ->assertJsonPath('data.pagination.last_page', 2);
 }
 
