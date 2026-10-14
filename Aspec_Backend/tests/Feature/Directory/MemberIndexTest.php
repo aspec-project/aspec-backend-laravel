@@ -283,6 +283,21 @@ class MemberIndexTest extends TestCase
     }
 
     #[Test]
+    public function description_is_the_full_profile_description_or_null(): void
+    {
+        $description = str_repeat('Consultoria e formacao para empresas. ', 26);
+        $withDescription = $this->listedMember(['business_name' => 'Alfa', 'description' => $description]);
+        $withoutDescription = $this->listedMember(['business_name' => 'Beta', 'description' => null]);
+
+        $this->listMembers()
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', $withDescription->id)
+            ->assertJsonPath('data.items.0.description', $description)
+            ->assertJsonPath('data.items.1.id', $withoutDescription->id)
+            ->assertJsonPath('data.items.1.description', null);
+    }
+
+    #[Test]
     public function number_of_queries_does_not_grow_with_the_number_of_members(): void
     {
         $this->listedMember(['sector_id' => $this->firstSector()->id, 'location_id' => $this->firstLocation()->id]);

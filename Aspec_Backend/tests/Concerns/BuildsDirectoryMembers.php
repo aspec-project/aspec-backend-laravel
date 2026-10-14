@@ -25,6 +25,7 @@ trait BuildsDirectoryMembers
     protected const LIST_ITEM_KEYS = [
         'average_rating',
         'business_name',
+        'description',
         'id',
         'location',
         'logo_url',
