@@ -1,0 +1,814 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\InactiveReason;
+use App\Models\AccountStatus;
+use App\Models\EventCategory;
+use App\Models\EventInstance;
+use App\Models\Location;
+use App\Models\MemberProfile;
+use App\Models\Role;
+use App\Models\Sector;
+use App\Models\SocialPlatform;
+use App\Models\User;
+use App\Models\WeekDay;
+use GdImage;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+
+/**
+ * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
+ * e eventos futuros. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * php artisan db:seed --class=DemoSeeder
+ *
+ * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
+ * pelo nome e distrito, e repõe os dados originais (útil para repetir a demonstração).
+ * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ */
+class DemoSeeder extends Seeder
+{
+    /** Password de todas as contas de demonstração (cumpre as regras de password da aplicação). */
+    public const PASSWORD = 'Demo#2026';
+
+    /** Cores de fundo dos logótipos e do portefólio (RGB). */
+    private const PALETTE = [
+        [13, 31, 53],
+        [49, 90, 121],
+        [138, 112, 67],
+        [46, 107, 79],
+        [122, 62, 72],
+        [75, 78, 140],
+        [160, 82, 45],
+        [197, 164, 107],
+    ];
+
+    /** Linhas da tabela de contas mostrada no fim. */
+    private array $accountRows = [];
+
+    /** Ids dos lookups já procurados, por modelo e nome. */
+    private array $lookupIds = [];
+
+    /**
+     * Cria ou repõe os dados de demonstração. Recusa correr em produção e, se os lookups
+     * ainda não existirem, corre primeiro o DatabaseSeeder.
+     */
+    public function run(): void
+    {
+        if (app()->isProduction()) {
+            $this->command?->error('O DemoSeeder não pode correr em produção.');
+
+            return;
+        }
+
+        if ($this->lookupsMissing()) {
+            $this->call(DatabaseSeeder::class);
+        }
+
+        $canDrawImages = extension_loaded('gd');
+
+        if (! $canDrawImages) {
+            $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo e sem portefólio.');
+        }
+
+        foreach ($this->activeMembers() as $index => $member) {
+            $profile = $this->seedAccount($member);
+
+            $this->syncBusinessHours($profile, $member['hours']);
+            $this->syncSocialLinks($profile, $member['social']);
+
+            if ($canDrawImages) {
+                $this->seedLogo($profile, self::PALETTE[$index % count(self::PALETTE)]);
+                $this->seedPortfolio($profile, $member['portfolio'], $index);
+            }
+        }
+
+        foreach ($this->applicants() as $applicant) {
+            $this->seedAccount($applicant);
+        }
+
+        $this->seedEvents();
+
+        $this->printSummary();
+    }
+
+    /**
+     * Indica se falta algum dos lookups de que os dados de demonstração dependem.
+     */
+    private function lookupsMissing(): bool
+    {
+        $lookups = [Role::class, AccountStatus::class, Sector::class, Location::class, WeekDay::class, SocialPlatform::class, EventCategory::class];
+
+        return collect($lookups)->contains(fn (string $model) => $model::query()->doesntExist());
+    }
+
+    /**
+     * Cria ou repõe a conta (papel, estado, motivo, telefone e password) e o respetivo perfil.
+     *
+     * @param  array<string, mixed>  $data  Uma entrada de activeMembers() ou applicants().
+     */
+    private function seedAccount(array $data): MemberProfile
+    {
+        $user = User::firstOrNew(['email' => $data['email']]);
+
+        // Papel, estado e motivo não são fillable (só o admin e os pagamentos os mudam), daí o forceFill.
+        $user->forceFill([
+            'password' => self::PASSWORD,
+            'phone' => $data['phone'],
+            'role_id' => $this->lookupId(Role::class, $data['role'] ?? 'Member'),
+            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
+            'inactive_reason' => $data['reason'] ?? null,
+            'email_verified_at' => $user->email_verified_at ?? now(),
+        ])->save();
+
+        $profile = $data['profile'];
+
+        $this->accountRows[] = [
+            $user->email,
+            $data['role'] ?? 'Member',
+            ($data['status'] ?? 'Active').(isset($data['reason']) ? " ({$data['reason']->value})" : ''),
+            $profile['business_name'],
+        ];
+
+        return MemberProfile::updateOrCreate(['user_id' => $user->id], [
+            'sector_id' => $this->lookupId(Sector::class, $profile['sector']),
+            'location_id' => $this->lookupId(Location::class, $profile['location']),
+            'name' => $profile['name'],
+            'business_name' => $profile['business_name'],
+            'congregation' => $profile['congregation'],
+            'role_in_congregation' => $profile['role_in_congregation'],
+            'description' => $profile['description'],
+            'website_url' => $profile['website_url'] ?? null,
+            'commercial_contacts' => $profile['commercial_contacts'] ?? null,
+            'address' => $profile['address'],
+        ]);
+    }
+
+    /**
+     * Horário de funcionamento: dias úteis 09:00–18:00, com ou sem sábado de manhã, ou nenhum.
+     *
+     * @param  string|null  $schedule  'weekdays', 'weekdays_saturday' ou null (sem horário).
+     */
+    private function syncBusinessHours(MemberProfile $profile, ?string $schedule): void
+    {
+        $hours = [];
+
+        if ($schedule !== null) {
+            foreach (range(1, 5) as $weekDayId) {
+                $hours[$weekDayId] = ['open_time' => '09:00', 'close_time' => '18:00'];
+            }
+        }
+
+        if ($schedule === 'weekdays_saturday') {
+            $hours[6] = ['open_time' => '09:00', 'close_time' => '13:00'];
+        }
+
+        $profile->weekDays()->sync($hours);
+    }
+
+    /**
+     * Redes sociais do perfil.
+     *
+     * @param  array<string, string>  $links  Nome da plataforma => URL.
+     */
+    private function syncSocialLinks(MemberProfile $profile, array $links): void
+    {
+        $pivot = [];
+
+        foreach ($links as $platform => $url) {
+            $pivot[$this->lookupId(SocialPlatform::class, $platform)] = ['url' => $url];
+        }
+
+        $profile->socialPlatforms()->sync($pivot);
+    }
+
+    /**
+     * Logótipo 400×400 com as iniciais da empresa, em logos/{user_id} no disco public
+     * (a mesma pasta do upload do membro). Nome fixo para não criar ficheiros repetidos.
+     *
+     * @param  array{int, int, int}  $background  Cor de fundo (RGB).
+     */
+    private function seedLogo(MemberProfile $profile, array $background): void
+    {
+        $path = "logos/{$profile->user_id}/demo-logo.png";
+
+        if (! Storage::disk('public')->exists($path)) {
+            $image = imagecreatetruecolor(400, 400);
+            imagefill($image, 0, 0, imagecolorallocate($image, ...$background));
+            $this->drawText($image, $this->initials($profile->business_name), 12, 200, 200, [255, 255, 255]);
+
+            Storage::disk('public')->put($path, $this->toPng($image));
+        }
+
+        $profile->update(['logo_path' => $path]);
+    }
+
+    /**
+     * Imagens do portefólio (1200×800, gradiente e "Projeto N"), em portfolios/{user_id}
+     * no disco public, como no upload do membro.
+     *
+     * @param  int  $count  Número de imagens (0 = perfil sem portefólio).
+     */
+    private function seedPortfolio(MemberProfile $profile, int $count, int $paletteOffset): void
+    {
+        for ($number = 1; $number <= $count; $number++) {
+            $path = "portfolios/{$profile->user_id}/demo-projeto-{$number}.png";
+
+            if (! Storage::disk('public')->exists($path)) {
+                $top = self::PALETTE[($paletteOffset + $number) % count(self::PALETTE)];
+                $bottom = self::PALETTE[($paletteOffset + $number + 3) % count(self::PALETTE)];
+
+                $image = $this->gradient(1200, 800, $top, $bottom);
+                $this->drawText($image, "Projeto {$number}", 8, 600, 360, [255, 255, 255]);
+                $this->drawText($image, Str::ascii($profile->business_name), 3, 600, 520, [255, 255, 255]);
+
+                Storage::disk('public')->put($path, $this->toPng($image));
+            }
+
+            $profile->portfolios()->firstOrCreate(['image_path' => $path]);
+        }
+    }
+
+    /**
+     * Eventos futuros nas quatro categorias, com datas relativas ao dia em que o seeder corre.
+     * Procura pelo nome e distrito (e não pela data): correr noutro dia atualiza as datas em vez de
+     * duplicar os eventos. As inscrições fecham na véspera às 23:59.
+     */
+    private function seedEvents(): void
+    {
+        foreach ($this->events() as $event) {
+            $date = today()->addDays($event['days_from_now']);
+
+            EventInstance::updateOrCreate(
+                [
+                    'name' => $event['name'],
+                    'location_id' => $this->lookupId(Location::class, $event['location']),
+                ],
+                [
+                    'category_id' => $this->lookupId(EventCategory::class, $event['category']),
+                    'event_date' => $date->format('Y-m-d'),
+                    'event_start_time' => $event['start'].':00',
+                    'event_end_time' => $event['end'].':00',
+                    'description' => $event['description'],
+                    'address' => $event['address'],
+                    'latitude' => $event['latitude'],
+                    'longitude' => $event['longitude'],
+                    'max_attendees' => $event['max_attendees'],
+                    'registration_deadline' => $date->copy()->subDay()->setTime(23, 59)->format('Y-m-d H:i:s'),
+                    'organizer_notes' => $event['notes'] ?? null,
+                ]
+            );
+        }
+    }
+
+    /**
+     * Mostra as contas criadas, a password comum e o lembrete do storage:link.
+     */
+    private function printSummary(): void
+    {
+        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa'], $this->accountRows);
+        $this->command?->info('Password de todas as contas: '.self::PASSWORD);
+        $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');
+    }
+
+    /**
+     * Id de um registo de lookup pelo nome (falha se o nome não existir, para apanhar gralhas nos dados).
+     *
+     * @param  class-string<Model>  $model
+     */
+    private function lookupId(string $model, string $name): string|int
+    {
+        return $this->lookupIds[$model][$name] ??= $model::query()->where('name', $name)->firstOrFail()->getKey();
+    }
+
+    /**
+     * Iniciais das duas primeiras palavras com mais de duas letras (ex.: "Carvalho & Filhos" → "CF").
+     */
+    private function initials(string $businessName): string
+    {
+        return Str::of(Str::ascii($businessName))
+            ->explode(' ')
+            ->filter(fn (string $word) => strlen($word) > 2)
+            ->take(2)
+            ->map(fn (string $word) => strtoupper($word[0]))
+            ->implode('');
+    }
+
+    /**
+     * Escreve texto centrado em ($centerX, $centerY), ampliado $scale vezes. A fonte embutida do GD
+     * é muito pequena (9×15 px), por isso o texto é desenhado numa imagem pequena e depois ampliado.
+     *
+     * @param  array{int, int, int}  $rgb
+     */
+    private function drawText(GdImage $canvas, string $text, int $scale, int $centerX, int $centerY, array $rgb): void
+    {
+        $font = 5;
+        $width = imagefontwidth($font) * strlen($text);
+        $height = imagefontheight($font);
+
+        $small = imagecreatetruecolor($width, $height);
+        imagesavealpha($small, true);
+        imagefill($small, 0, 0, imagecolorallocatealpha($small, 0, 0, 0, 127));
+        imagestring($small, $font, 0, 0, $text, imagecolorallocate($small, ...$rgb));
+
+        imagecopyresized(
+            $canvas, $small,
+            $centerX - intdiv($width * $scale, 2), $centerY - intdiv($height * $scale, 2),
+            0, 0,
+            $width * $scale, $height * $scale,
+            $width, $height
+        );
+    }
+
+    /**
+     * Imagem com um gradiente vertical entre duas cores.
+     *
+     * @param  array{int, int, int}  $top
+     * @param  array{int, int, int}  $bottom
+     */
+    private function gradient(int $width, int $height, array $top, array $bottom): GdImage
+    {
+        $image = imagecreatetruecolor($width, $height);
+
+        for ($y = 0; $y < $height; $y++) {
+            $ratio = $y / ($height - 1);
+            $rgb = array_map(fn (int $from, int $to) => (int) round($from + ($to - $from) * $ratio), $top, $bottom);
+
+            imageline($image, 0, $y, $width - 1, $y, imagecolorallocate($image, ...$rgb));
+        }
+
+        return $image;
+    }
+
+    /**
+     * Conteúdo PNG de uma imagem GD.
+     */
+    private function toPng(GdImage $image): string
+    {
+        ob_start();
+        imagepng($image);
+
+        return ob_get_clean();
+    }
+
+    /**
+     * Os 13 perfis Active do diretório (o admin incluído), com setores e distritos variados.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function activeMembers(): array
+    {
+        return [
+            [
+                'email' => 'demo.admin@aspec.test',
+                'role' => 'Admin',
+                'phone' => '912000001',
+                'hours' => 'weekdays',
+                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/mendes-consultoria-gestao'],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Ricardo Mendes',
+                    'business_name' => 'Mendes Consultoria de Gestão',
+                    'sector' => 'Consultoria de Gestão e Negócios',
+                    'location' => 'Lisboa',
+                    'description' => 'Apoiamos pequenas e médias empresas a organizar processos, definir objetivos e crescer de forma sustentável. Fazemos diagnósticos de gestão, planos de negócio e acompanhamento mensal.',
+                    'website_url' => 'https://www.mendesconsultoria.pt',
+                    'commercial_contacts' => "geral@mendesconsultoria.pt\n213 000 101",
+                    'address' => 'Avenida da República 50, 3.º Esq., 1050-196 Lisboa',
+                    'congregation' => 'Comunidade Cristã do Areeiro',
+                    'role_in_congregation' => 'Presbítero',
+                ],
+            ],
+            [
+                'email' => 'demo.membro@aspec.test',
+                'phone' => '912000002',
+                'hours' => 'weekdays_saturday',
+                'social' => [
+                    'LinkedIn' => 'https://www.linkedin.com/company/ferreira-arquitetura-interiores',
+                    'Instagram' => 'https://www.instagram.com/ferreira.arquitetura',
+                    'Facebook' => 'https://www.facebook.com/ferreira.arquitetura',
+                ],
+                'portfolio' => 4,
+                'profile' => [
+                    'name' => 'Ana Ferreira',
+                    'business_name' => 'Ferreira Arquitetura e Interiores',
+                    'sector' => 'Arquitetura e Design',
+                    'location' => 'Porto',
+                    'description' => 'Projetos de arquitetura residencial e comercial, da ideia ao licenciamento. Remodelações de interiores com acompanhamento de obra e escolha de materiais.',
+                    'website_url' => 'https://www.ferreiraarquitetura.pt',
+                    'commercial_contacts' => "projetos@ferreiraarquitetura.pt\n220 000 202",
+                    'address' => 'Rua de Cedofeita 300, 4050-174 Porto',
+                    'congregation' => 'Igreja Evangélica da Boavista',
+                    'role_in_congregation' => 'Líder do ministério de jovens',
+                ],
+            ],
+            [
+                'email' => 'demo.membro01@aspec.test',
+                'phone' => '913000003',
+                'hours' => 'weekdays_saturday',
+                'social' => [
+                    'Facebook' => 'https://www.facebook.com/carvalhoefilhosconstrucoes',
+                    'YouTube' => 'https://www.youtube.com/@carvalhoefilhos',
+                ],
+                'portfolio' => 3,
+                'profile' => [
+                    'name' => 'João Carvalho',
+                    'business_name' => 'Carvalho & Filhos Construções',
+                    'sector' => 'Construção Civil e Obras Públicas',
+                    'location' => 'Braga',
+                    'description' => 'Empresa familiar de construção civil com mais de 20 anos de experiência. Construção de moradias, reabilitação de edifícios e pequenas obras públicas.',
+                    'website_url' => 'https://www.carvalhoefilhos.pt',
+                    'commercial_contacts' => "orcamentos@carvalhoefilhos.pt\n253 000 303",
+                    'address' => 'Rua Nova de Santa Cruz 85, 4710-409 Braga',
+                    'congregation' => 'Igreja Batista de Braga Norte',
+                    'role_in_congregation' => 'Diácono',
+                ],
+            ],
+            [
+                'email' => 'demo.membro02@aspec.test',
+                'phone' => '916000004',
+                'hours' => 'weekdays',
+                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/contas-certas-contabilidade'],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Marta Sousa',
+                    'business_name' => 'Contas Certas Contabilidade',
+                    'sector' => 'Contabilidade e Finanças',
+                    'location' => 'Coimbra',
+                    'description' => 'Contabilidade organizada para empresas e empresários em nome individual. Processamento salarial, declarações fiscais e apoio na candidatura a incentivos.',
+                    'website_url' => 'https://www.contascertas-coimbra.pt',
+                    'commercial_contacts' => "geral@contascertas-coimbra.pt\n239 000 404",
+                    'address' => 'Avenida Fernão de Magalhães 410, 3000-177 Coimbra',
+                    'congregation' => 'Comunidade Evangélica de Celas',
+                    'role_in_congregation' => 'Tesoureira',
+                ],
+            ],
+            [
+                'email' => 'demo.membro03@aspec.test',
+                'phone' => '919000005',
+                'hours' => 'weekdays_saturday',
+                'social' => [
+                    'Instagram' => 'https://www.instagram.com/saboresdoalgarve.faro',
+                    'Facebook' => 'https://www.facebook.com/saboresdoalgarve.faro',
+                ],
+                'portfolio' => 3,
+                'profile' => [
+                    'name' => 'Pedro Almeida',
+                    'business_name' => 'Sabores do Algarve Restaurante',
+                    'sector' => 'Restauração e Hotelaria',
+                    'location' => 'Faro',
+                    'description' => 'Cozinha tradicional algarvia com peixe fresco da lota de Faro. Servimos almoços de grupo, jantares de empresa e serviço de catering para eventos.',
+                    'website_url' => 'https://www.saboresdoalgarve-faro.pt',
+                    'commercial_contacts' => "reservas@saboresdoalgarve-faro.pt\n289 000 505",
+                    'address' => 'Rua Conselheiro Bivar 20, 8000-255 Faro',
+                    'congregation' => 'Igreja Cristã da Sé de Faro',
+                    'role_in_congregation' => 'Membro',
+                ],
+            ],
+            [
+                'email' => 'demo.membro04@aspec.test',
+                'phone' => '921000006',
+                'hours' => 'weekdays',
+                'social' => [
+                    'LinkedIn' => 'https://www.linkedin.com/company/ribeiro-digital',
+                    'YouTube' => 'https://www.youtube.com/@ribeirodigital',
+                ],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Sofia Ribeiro',
+                    'business_name' => 'Ribeiro Digital Soluções Informáticas',
+                    'sector' => 'Tecnologias de Informação (TI)',
+                    'location' => 'Aveiro',
+                    'description' => 'Desenvolvimento de sites e aplicações à medida, manutenção de redes e apoio informático a escritórios. Contratos de assistência mensal com tempo de resposta garantido.',
+                    'website_url' => 'https://www.ribeirodigital.pt',
+                    'commercial_contacts' => "suporte@ribeirodigital.pt\n234 000 606",
+                    'address' => 'Rua de Viana do Castelo 15, 3800-275 Aveiro',
+                    'congregation' => 'Igreja Evangélica da Glória',
+                    'role_in_congregation' => 'Responsável pela equipa de som',
+                ],
+            ],
+            [
+                'email' => 'demo.membro05@aspec.test',
+                'phone' => '924000007',
+                'hours' => 'weekdays',
+                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/martins-advogados-associados'],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Tiago Martins',
+                    'business_name' => 'Martins Advogados Associados',
+                    'sector' => 'Serviços Jurídicos e Advocacia',
+                    'location' => 'Leiria',
+                    'description' => 'Sociedade de advogados dedicada ao direito empresarial, laboral e imobiliário. Constituição de sociedades, contratos comerciais e cobranças.',
+                    'website_url' => 'https://www.martinsadvogados.pt',
+                    'commercial_contacts' => "escritorio@martinsadvogados.pt\n244 000 707",
+                    'address' => 'Largo Cândido dos Reis 7, 2400-112 Leiria',
+                    'congregation' => 'Comunidade Cristã de Leiria',
+                    'role_in_congregation' => 'Conselheiro',
+                ],
+            ],
+            [
+                'email' => 'demo.membro06@aspec.test',
+                'phone' => '927000008',
+                'hours' => 'weekdays_saturday',
+                'social' => [
+                    'Facebook' => 'https://www.facebook.com/clinicabemcuidar',
+                    'Instagram' => 'https://www.instagram.com/clinicabemcuidar',
+                ],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Inês Costa',
+                    'business_name' => 'Clínica Bem Cuidar',
+                    'sector' => 'Saúde e Medicina',
+                    'location' => 'Setúbal',
+                    'description' => 'Clínica de medicina geral e familiar, fisioterapia e nutrição. Acordos com empresas para medicina do trabalho.',
+                    'website_url' => 'https://www.clinicabemcuidar.pt',
+                    'commercial_contacts' => "marcacoes@clinicabemcuidar.pt\n265 000 808",
+                    'address' => 'Avenida Luísa Todi 250, 2900-452 Setúbal',
+                    'congregation' => 'Igreja Evangélica de Setúbal',
+                    'role_in_congregation' => 'Diaconisa',
+                ],
+            ],
+            [
+                'email' => 'demo.membro07@aspec.test',
+                'phone' => '931000009',
+                'hours' => null,
+                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/rota-segura-transportes'],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Miguel Rodrigues',
+                    'business_name' => 'Rota Segura Transportes',
+                    'sector' => 'Transportes e Logística',
+                    'location' => 'Santarém',
+                    'description' => 'Transporte rodoviário de mercadorias em todo o país e armazenagem. Frota própria com rastreamento e entregas no dia seguinte.',
+                    'website_url' => 'https://www.rotasegura.pt',
+                    'commercial_contacts' => "logistica@rotasegura.pt\n243 000 909",
+                    'address' => 'Zona Industrial de Santarém, Lote 12, 2005-002 Santarém',
+                    'congregation' => 'Igreja Batista de Santarém',
+                    'role_in_congregation' => 'Membro',
+                ],
+            ],
+            [
+                'email' => 'demo.membro08@aspec.test',
+                'phone' => '934000010',
+                'hours' => 'weekdays_saturday',
+                'social' => [
+                    'Instagram' => 'https://www.instagram.com/casalusa.imobiliaria',
+                    'Facebook' => 'https://www.facebook.com/casalusa.imobiliaria',
+                ],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Catarina Lopes',
+                    'business_name' => 'Casa Lusa Imobiliária',
+                    'sector' => 'Imobiliário',
+                    'location' => 'Viseu',
+                    'description' => 'Compra, venda e arrendamento de imóveis na região de Viseu. Avaliação gratuita e acompanhamento até à escritura.',
+                    'website_url' => 'https://www.casalusa-imobiliaria.pt',
+                    'commercial_contacts' => "imoveis@casalusa-imobiliaria.pt\n232 000 110",
+                    'address' => 'Rua Formosa 60, 3500-135 Viseu',
+                    'congregation' => 'Comunidade Evangélica de Viseu',
+                    'role_in_congregation' => 'Coordenadora da escola dominical',
+                ],
+            ],
+            [
+                'email' => 'demo.membro09@aspec.test',
+                'phone' => '937000011',
+                'hours' => 'weekdays',
+                'social' => [
+                    'LinkedIn' => 'https://www.linkedin.com/company/ideia-viva-comunicacao',
+                    'Instagram' => 'https://www.instagram.com/ideiaviva.comunicacao',
+                    'YouTube' => 'https://www.youtube.com/@ideiaviva',
+                ],
+                'portfolio' => 4,
+                'profile' => [
+                    'name' => 'Daniel Pereira',
+                    'business_name' => 'Ideia Viva Comunicação',
+                    'sector' => 'Marketing, Comunicação e Publicidade',
+                    'location' => 'Lisboa',
+                    'description' => 'Agência de comunicação para negócios locais: identidade visual, gestão de redes sociais e campanhas digitais. Fotografia e vídeo para empresas.',
+                    'website_url' => 'https://www.ideiaviva.pt',
+                    'commercial_contacts' => "ola@ideiaviva.pt\n218 000 111",
+                    'address' => 'Rua Morais Soares 90, 1900-345 Lisboa',
+                    'congregation' => 'Igreja Cristã de Arroios',
+                    'role_in_congregation' => 'Responsável pela comunicação',
+                ],
+            ],
+            [
+                'email' => 'demo.membro10@aspec.test',
+                'phone' => '961000012',
+                'hours' => 'weekdays',
+                'social' => [
+                    'LinkedIn' => 'https://www.linkedin.com/company/saber-mais-formacao',
+                    'Facebook' => 'https://www.facebook.com/sabermais.formacao',
+                ],
+                'portfolio' => 0,
+                'profile' => [
+                    'name' => 'Rita Gonçalves',
+                    'business_name' => 'Saber Mais Centro de Formação',
+                    'sector' => 'Educação e Formação',
+                    'location' => 'Porto',
+                    'description' => 'Centro de formação profissional certificado. Cursos de gestão, línguas e informática, em sala e à distância, com planos de formação à medida para empresas.',
+                    'website_url' => 'https://www.sabermais-formacao.pt',
+                    'commercial_contacts' => "inscricoes@sabermais-formacao.pt\n225 000 112",
+                    'address' => 'Rua de Santa Catarina 500, 4000-446 Porto',
+                    'congregation' => 'Igreja Evangélica do Bonfim',
+                    'role_in_congregation' => 'Professora da escola bíblica',
+                ],
+            ],
+            [
+                'email' => 'demo.membro11@aspec.test',
+                'phone' => '964000013',
+                'hours' => null,
+                'social' => [
+                    'Instagram' => 'https://www.instagram.com/quintavaleverde.evora',
+                    'Facebook' => 'https://www.facebook.com/quintavaleverde.evora',
+                ],
+                'portfolio' => 3,
+                'profile' => [
+                    'name' => 'Bruno Fernandes',
+                    'business_name' => 'Quinta do Vale Verde',
+                    'sector' => 'Agricultura e Pescas',
+                    'location' => 'Évora',
+                    'description' => 'Produção de azeite, vinho e hortícolas em modo biológico. Venda direta na quinta, cabazes semanais e visitas para grupos.',
+                    'website_url' => 'https://www.quintavaleverde-evora.pt',
+                    'commercial_contacts' => "encomendas@quintavaleverde-evora.pt\n266 000 113",
+                    'address' => 'Estrada de Arraiolos, km 4, 7000-171 Évora',
+                    'congregation' => 'Igreja Evangélica de Évora',
+                    'role_in_congregation' => 'Membro',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Contas fora do diretório (para o backoffice): candidaturas pendentes, aprovada à espera de
+     * ativação, inativa por falta de pagamento e bloqueada. Perfis mais simples, sem imagens.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function applicants(): array
+    {
+        $applicant = fn (string $email, string $phone, string $status, ?InactiveReason $reason, array $profile) => [
+            'email' => $email,
+            'phone' => $phone,
+            'status' => $status,
+            'reason' => $reason,
+            'profile' => $profile,
+        ];
+
+        return [
+            $applicant('demo.pendente01@aspec.test', '912000101', 'Pending', null, [
+                'name' => 'Luís Teixeira',
+                'business_name' => 'Teixeira Eletricidade',
+                'sector' => 'Engenharia e Indústria',
+                'location' => 'Vila Real',
+                'description' => 'Instalações elétricas, certificação energética e manutenção industrial.',
+                'address' => 'Avenida Carvalho Araújo 30, 5000-657 Vila Real',
+                'congregation' => 'Igreja Evangélica de Vila Real',
+                'role_in_congregation' => 'Membro',
+            ]),
+            $applicant('demo.pendente02@aspec.test', '913000102', 'Pending', null, [
+                'name' => 'Joana Moreira',
+                'business_name' => 'Essência Natural Estética',
+                'sector' => 'Estética e Bem-Estar',
+                'location' => 'Viana do Castelo',
+                'description' => 'Tratamentos de estética, massagens e cuidados de pele.',
+                'address' => 'Rua da Bandeira 120, 4900-560 Viana do Castelo',
+                'congregation' => 'Comunidade Cristã de Viana',
+                'role_in_congregation' => 'Membro do coro',
+            ]),
+            $applicant('demo.pendente03@aspec.test', '916000103', 'Pending', null, [
+                'name' => 'André Pinto',
+                'business_name' => 'Caminhos do Douro Turismo',
+                'sector' => 'Turismo e Lazer',
+                'location' => 'Bragança',
+                'description' => 'Passeios guiados e alojamento local no Nordeste Transmontano.',
+                'address' => 'Rua Almirante Reis 45, 5300-033 Bragança',
+                'congregation' => 'Igreja Batista de Bragança',
+                'role_in_congregation' => 'Membro',
+            ]),
+            $applicant('demo.aprovado@aspec.test', '919000104', 'Approved', null, [
+                'name' => 'Helena Marques',
+                'business_name' => 'Marques Comércio de Papelaria',
+                'sector' => 'Comércio Retalhista',
+                'location' => 'Castelo Branco',
+                'description' => 'Papelaria, material de escritório e consumíveis para empresas.',
+                'address' => 'Avenida 1.º de Maio 18, 6000-086 Castelo Branco',
+                'congregation' => 'Igreja Evangélica de Castelo Branco',
+                'role_in_congregation' => 'Membro',
+            ]),
+            $applicant('demo.inativo.pagamento@aspec.test', '921000105', 'Inactive', InactiveReason::Unpaid, [
+                'name' => 'Paulo Correia',
+                'business_name' => 'Correia Mediação de Seguros',
+                'sector' => 'Contabilidade e Finanças',
+                'location' => 'Guarda',
+                'description' => 'Seguros para particulares e empresas.',
+                'address' => 'Rua do Comércio 22, 6300-680 Guarda',
+                'congregation' => 'Comunidade Cristã da Guarda',
+                'role_in_congregation' => 'Membro',
+            ]),
+            $applicant('demo.bloqueado@aspec.test', '924000106', 'Inactive', InactiveReason::Blocked, [
+                'name' => 'Vítor Santos',
+                'business_name' => 'Santos Reparações Auto',
+                'sector' => 'Transportes e Logística',
+                'location' => 'Portalegre',
+                'description' => 'Oficina de mecânica geral e pneus.',
+                'address' => 'Rua 19 de Junho 8, 7300-155 Portalegre',
+                'congregation' => 'Igreja Evangélica de Portalegre',
+                'role_in_congregation' => 'Membro',
+            ]),
+        ];
+    }
+
+    /**
+     * Dez eventos futuros: o pequeno-almoço e o jantar repetem-se em várias cidades
+     * (o mesmo formato em localidades diferentes). Coordenadas no centro de cada cidade.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function events(): array
+    {
+        $breakfast = 'Pequeno-almoço de Negócios ASPEC';
+        $breakfastDescription = 'Um pequeno-almoço para conhecer outros empresários da região, apresentar o seu negócio em dois minutos e criar parcerias.';
+        $dinner = 'Jantar de Networking ASPEC';
+        $dinnerDescription = 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.';
+        $dinnerNotes = 'Custo de participação: 25 € (pago no local).';
+
+        return [
+            [
+                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Lisboa',
+                'days_from_now' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 40,
+                'description' => $breakfastDescription,
+                'address' => 'Salão de eventos, Avenida da Liberdade 180, 1250-146 Lisboa',
+                'latitude' => 38.7197, 'longitude' => -9.1452,
+            ],
+            [
+                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Porto',
+                'days_from_now' => 12, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+                'description' => $breakfastDescription,
+                'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
+                'latitude' => 41.1486, 'longitude' => -8.6110,
+            ],
+            [
+                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Braga',
+                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
+                'description' => $breakfastDescription,
+                'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
+                'latitude' => 41.5512, 'longitude' => -8.4229,
+            ],
+            [
+                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Lisboa',
+                'days_from_now' => 9, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 80,
+                'description' => $dinnerDescription,
+                'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
+                'latitude' => 38.7290, 'longitude' => -9.1560,
+                'notes' => $dinnerNotes,
+            ],
+            [
+                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Coimbra',
+                'days_from_now' => 23, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
+                'description' => $dinnerDescription,
+                'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
+                'latitude' => 40.2115, 'longitude' => -8.4290,
+                'notes' => $dinnerNotes,
+            ],
+            [
+                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Faro',
+                'days_from_now' => 37, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
+                'description' => $dinnerDescription,
+                'address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro',
+                'latitude' => 37.0153, 'longitude' => -7.9352,
+            ],
+            [
+                'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formações', 'location' => 'Aveiro',
+                'days_from_now' => 15, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 30,
+                'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
+                'address' => 'Auditório, Cais da Fonte Nova, 3810-200 Aveiro',
+                'latitude' => 40.6380, 'longitude' => -8.6440,
+            ],
+            [
+                'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formações', 'location' => 'Leiria',
+                'days_from_now' => 29, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
+                'description' => 'Como usar as redes sociais e o Google para atrair clientes da sua zona, com um plano simples para aplicar no dia seguinte.',
+                'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
+                'latitude' => 39.7445, 'longitude' => -8.8070,
+                'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
+            ],
+            [
+                'name' => 'Formação: Liderança com Valores', 'category' => 'Formações', 'location' => 'Setúbal',
+                'days_from_now' => 44, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
+                'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
+                'address' => 'Auditório Municipal, Avenida Luísa Todi 65, 2900-461 Setúbal',
+                'latitude' => 38.5225, 'longitude' => -8.8920,
+            ],
+            [
+                'name' => 'Reunião Regional de Membros', 'category' => 'Reuniões', 'location' => 'Porto',
+                'days_from_now' => 58, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 60,
+                'description' => 'Balanço do semestre do núcleo do Porto, apresentação dos novos membros e planeamento das próximas atividades.',
+                'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
+                'latitude' => 41.1580, 'longitude' => -8.6290,
+            ],
+        ];
+    }
+}
