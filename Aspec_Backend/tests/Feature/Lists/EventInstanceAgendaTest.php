@@ -191,7 +191,7 @@ class EventInstanceAgendaTest extends TestCase
     }
 
     #[Test]
-    public function public_agenda_is_paginated_by_fifteen_events(): void
+    public function public_agenda_is_paginated_by_nine_events(): void
     {
         $category = EventCategory::factory()->create();
 
@@ -202,14 +202,14 @@ class EventInstanceAgendaTest extends TestCase
 
         $this->getJson(self::URL)
             ->assertOk()
-            ->assertJsonCount(15, 'data.items')
-            ->assertJsonPath('data.pagination.per_page', 15)
+            ->assertJsonCount(9, 'data.items')
+            ->assertJsonPath('data.pagination.per_page', 9)
             ->assertJsonPath('data.pagination.total', 16)
             ->assertJsonPath('data.pagination.last_page', 2);
 
         $this->getJson(self::URL.'?page=2')
             ->assertOk()
-            ->assertJsonCount(1, 'data.items')
+            ->assertJsonCount(7, 'data.items')
             ->assertJsonPath('data.pagination.current_page', 2);
     }
 
@@ -255,5 +255,51 @@ class EventInstanceAgendaTest extends TestCase
 
         $this->getJson('/api/events/'.$event->id)
             ->assertTooManyRequests();
+    }
+
+
+
+    #[Test]
+    public function public_agenda_uses_nine_events_by_default_and_accepts_per_page(): void
+    {
+        $category = EventCategory::factory()->create();
+        $eventDate = today()->addDays(2)->toDateString();
+
+        for ($i = 0; $i < 12; $i++) {
+            $this->createEvent(
+                $category,
+                $eventDate,
+                sprintf('%02d:00', $i + 8),
+                "Evento {$i}"
+            );
+        }
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonCount(9, 'data.items')
+            ->assertJsonPath('data.pagination.per_page', 9)
+            ->assertJsonPath('data.pagination.total', 12)
+            ->assertJsonPath('data.pagination.last_page', 2);
+
+        $this->getJson(self::URL.'?per_page=9')
+            ->assertOk()
+            ->assertJsonCount(9, 'data.items')
+            ->assertJsonPath('data.pagination.per_page', 9);
+
+        $this->getJson(self::URL.'?per_page=4')
+            ->assertOk()
+            ->assertJsonCount(4, 'data.items')
+            ->assertJsonPath('data.pagination.per_page', 4)
+            ->assertJsonPath('data.pagination.last_page', 3);
+    }
+
+    #[Test]
+    public function public_agenda_rejects_per_page_above_one_hundred(): void
+    {
+        $this->getJson(self::URL.'?per_page=101')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['per_page'],
+            ]);
     }
 }
