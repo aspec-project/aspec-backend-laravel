@@ -96,11 +96,10 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->user()?->id ?: $request->ip()));
         }
 
-
         $authActions = [
-        'auth-login',
-        'auth-token',
-        'auth-forgot-password',
+            'auth-login',
+            'auth-token',
+            'auth-forgot-password',
         ];
 
         foreach ($authActions as $action) {
@@ -109,7 +108,7 @@ class AppServiceProvider extends ServiceProvider
                 fn (Request $request) => Limit::perMinute(5)
                     ->by(
                         strtolower(trim((string) $request->input('email')))
-                        . '|' . $request->ip()
+                        .'|'.$request->ip()
                     )
             );
         }
@@ -120,7 +119,6 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perHour(20)
                 ->by($request->ip())
         );
-
 
         // Registo: 5/min por IP.
         RateLimiter::for(
@@ -151,6 +149,12 @@ class AppServiceProvider extends ServiceProvider
         // Diretório público: 60/min por IP, partilhado por lista e perfil; trava a recolha automática de perfis.
         RateLimiter::for(
             'member-directory',
+            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+        );
+
+        // Eventos públicos: 60/min por IP.
+        RateLimiter::for(
+            'public-events',
             fn (Request $request) => Limit::perMinute(60)->by($request->ip())
         );
     }

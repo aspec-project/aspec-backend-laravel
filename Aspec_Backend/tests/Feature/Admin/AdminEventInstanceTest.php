@@ -45,7 +45,11 @@ class AdminEventInstanceTest extends TestCase
             'latitude' => 38.7223,
             'longitude' => -9.1393,
             'max_attendees' => 30,
-            'registration_deadline' => $eventStartsAt->copy()->subDay()->setTime(23, 59)->toIso8601String(),
+            'registration_deadline' => $eventStartsAt
+                ->copy()
+                ->subDay()
+                ->setTime(23, 59)
+                ->format('Y-m-d H:i'),
             'organizer_notes' => 'Notas do organizador.',
         ];
     }
@@ -149,7 +153,7 @@ class AdminEventInstanceTest extends TestCase
             'registration_deadline' => [
                 'registration_deadline' => Carbon::parse(
                     $valid['event_date'].' 11:00'
-                )->toIso8601String(),
+                )->format('Y-m-d H:i'),
             ],
             'max_attendees' => ['max_attendees' => 0],
             'latitude' => ['latitude' => -91],
@@ -178,5 +182,170 @@ class AdminEventInstanceTest extends TestCase
 
         $this->getJson(self::URL)->assertForbidden();
         $this->postJson(self::URL, $this->validPayload())->assertForbidden();
+    }
+
+    #[Test]
+    public function admin_events_index_rejects_an_excessively_large_page_number(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->getJson(self::URL.'?page=9223372036854775807')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['page'],
+            ]);
+    }
+
+    #[Test]
+    public function event_creation_rejects_registration_deadline_with_timezone_offset(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['registration_deadline'] = '2026-11-13T23:00:00+14:00';
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['registration_deadline'],
+            ]);
+    }
+
+    #[Test]
+    public function event_creation_rejects_a_past_event_date_and_registration_deadline(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $past = now($timezone)->subDays(2);
+        $payload = $this->validPayload();
+
+        $payload['event_date'] = $past->copy()->addDay()->format('Y-m-d');
+        $payload['registration_deadline'] = $past->format('Y-m-d H:i');
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['event_date', 'registration_deadline'],
+            ]);
+    }
+
+    #[Test]
+    public function admin_can_update_an_event_with_a_past_date_and_deadline(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $past = now($timezone)->subDays(2);
+        $payload = $this->validPayload();
+
+        $payload['event_date'] = $past->copy()->addDay()->format('Y-m-d');
+        $payload['registration_deadline'] = $past->format('Y-m-d H:i');
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('message', 'Evento atualizado com sucesso.');
+    }
+
+    #[Test]
+    public function event_creation_and_update_reject_values_above_storage_limits(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $event = EventInstance::factory()->create();
+
+        $invalidCases = [
+            'max_attendees' => ['max_attendees' => 100001],
+            'description' => ['description' => str_repeat('a', 5001)],
+            'organizer_notes' => ['organizer_notes' => str_repeat('a', 2001)],
+        ];
+
+        foreach ($invalidCases as $field => $override) {
+            $invalidPayload = array_merge($payload, $override);
+
+            $this->postJson(self::URL, $invalidPayload)
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => [$field],
+                ]);
+
+            $this->putJson(self::URL."/{$event->id}", $invalidPayload)
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => [$field],
+                ]);
+        }
+    }
+
+    #[Test]
+    public function admin_event_update_rejects_invalid_data(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $payload = $this->validPayload();
+        $payload['event_end_time'] = '09:00';
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['event_end_time'],
+            ]);
+    }
+
+    #[Test]
+    public function missing_event_returns_404_for_show_update_and_delete(): void
+    {
+        $this->actingAsAdmin();
+
+        $missingId = '00000000-0000-4000-8000-000000000000';
+
+        $this->getJson(self::URL."/{$missingId}")
+            ->assertNotFound();
+
+        $this->putJson(self::URL."/{$missingId}", $this->validPayload())
+            ->assertNotFound();
+
+        $this->deleteJson(self::URL."/{$missingId}")
+            ->assertNotFound();
+    }
+
+    #[Test]
+    public function inactive_or_pending_admin_cannot_access_admin_events(): void
+    {
+        $admins = [
+            User::factory()->admin()->pending()->create(),
+            User::factory()->admin()->inactive()->create(),
+        ];
+
+        foreach ($admins as $admin) {
+            Sanctum::actingAs($admin);
+
+            $this->getJson(self::URL)->assertForbidden();
+        }
+    }
+
+    #[Test]
+    public function updating_event_without_organizer_notes_keeps_existing_notes(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create([
+            'organizer_notes' => 'Notas já existentes.',
+        ]);
+
+        $payload = $this->validPayload();
+        unset($payload['organizer_notes']);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.organizer_notes', 'Notas já existentes.');
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'organizer_notes' => 'Notas já existentes.',
+        ]);
     }
 }

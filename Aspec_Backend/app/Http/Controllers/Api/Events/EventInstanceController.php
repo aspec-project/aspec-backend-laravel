@@ -18,10 +18,13 @@ class EventInstanceController extends Controller
     {
         $filters = $request->validate([
             'category_id' => ['sometimes', 'uuid', 'exists:event_categories,id'],
+            'location_id' => ['sometimes', 'uuid', 'exists:locations,id'],
+            'page' => ['nullable', 'integer', 'between:1,10000'],
         ]);
 
-        $today = today()->toDateString();
-        $currentTime = now()->format('H:i:s');
+        $now = now(config('app.event_timezone', 'Europe/Lisbon'));
+        $today = $now->toDateString();
+        $currentTime = $now->format('H:i:s');
 
         $events = EventInstance::query()
             ->with(['category', 'location'])
@@ -37,6 +40,10 @@ class EventInstanceController extends Controller
             ->when(
                 isset($filters['category_id']),
                 fn (Builder $query) => $query->where('category_id', $filters['category_id'])
+            )
+            ->when(
+                isset($filters['location_id']),
+                fn (Builder $query) => $query->where('location_id', $filters['location_id'])
             )
             ->orderBy('event_date')
             ->orderBy('event_start_time')
