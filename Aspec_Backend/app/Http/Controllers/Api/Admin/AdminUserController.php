@@ -8,6 +8,7 @@ use App\Models\AccountStatus;
 use App\Models\User;
 use App\Http\Resources\UserResource;
 use App\Http\Resources\AdminUserSummaryResource;
+use App\Http\Resources\AdminUserDetailResource;
 use App\Http\Requests\IndexAdminUserRequest;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -418,6 +419,23 @@ class AdminUserController extends Controller
             ],
             'counts' => $this->countByTab($base),
         ], 'Lista de utilizadores obtida com sucesso.');
+    }
+
+    /**
+     * Detalhe de um utilizador para o backoffice: dados da conta e perfil de membro completo
+     * (horário, redes sociais e portfólio). Inclui admins e a própria conta, só para leitura.
+     *
+     * @param string $id Id (UUID) do utilizador.
+     * @return JsonResponse 200 com o AdminUserDetailResource; 404 se não existir ou estiver apagado.
+     */
+    public function show(string $id): JsonResponse
+    {
+        $user = $this->loadUserRelations(User::findOrFail($id));
+
+        return $this->successResponse(
+            new AdminUserDetailResource($user),
+            'Utilizador obtido com sucesso.'
+        );
     }
 
     /**

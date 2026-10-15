@@ -75,6 +75,7 @@ Route::prefix('admin')
         Route::patch('/users/{id}/promote', [AdminUserController::class, 'promote']);
         Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
         Route::get('/users', [AdminUserController::class, 'index']);
+        Route::get('/users/{id}', [AdminUserController::class, 'show'])->whereUuid('id');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
