@@ -23,8 +23,9 @@ class EventCategoryRequest extends FormRequest
     }
 
     /**
-     * Nome obrigatório, até 100 caracteres e único sem distinguir maiúsculas (ao editar, ignora a própria
-     * categoria); cor opcional no formato #RRGGBB.
+     * Nome obrigatório, até 30 caracteres e único sem distinguir maiúsculas; cor obrigatória no formato #RRGGBB
+     * e diferente da das outras categorias, também sem distinguir maiúsculas (ao editar, as duas regras ignoram
+     * a própria categoria).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -35,7 +36,7 @@ class EventCategoryRequest extends FormRequest
                 'bail',
                 'required',
                 'string',
-                'max:100',
+                'max:30',
                 function (string $attribute, mixed $value, Closure $fail) {
                     $exists = EventCategory::query()
                         ->whereRaw('LOWER(name) = ?', [mb_strtolower($value)])
@@ -47,7 +48,22 @@ class EventCategoryRequest extends FormRequest
                     }
                 },
             ],
-            'color' => ['sometimes', 'nullable', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'color' => [
+                'bail',
+                'required',
+                'string',
+                'regex:/^#[0-9A-Fa-f]{6}$/',
+                function (string $attribute, mixed $value, Closure $fail) {
+                    $exists = EventCategory::query()
+                        ->where('color', strtoupper($value))
+                        ->when($this->route('eventCategory'), fn ($query, $category) => $query->whereKeyNot($category->id))
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('Já existe uma categoria com esta cor.');
+                    }
+                },
+            ],
         ];
     }
 

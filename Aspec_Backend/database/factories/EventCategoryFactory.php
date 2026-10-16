@@ -20,8 +20,8 @@ class EventCategoryFactory extends Factory
         return [
             // unique() evita colidir com o índice unique do nome entre categorias da mesma execução.
             'name' => ucfirst(fake()->unique()->words(2, true)),
-            // hexColor() devolve #rrggbb (minúsculas), aceite pela validação #RRGGBB da API.
-            'color' => fake()->hexColor(),
+            // unique() evita cores repetidas (índice único); o modelo guarda-a em maiúsculas.
+            'color' => fake()->unique()->hexColor(),
         ];
     }
 }

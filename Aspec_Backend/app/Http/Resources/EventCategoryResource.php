@@ -6,12 +6,12 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
- * Representação JSON de uma categoria de evento, igual na lista pública e no backoffice.
+ * Representação JSON de uma categoria de evento; o backoffice recebe também o número de eventos.
  */
 class EventCategoryResource extends JsonResource
 {
     /**
-     * Devolve só o id, o nome e a cor (sem timestamps).
+     * Devolve o id, o nome e a cor (sem timestamps) e, quando a contagem foi carregada (backoffice), o número de eventos.
      *
      * @param Request $request Pedido HTTP atual.
      * @return array<string, mixed>
@@ -22,6 +22,7 @@ class EventCategoryResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'color' => $this->color,
+            'events_count' => $this->whenCounted('eventInstances'),
         ];
     }
 }

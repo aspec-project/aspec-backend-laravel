@@ -15,8 +15,8 @@ return new class extends Migration
             $table->uuid('id')->primary();
             // O índice unique é a última barreira contra nomes repetidos (ex.: dois admins a criar ao mesmo tempo).
             $table->string('name')->unique();
-            // Cor #RRGGBB usada pelo frontend nos cartões da agenda; não está no ERD (decisão de 09/10).
-            $table->string('color', 7)->nullable();
+            // Cor #RRGGBB (em maiúsculas) usada pelo frontend nos cartões da agenda; obrigatória e única; não está no ERD (decisão de 09/10, ASPEC-326).
+            $table->string('color', 7)->unique();
             $table->timestamps();
         });
     }
