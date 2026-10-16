@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
 class AdminEventCategoryController extends Controller
 {
     /**
-     * Lista todas as categorias, ordenadas por nome e sem paginação.
+     * Lista todas as categorias com o número de eventos de cada uma, ordenadas por nome e sem paginação.
      *
      * @param Request $request Pedido HTTP atual.
      * @return JsonResponse 200 com a lista de categorias.
@@ -24,6 +24,7 @@ class AdminEventCategoryController extends Controller
     public function index(Request $request): JsonResponse
     {
         $categories = EventCategory::query()
+            ->withCount('eventInstances')
             ->orderBy('name')
             ->get();
 
@@ -34,14 +35,15 @@ class AdminEventCategoryController extends Controller
     }
 
     /**
-     * Cria uma categoria só com os campos validados (nome e cor).
+     * Cria uma categoria só com os campos validados (nome e cor) e devolve-a com o número de eventos (0).
      *
-     * @param EventCategoryRequest $request Pedido com o nome e a cor opcional.
+     * @param EventCategoryRequest $request Pedido com o nome e a cor.
      * @return JsonResponse 201 com a categoria criada.
      */
     public function store(EventCategoryRequest $request): JsonResponse
     {
         $category = EventCategory::create($request->validated());
+        $category->loadCount('eventInstances');
 
         return $this->successResponse(
             new EventCategoryResource($category),
@@ -51,15 +53,16 @@ class AdminEventCategoryController extends Controller
     }
 
     /**
-     * Atualiza o nome e a cor de uma categoria; se a cor não for enviada mantém-se, se vier a null é removida.
+     * Atualiza o nome e a cor de uma categoria e devolve-a com o número de eventos.
      *
-     * @param EventCategoryRequest $request Pedido com o nome e a cor opcional.
+     * @param EventCategoryRequest $request Pedido com o nome e a cor.
      * @param EventCategory $eventCategory Categoria obtida pelo id da rota.
      * @return JsonResponse 200 com a categoria atualizada.
      */
     public function update(EventCategoryRequest $request, EventCategory $eventCategory): JsonResponse
     {
         $eventCategory->update($request->validated());
+        $eventCategory->loadCount('eventInstances');
 
         return $this->successResponse(
             new EventCategoryResource($eventCategory),

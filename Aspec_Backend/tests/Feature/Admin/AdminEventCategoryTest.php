@@ -96,7 +96,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
-            'color' => '#315A79',
+            'color' => '#2E7D32',
         ]);
 
         $response
@@ -104,14 +104,14 @@ class AdminEventCategoryTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria criada com sucesso.')
             ->assertJsonPath('data.name', 'Workshops')
-            ->assertJsonPath('data.color', '#315A79');
+            ->assertJsonPath('data.color', '#2E7D32');
 
         $this->assertTrue(Str::isUuid($response->json('data.id')));
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $response->json('data.id'),
             'name' => 'Workshops',
-            'color' => '#315A79',
+            'color' => '#2E7D32',
         ]);
     }
 
@@ -120,13 +120,13 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => '  Workshops  '])
+        $this->postJson(self::URL, ['name' => '  Workshops  ', 'color' => '#2E7D32'])
             ->assertStatus(201)
             ->assertJsonPath('data.name', 'Workshops');
 
         $this->assertDatabaseHas('event_categories', ['name' => 'Workshops']);
 
-        $this->postJson(self::URL, ['name' => '   '])
+        $this->postJson(self::URL, ['name' => '   ', 'color' => '#2E7D32'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome é obrigatório.');
     }
@@ -146,15 +146,18 @@ class AdminEventCategoryTest extends TestCase
     }
 
     #[Test]
-    public function category_name_cannot_exceed_100_characters(): void
+    public function category_name_cannot_exceed_30_characters(): void
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 101)])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 31), 'color' => '#2E7D32'])
             ->assertStatus(422)
-            ->assertJsonPath('errors.name.0', 'O campo nome não pode ter mais de 100 caracteres.');
+            ->assertJsonPath('errors.name.0', 'O campo nome não pode ter mais de 30 caracteres.');
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 100)])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 30), 'color' => '#2E7D32'])
+            ->assertStatus(201);
+
+        $this->postJson(self::URL, ['name' => str_repeat('ç', 30), 'color' => '#1565C0'])
             ->assertStatus(201);
     }
 
@@ -205,20 +208,23 @@ class AdminEventCategoryTest extends TestCase
     }
 
     #[Test]
-    public function color_is_optional_on_create(): void
+    public function color_is_required_on_create(): void
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Workshops'])
-            ->assertStatus(201)
-            ->assertJsonPath('data.color', null);
+        $requests = [
+            ['name' => 'Workshops'],
+            ['name' => 'Workshops', 'color' => null],
+            ['name' => 'Workshops', 'color' => ''],
+        ];
 
-        $this->postJson(self::URL, ['name' => 'Webinars', 'color' => null])
-            ->assertStatus(201)
-            ->assertJsonPath('data.color', null);
+        foreach ($requests as $request) {
+            $this->postJson(self::URL, $request)
+                ->assertStatus(422)
+                ->assertJsonPath('errors.color.0', 'O campo cor é obrigatório.');
+        }
 
-        $this->assertDatabaseHas('event_categories', ['name' => 'Workshops', 'color' => null]);
-        $this->assertDatabaseHas('event_categories', ['name' => 'Webinars', 'color' => null]);
+        $this->assertDatabaseMissing('event_categories', ['name' => 'Workshops']);
     }
 
     #[Test]
@@ -230,6 +236,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
+            'color' => '#2E7D32',
             'id' => $forgedId,
             'created_at' => '2000-01-01',
         ]);
@@ -249,7 +256,7 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $reunioes = $this->category('Reuniões');
 
-        $this->putJson(self::URL."/{$reunioes->id}", ['name' => 'Reuniões de Núcleo'])
+        $this->putJson(self::URL."/{$reunioes->id}", ['name' => 'Reuniões de Núcleo', 'color' => '#0D1F35'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria atualizada com sucesso.')
@@ -269,11 +276,11 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $formacoes = $this->category('Formações');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações'])
+        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315A79'])
             ->assertOk()
             ->assertJsonPath('data.name', 'Formações');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'FORMAÇÕES'])
+        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'FORMAÇÕES', 'color' => '#315A79'])
             ->assertOk()
             ->assertJsonPath('data.name', 'FORMAÇÕES');
 
@@ -313,23 +320,22 @@ class AdminEventCategoryTest extends TestCase
     }
 
     #[Test]
-    public function color_is_kept_when_absent_and_cleared_when_null(): void
+    public function update_requires_a_color(): void
     {
         $this->actingAsAdmin();
         $formacoes = $this->category('Formações');
-        $this->assertSame('#315A79', $formacoes->color);
 
         $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações'])
-            ->assertOk()
-            ->assertJsonPath('data.color', '#315A79');
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', 'O campo cor é obrigatório.');
 
         $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => null])
-            ->assertOk()
-            ->assertJsonPath('data.color', null);
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', 'O campo cor é obrigatório.');
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $formacoes->id,
-            'color' => null,
+            'color' => '#315A79',
         ]);
     }
 
@@ -448,5 +454,112 @@ class AdminEventCategoryTest extends TestCase
         }
 
         $this->assertSeededCategoriesUnchanged();
+    }
+
+    #[Test]
+    public function color_must_be_unique_ignoring_case(): void
+    {
+        $this->actingAsAdmin();
+
+        foreach (['#315a79', '#315A79'] as $color) {
+            $this->postJson(self::URL, ['name' => 'Workshops', 'color' => $color])
+                ->assertStatus(422)
+                ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
+        }
+
+        $this->assertDatabaseMissing('event_categories', ['name' => 'Workshops']);
+        $this->assertSame(4, EventCategory::count());
+    }
+
+    #[Test]
+    public function color_is_stored_in_uppercase(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2e7d32'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.color', '#2E7D32');
+
+        $this->assertDatabaseHas('event_categories', [
+            'name' => 'Workshops',
+            'color' => '#2E7D32',
+        ]);
+    }
+
+    #[Test]
+    public function updating_keeps_its_own_color_in_any_case(): void
+    {
+        $this->actingAsAdmin();
+        $formacoes = $this->category('Formações');
+
+        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315a79'])
+            ->assertOk()
+            ->assertJsonPath('data.color', '#315A79');
+    }
+
+    #[Test]
+    public function cannot_update_to_another_categorys_color(): void
+    {
+        $this->actingAsAdmin();
+        $formacoes = $this->category('Formações');
+
+        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#8a7043'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
+
+        $this->assertDatabaseHas('event_categories', [
+            'id' => $formacoes->id,
+            'color' => '#315A79',
+        ]);
+    }
+
+    #[Test]
+    public function admin_list_includes_the_number_of_events_per_category(): void
+    {
+        $this->actingAsAdmin();
+        $formacoes = $this->category('Formações');
+        $reunioes = $this->category('Reuniões');
+
+        EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        EventInstance::factory()->create([
+            'category_id' => $formacoes->id,
+            'event_date' => today()->subDays(10),
+            'registration_deadline' => today()->subDays(11),
+        ]);
+        EventInstance::factory()->create(['category_id' => $reunioes->id]);
+
+        $response = $this->getJson(self::URL);
+
+        $response
+            ->assertOk()
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => ['id', 'name', 'color', 'events_count'],
+                ],
+            ]);
+
+        $counts = array_column($response->json('data'), 'events_count', 'name');
+
+        $this->assertSame(2, $counts['Formações']);
+        $this->assertSame(1, $counts['Reuniões']);
+        $this->assertSame(0, $counts['Jantares de Networking']);
+        $this->assertSame(0, $counts['Pequenos-almoços de Negócios']);
+    }
+
+    #[Test]
+    public function create_and_update_responses_include_the_number_of_events(): void
+    {
+        $this->actingAsAdmin();
+
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2E7D32'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.events_count', 0);
+
+        $formacoes = $this->category('Formações');
+        EventInstance::factory()->create(['category_id' => $formacoes->id]);
+
+        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315A79'])
+            ->assertOk()
+            ->assertJsonPath('data.events_count', 1);
     }
 }
