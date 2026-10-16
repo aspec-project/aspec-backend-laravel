@@ -302,4 +302,86 @@ class EventInstanceAgendaTest extends TestCase
                 'errors' => ['per_page'],
             ]);
     }
+
+
+    #[Test]
+    public function public_agenda_searches_event_name_description_category_and_location(): void
+    {
+        $category = EventCategory::factory()->create([
+            'name' => 'CategorySearchMarker',
+        ]);
+        $location = Location::create([
+            'name' => 'LocationSearchMarker',
+        ]);
+
+        $event = EventInstance::factory()->create([
+            'category_id' => $category->id,
+            'location_id' => $location->id,
+            'name' => 'EventNameSearchMarker',
+            'description' => 'EventDescriptionSearchMarker',
+            'event_date' => today()->addDays(2)->toDateString(),
+        ]);
+
+        foreach ([
+            'EventNameSearchMarker',
+            'EventDescriptionSearchMarker',
+            'CategorySearchMarker',
+            'LocationSearchMarker',
+        ] as $term) {
+            $this->getJson(self::URL.'?search='.$term)
+                ->assertOk()
+                ->assertJsonCount(1, 'data.items')
+                ->assertJsonPath('data.items.0.id', $event->id);
+        }
+    }
+
+    #[Test]
+    public function public_agenda_combines_text_search_with_category_and_location_filters(): void
+    {
+        $category = EventCategory::factory()->create();
+        $otherCategory = EventCategory::factory()->create();
+        $location = Location::create(['name' => 'SearchFilterLocation']);
+        $otherLocation = Location::create(['name' => 'OtherSearchFilterLocation']);
+        $eventDate = today()->addDays(2)->toDateString();
+
+        $matchingEvent = EventInstance::factory()->create([
+            'category_id' => $category->id,
+            'location_id' => $location->id,
+            'name' => 'Business Search Match',
+            'event_date' => $eventDate,
+        ]);
+
+        EventInstance::factory()->create([
+            'category_id' => $otherCategory->id,
+            'location_id' => $location->id,
+            'name' => 'Business Search Wrong Category',
+            'event_date' => $eventDate,
+        ]);
+
+        EventInstance::factory()->create([
+            'category_id' => $category->id,
+            'location_id' => $otherLocation->id,
+            'name' => 'Business Search Wrong Location',
+            'event_date' => $eventDate,
+        ]);
+
+        $this->getJson(
+            self::URL.'?search=Business&category_id='.$category->id.'&location_id='.$location->id
+        )
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $matchingEvent->id);
+    }
+
+    #[Test]
+    public function public_agenda_rejects_search_terms_longer_than_one_hundred_characters(): void
+    {
+        $search = str_repeat('a', 101);
+
+        $this->getJson(self::URL.'?search='.$search)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['search'],
+            ]);
+    }
 }

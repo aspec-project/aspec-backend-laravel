@@ -21,11 +21,13 @@ class EventInstanceController extends Controller
             'location_id' => ['sometimes', 'uuid', 'exists:locations,id'],
             'page' => ['nullable', 'integer', 'between:1,10000'],
             'per_page' => ['sometimes', 'nullable', 'integer', 'between:1,100'],
+            'search' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
         $now = now(config('app.event_timezone', 'Europe/Lisbon'));
         $today = $now->toDateString();
         $currentTime = $now->format('H:i:s');
+        $search = trim((string) ($filters['search'] ?? ''));
 
         $events = EventInstance::query()
             ->with(['category', 'location'])
@@ -46,6 +48,24 @@ class EventInstanceController extends Controller
                 isset($filters['location_id']),
                 fn (Builder $query) => $query->where('location_id', $filters['location_id'])
             )
+
+                    ->when($search !== '', function (Builder $query) use ($search) {
+            $term = '%'.$search.'%';
+
+            $query->where(function (Builder $query) use ($term) {
+                $query
+                    ->where('name', 'like', $term)
+                    ->orWhere('description', 'like', $term)
+                    ->orWhereHas(
+                        'category',
+                        fn (Builder $categoryQuery) => $categoryQuery->where('name', 'like', $term)
+                    )
+                    ->orWhereHas(
+                        'location',
+                        fn (Builder $locationQuery) => $locationQuery->where('name', 'like', $term)
+                    );
+                });
+            })
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->paginate((int) ($filters['per_page'] ?? 9));
