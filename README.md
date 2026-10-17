@@ -53,6 +53,21 @@ Password de todas as contas: `Demo#2026`
 | `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) |
 | `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) |
 
+## Email
+
+Por omissão (`MAIL_MAILER=log`) os emails não saem: ficam escritos no `storage/logs/laravel.log`, incluindo os links de ativação. É o modo para desenvolvimento e o que os testes automáticos usam.
+
+Para enviar emails a sério (demonstração), a plataforma usa a conta Gmail do projeto, `geral.teste.aspec@gmail.com`, com uma **palavra-passe de aplicação** (16 letras, criada em myaccount.google.com/apppasswords com a verificação em dois passos ativa). A palavra-passe da conta Google não funciona por SMTP. Pede a palavra-passe de aplicação ao Mário; nunca a pôr no `.env.example`, no git nem em mensagens públicas.
+
+1. No `.env`, trocar o bloco `MAIL_*` pelo bloco comentado do `.env.example` (sem os `#`) e preencher `MAIL_PASSWORD` com a palavra-passe de aplicação, sem espaços. O `MAIL_FROM_ADDRESS` tem de ser o endereço da conta.
+2. `php artisan config:clear`
+3. Testar: `php artisan tinker --execute="Mail::raw('Teste ASPEC', fn (\$m) => \$m->to('o-teu-email')->subject('Teste ASPEC'));"`
+4. A maior parte dos emails da aplicação (ativação, carência, faturas) passa pela fila: é preciso ter `php artisan queue:work` a correr.
+
+Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada ou verificação em dois passos desligada; `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
+
+**Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
