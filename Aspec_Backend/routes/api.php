@@ -22,6 +22,7 @@ use App\Http\Controllers\Api\Payments\InvoicePdfController;
 use App\Http\Controllers\Api\Payments\StripeWebhookController;
 use App\Http\Controllers\Api\Payments\SubscriptionController;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
 
@@ -51,15 +52,17 @@ Route::middleware('throttle:member-directory')->group(function () {
     Route::get('/members/{member}', [MemberController::class, 'show'])->whereUuid('member');
 });
 
-Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
-    ->middleware('throttle:activation-resend')->name('account-activations.resend');
+Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)->group(function () {
+    Route::post('/account-activations/resend', [AccountActivationController::class, 'resend'])
+        ->middleware('throttle:activation-resend')->name('account-activations.resend');
 
-// Públicas: a autorização é a assinatura do link do email (relativa, porque o link aponta para o frontend).
-Route::middleware('throttle:account-activation')->group(function () {
-    Route::get('/account-activations/{user}', [AccountActivationController::class, 'show'])
-        ->middleware('signed:relative')->whereUuid('user')->name('account-activations.show');
-    Route::post('/account-activations/{user}', [AccountActivationController::class, 'store'])
-        ->middleware('signed:relative')->whereUuid('user')->name('account-activations.store');
+    // Públicas: a autorização é a assinatura do link do email (relativa, porque o link aponta para o frontend).
+    Route::middleware('throttle:account-activation')->group(function () {
+        Route::get('/account-activations/{user}', [AccountActivationController::class, 'show'])
+            ->middleware('signed:relative')->whereUuid('user')->name('account-activations.show');
+        Route::post('/account-activations/{user}', [AccountActivationController::class, 'store'])
+            ->middleware('signed:relative')->whereUuid('user')->name('account-activations.store');
+    });
 });
 
 // Público e sem throttle: protegido pela assinatura do Stripe, que envia eventos em rajada.
