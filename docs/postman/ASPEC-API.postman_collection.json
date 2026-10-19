@@ -1329,7 +1329,7 @@
                 "locations"
               ]
             },
-            "description": "Os 18 distritos (núcleos regionais).\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "As 20 localidades de Portugal: os 18 distritos de Portugal continental, Açores e Madeira.\n\nPúblico. Usado para preencher selects no frontend.",
             "auth": {
               "type": "noauth"
             }
@@ -1550,7 +1550,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categorias de eventos obtidas com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formações\",\n      \"color\": \"#315A79\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\",\n      \"color\": \"#8A7043\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequenos-almoços de Negócios\",\n      \"color\": \"#C5A46B\"\n    },\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Reuniões\",\n      \"color\": \"#0D1F35\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categorias de eventos obtidas com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Almoço\",\n      \"color\": \"#2E7D32\"\n    },\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequeno-almoço\",\n      \"color\": \"#B84A00\"\n    },\n    {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    }\n  ]\n}"
             }
           ]
         }
@@ -4477,7 +4477,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar de Networking — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantares de Networking\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Pequeno-almoço de Negócios — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequenos-almoços de Negócios\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2026-10-22\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"available_spots\": 0,\n        \"registration_open\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2026-10-22\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"available_spots\": 0,\n        \"registration_open\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
             }
           ]
         },
@@ -4538,7 +4538,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar de Networking — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
             },
             {
               "name": "200 Evento (membro autenticado)",
@@ -4572,7 +4572,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar de Networking — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"is_registered\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"is_registered\": true\n  }\n}"
             },
             {
               "name": "404 Evento não encontrado",
@@ -4593,6 +4593,209 @@
                     "api",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Evento não encontrado.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Inscritos de um evento (nomes das empresas)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/events/:id/registrants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                ":id",
+                "registrants"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "e5a6b7c8-5555-4c55-8555-555555555555"
+                }
+              ]
+            },
+            "description": "Lista apenas os nomes das empresas inscritas no evento. Não expõe nomes pessoais, email ou telefone. Requer autenticação e conta **Active**; membros e administradores ativos podem consultar. Devolve uma lista vazia quando não há inscrições."
+          },
+          "response": [
+            {
+              "name": "200 Lista de empresas",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Lista de empresas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/registrants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "registrants"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de inscritos obtida com sucesso.\",\n  \"data\": [\n    {\n      \"business_name\": \"Silva Consultoria Unipessoal\"\n    },\n    {\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 Sem inscrições",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Sem inscrições"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/registrants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "registrants"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de inscritos obtida com sucesso.\",\n  \"data\": []\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/registrants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "registrants"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/registrants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "registrants"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Evento não encontrado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/registrants",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "registrants"
                   ]
                 }
               },
@@ -4669,7 +4872,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Inscrição efetuada com sucesso.\",\n  \"data\": {\n    \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n    \"event_id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Inscrição efetuada com sucesso.\",\n  \"data\": {\n    \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n    \"event_instance_id\": \"e5a6b7c8-5555-4c55-8555-555555555555\"\n  }\n}"
             },
             {
               "name": "409 Evento lotado",
@@ -4704,7 +4907,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"O evento já atingiu a lotação máxima.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"O evento atingiu a lotação máxima.\"\n}"
             },
             {
               "name": "409 Já inscrito",
@@ -4742,13 +4945,13 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Já está inscrito neste evento.\"\n}"
             },
             {
-              "name": "422 Prazo terminado",
+              "name": "409 Prazo terminado",
               "originalRequest": {
                 "method": "POST",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "422 Prazo terminado"
+                    "value": "409 Prazo terminado"
                   }
                 ],
                 "url": {
@@ -4764,8 +4967,8 @@
                   ]
                 }
               },
-              "status": "Unprocessable Content",
-              "code": 422,
+              "status": "Conflict",
+              "code": 409,
               "_postman_previewlanguage": "json",
               "header": [
                 {
@@ -4774,7 +4977,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo de inscrição terminou.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo de inscrição para este evento terminou.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -4871,7 +5074,7 @@
                 }
               ]
             },
-            "description": "Cancela a inscrição do membro autenticado e liberta a vaga. Só é possível até ao início do evento. Requer conta **Active**."
+            "description": "Cancela a inscrição do membro autenticado e liberta a vaga. Só é possível até ao prazo de inscrição (`registration_deadline`). Requer conta **Active**."
           },
           "response": [
             {
@@ -4942,16 +5145,16 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não está inscrito neste evento.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não existe inscrição sua para este evento.\"\n}"
             },
             {
-              "name": "422 Evento já começou",
+              "name": "409 Prazo terminado",
               "originalRequest": {
                 "method": "DELETE",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "422 Evento já começou"
+                    "value": "409 Prazo terminado"
                   }
                 ],
                 "url": {
@@ -4967,8 +5170,8 @@
                   ]
                 }
               },
-              "status": "Unprocessable Content",
-              "code": 422,
+              "status": "Conflict",
+              "code": 409,
               "_postman_previewlanguage": "json",
               "header": [
                 {
@@ -4977,7 +5180,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Já não é possível cancelar a inscrição: o evento já começou.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo para cancelar a inscrição terminou.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -5057,13 +5260,14 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/event-registrations",
+              "raw": "{{base_url}}/api/me/registrations",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "event-registrations"
+                "me",
+                "registrations"
               ]
             },
             "description": "Inscrições do membro autenticado, eventos futuros primeiro. Requer conta **Active**."
@@ -5080,13 +5284,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/event-registrations",
+                  "raw": "{{base_url}}/api/me/registrations",
                   "host": [
                     "{{base_url}}"
                   ],
                   "path": [
                     "api",
-                    "event-registrations"
+                    "me",
+                    "registrations"
                   ]
                 }
               },
@@ -5100,7 +5305,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n      \"created_at\": \"2026-10-01T10:00:00+01:00\",\n      \"event\": {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar de Networking — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantares de Networking\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      }\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n      \"created_at\": \"2026-10-01T10:00:00+01:00\",\n      \"event\": {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      }\n    }\n  ]\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -5113,13 +5318,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/event-registrations",
+                  "raw": "{{base_url}}/api/me/registrations",
                   "host": [
                     "{{base_url}}"
                   ],
                   "path": [
                     "api",
-                    "event-registrations"
+                    "me",
+                    "registrations"
                   ]
                 }
               },
@@ -5146,13 +5352,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/event-registrations",
+                  "raw": "{{base_url}}/api/me/registrations",
                   "host": [
                     "{{base_url}}"
                   ],
                   "path": [
                     "api",
-                    "event-registrations"
+                    "me",
+                    "registrations"
                   ]
                 }
               },
@@ -9850,7 +10057,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de categorias obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formações\",\n      \"color\": \"#315A79\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\",\n      \"color\": \"#8A7043\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequenos-almoços de Negócios\",\n      \"color\": \"#C5A46B\"\n    },\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Reuniões\",\n      \"color\": \"#0D1F35\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de categorias obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Almoço\",\n      \"color\": \"#2E7D32\"\n    },\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequeno-almoço\",\n      \"color\": \"#B84A00\"\n    },\n    {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    }\n  ]\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -9977,10 +10184,10 @@
                 "event-categories"
               ]
             },
-            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nCria uma categoria de eventos.\n\n- `name`: obrigatório, texto, até 100 caracteres, **único sem distinguir maiúsculas** (`formações` colide com `Formações`). Espaços no início e no fim são removidos.\n- `color`: opcional, formato `#RRGGBB` (ex.: `#8A7043`); ausente ou `null` → categoria sem cor.\n- Outros campos são ignorados.\n\nGuarda o `id` da categoria criada em `event_category_id`, usado por \"Atualizar categoria\" e \"Eliminar categoria\".\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 422 validação.",
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nCria uma categoria de eventos.\n\n- `name`: obrigatório, texto, até 100 caracteres, **único sem distinguir maiúsculas** (`formações` colide com `Formação`). Espaços no início e no fim são removidos.\n- `color`: opcional, formato `#RRGGBB` (ex.: `#8A7043`); ausente ou `null` → categoria sem cor.\n- Outros campos são ignorados.\n\nGuarda o `id` da categoria criada em `event_category_id`, usado por \"Atualizar categoria\" e \"Eliminar categoria\".\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+              "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -10012,7 +10219,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10030,7 +10237,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops\",\n    \"color\": \"#315A79\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking\",\n    \"color\": \"#315A79\"\n  }\n}"
             },
             {
               "name": "422 Nome em falta",
@@ -10184,7 +10391,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"vermelho\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"vermelho\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10227,7 +10434,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10270,7 +10477,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10313,7 +10520,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10381,7 +10588,7 @@
             "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos. Correr antes \"Criar categoria\" para preencher `event_category_id`.\n\nAltera o nome e/ou a cor. As regras são as de \"Criar categoria\"; a unicidade ignora a própria categoria (pode manter o nome ou mudar só as maiúsculas).\n\n- `name`: **obrigatório** também na edição.\n- `color`: **ausente → mantém a cor atual**; `null` → remove a cor.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (id inexistente ou que não é UUID) · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+              "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -10414,7 +10621,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10432,7 +10639,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops de Liderança\",\n    \"color\": \"#8A7043\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking para liderança\",\n    \"color\": \"#8A7043\"\n  }\n}"
             },
             {
               "name": "200 Cor removida",
@@ -10458,7 +10665,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": null\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": null\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10476,7 +10683,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Workshops de Liderança\",\n    \"color\": null\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking para liderança\",\n    \"color\": null\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -10502,7 +10709,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10590,7 +10797,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formações\"\n}",
+                  "raw": "{\n  \"name\": \"Formação\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10634,7 +10841,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10678,7 +10885,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10722,7 +10929,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Workshops de Liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11046,7 +11253,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar de Networking — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantares de Networking\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Pequeno-almoço de Negócios — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequenos-almoços de Negócios\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2026-10-22\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"available_spots\": 0,\n        \"registration_open\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2026-10-22\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"available_spots\": 0,\n        \"registration_open\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -11154,7 +11361,7 @@
             "description": "Cria uma instância de evento numa localização. Para replicar o mesmo formato noutra localização, criar outra instância com a mesma categoria.\n\n`event_end_time` > `event_start_time`; `registration_deadline` ≤ início do evento; `latitude` -90..90, `longitude` -180..180; `max_attendees` ≥ 1.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -11186,7 +11393,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11204,7 +11411,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar de Networking — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
             },
             {
               "name": "422 Validação",
@@ -11229,7 +11436,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11272,7 +11479,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11315,7 +11522,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar de Networking — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2026-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2026-10-13 23:59\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11396,7 +11603,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar de Networking — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -11587,7 +11794,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar de Networking — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantares de Networking\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registrations_count\": 28,\n    \"available_spots\": 22,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registrations_count\": 28,\n    \"available_spots\": 22,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
             },
             {
               "name": "422 Lotação inferior aos inscritos",
