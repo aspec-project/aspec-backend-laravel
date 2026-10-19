@@ -232,7 +232,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Eventos futuros nas quatro categorias, com datas relativas ao dia em que o seeder corre.
+     * Eventos futuros nas cinco categorias, com datas relativas ao dia em que o seeder corre.
      * Procura pelo nome e distrito (e não pela data): correr noutro dia atualiza as datas em vez de
      * duplicar os eventos. As inscrições fecham na véspera às 23:59.
      */
@@ -722,7 +722,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Dez eventos futuros: o pequeno-almoço e o jantar repetem-se em várias cidades
+     * Onze eventos futuros: o pequeno-almoço e o jantar repetem-se em várias cidades
      * (o mesmo formato em localidades diferentes). Coordenadas no centro de cada cidade.
      *
      * @return list<array<string, mixed>>
@@ -737,28 +737,28 @@ class DemoSeeder extends Seeder
 
         return [
             [
-                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Lisboa',
+                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Lisboa',
                 'days_from_now' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 40,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida da Liberdade 180, 1250-146 Lisboa',
                 'latitude' => 38.7197, 'longitude' => -9.1452,
             ],
             [
-                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Porto',
+                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Porto',
                 'days_from_now' => 12, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
                 'latitude' => 41.1486, 'longitude' => -8.6110,
             ],
             [
-                'name' => $breakfast, 'category' => 'Pequenos-almoços de Negócios', 'location' => 'Braga',
+                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Braga',
                 'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
                 'latitude' => 41.5512, 'longitude' => -8.4229,
             ],
             [
-                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Lisboa',
+                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Lisboa',
                 'days_from_now' => 9, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 80,
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
@@ -766,7 +766,7 @@ class DemoSeeder extends Seeder
                 'notes' => $dinnerNotes,
             ],
             [
-                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Coimbra',
+                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Coimbra',
                 'days_from_now' => 23, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
@@ -774,21 +774,29 @@ class DemoSeeder extends Seeder
                 'notes' => $dinnerNotes,
             ],
             [
-                'name' => $dinner, 'category' => 'Jantares de Networking', 'location' => 'Faro',
+                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Faro',
                 'days_from_now' => 37, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
                 'description' => $dinnerDescription,
                 'address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro',
                 'latitude' => 37.0153, 'longitude' => -7.9352,
             ],
             [
-                'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formações', 'location' => 'Aveiro',
+                'name' => 'Almoço de Negócios ASPEC', 'category' => 'Almoço', 'location' => 'Viseu',
+                'days_from_now' => 33, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 40,
+                'description' => 'Almoço entre empresários da região, com uma breve apresentação de cada participante e tempo para conversar e criar parcerias.',
+                'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
+                'latitude' => 40.6566, 'longitude' => -7.9125,
+                'notes' => 'Custo de participação: 18 € (pago no local).',
+            ],
+            [
+                'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Aveiro',
                 'days_from_now' => 15, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 30,
                 'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
                 'address' => 'Auditório, Cais da Fonte Nova, 3810-200 Aveiro',
                 'latitude' => 40.6380, 'longitude' => -8.6440,
             ],
             [
-                'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formações', 'location' => 'Leiria',
+                'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'location' => 'Leiria',
                 'days_from_now' => 29, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
                 'description' => 'Como usar as redes sociais e o Google para atrair clientes da sua zona, com um plano simples para aplicar no dia seguinte.',
                 'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
@@ -796,16 +804,16 @@ class DemoSeeder extends Seeder
                 'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
             ],
             [
-                'name' => 'Formação: Liderança com Valores', 'category' => 'Formações', 'location' => 'Setúbal',
+                'name' => 'Formação: Liderança com Valores', 'category' => 'Formação', 'location' => 'Setúbal',
                 'days_from_now' => 44, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
                 'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
                 'address' => 'Auditório Municipal, Avenida Luísa Todi 65, 2900-461 Setúbal',
                 'latitude' => 38.5225, 'longitude' => -8.8920,
             ],
             [
-                'name' => 'Reunião Regional de Membros', 'category' => 'Reuniões', 'location' => 'Porto',
-                'days_from_now' => 58, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 60,
-                'description' => 'Balanço do semestre do núcleo do Porto, apresentação dos novos membros e planeamento das próximas atividades.',
+                'name' => 'Workshop: Apresente o seu Negócio em Dois Minutos', 'category' => 'Workshop', 'location' => 'Porto',
+                'days_from_now' => 58, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 30,
+                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes.',
                 'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
                 'latitude' => 41.1580, 'longitude' => -8.6290,
             ],

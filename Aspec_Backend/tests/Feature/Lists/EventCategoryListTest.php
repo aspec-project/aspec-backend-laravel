@@ -32,7 +32,7 @@ class EventCategoryListTest extends TestCase
             ]);
 
         $this->assertSame(
-            ['Formações', 'Jantares de Networking', 'Pequenos-almoços de Negócios', 'Reuniões'],
+            ['Almoço', 'Formação', 'Jantar', 'Pequeno-almoço', 'Workshop'],
             array_column($response->json('data'), 'name')
         );
     }
@@ -61,14 +61,14 @@ class EventCategoryListTest extends TestCase
         $this->getJson('/api/event-categories')
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonCount(4, 'data');
+            ->assertJsonCount(5, 'data');
     }
 
     #[Test]
     public function public_list_does_not_include_the_number_of_events(): void
     {
-        $formacoes = EventCategory::where('name', 'Formações')->firstOrFail();
-        EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        $formacao = EventCategory::where('name', 'Formação')->firstOrFail();
+        EventInstance::factory()->create(['category_id' => $formacao->id]);
 
         $response = $this->getJson('/api/event-categories');
 

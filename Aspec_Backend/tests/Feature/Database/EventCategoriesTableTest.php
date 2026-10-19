@@ -25,7 +25,7 @@ class EventCategoriesTableTest extends TestCase
         $this->expectException(QueryException::class);
         DB::table('event_categories')->insert([
             'id' => (string) Str::uuid(),
-            'name' => 'Formações',
+            'name' => 'Formação',
             'color' => '#123456',
             'created_at' => now(),
             'updated_at' => now(),
@@ -52,7 +52,7 @@ class EventCategoriesTableTest extends TestCase
         DB::table('event_categories')->insert([
             'id' => (string) Str::uuid(),
             'name' => 'Workshops',
-            'color' => '#315A79',
+            'color' => '#1565C0',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
