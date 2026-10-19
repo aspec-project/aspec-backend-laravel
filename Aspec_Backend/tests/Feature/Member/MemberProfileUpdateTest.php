@@ -7,6 +7,7 @@ use App\Models\MemberProfile;
 use App\Models\Role;
 use App\Models\SocialPlatform;
 use App\Models\User;
+use App\Rules\InternationalPhone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -901,5 +902,296 @@ class MemberProfileUpdateTest extends TestCase
 
         $this->assertDatabaseHas('password_reset_tokens', ['email' => $user->email]);
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
+    }
+
+    private const COMMERCIAL_PHONE_MESSAGE = 'O campo telefone comercial tem de ser um número de telefone válido. Números estrangeiros precisam do indicativo do país (ex.: +44).';
+
+    private function memberWithCommercialContacts(string $status = 'Active'): User
+    {
+        return $this->memberWithProfile($status, [
+            'commercial_email' => 'antigo@silva.pt',
+            'commercial_phone' => '+351213000000',
+        ]);
+    }
+
+    private function assertCommercialContactsUnchanged(User $user): void
+    {
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'commercial_email' => 'antigo@silva.pt',
+            'commercial_phone' => '+351213000000',
+        ]);
+    }
+
+    #[Test]
+    public function commercial_email_and_phone_are_saved_and_phone_is_stored_in_e164(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'commercial_email' => 'geral@silva.pt',
+            'commercial_phone' => '213 456 789',
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Perfil atualizado com sucesso.')
+            ->assertJsonPath('data.commercial_email', 'geral@silva.pt')
+            ->assertJsonPath('data.commercial_phone', '+351213456789');
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'commercial_email' => 'geral@silva.pt',
+            'commercial_phone' => '+351213456789',
+        ]);
+    }
+
+    #[Test]
+    public function update_without_commercial_fields_keeps_them_unchanged(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['name' => 'Novo Nome'])
+            ->assertOk()
+            ->assertJsonPath('data.commercial_email', 'antigo@silva.pt')
+            ->assertJsonPath('data.commercial_phone', '+351213000000');
+
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    /**
+     * @return array<string, array{string, ?string, string}>
+     */
+    public static function emptyCommercialFields(): array
+    {
+        return [
+            'email vazio' => ['commercial_email', '', 'O campo email comercial é obrigatório.'],
+            'email null' => ['commercial_email', null, 'O campo email comercial é obrigatório.'],
+            'telefone vazio' => ['commercial_phone', '', 'O campo telefone comercial é obrigatório.'],
+            'telefone null' => ['commercial_phone', null, 'O campo telefone comercial é obrigatório.'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('emptyCommercialFields')]
+    public function commercial_field_sent_empty_is_rejected_and_kept(string $field, ?string $value, string $message): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [$field => $value])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors([$field => $message]);
+
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    #[Test]
+    public function both_commercial_fields_sent_empty_return_both_errors(): void
+    {
+        Sanctum::actingAs($this->memberWithCommercialContacts());
+
+        $this->putJson(self::URL, ['commercial_email' => '', 'commercial_phone' => ''])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors([
+                'commercial_email' => 'O campo email comercial é obrigatório.',
+                'commercial_phone' => 'O campo telefone comercial é obrigatório.',
+            ]);
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function invalidCommercialEmails(): array
+    {
+        $longDomain = implode('.', array_fill(0, 4, str_repeat('a', 60)));
+
+        return [
+            'sem arroba' => ['sem-arroba'],
+            'sem domínio' => ['a@'],
+            '256 caracteres' => ['geral@'.$longDomain.'.abc.pt'],
+            'array' => [['geral@silva.pt']],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidCommercialEmails')]
+    public function invalid_commercial_email_is_rejected_and_kept(mixed $email): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_email' => $email])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_email']);
+
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    #[Test]
+    public function commercial_email_without_at_sign_has_the_email_message(): void
+    {
+        Sanctum::actingAs($this->memberWithCommercialContacts());
+
+        $this->putJson(self::URL, ['commercial_email' => 'sem-arroba'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_email' => 'O campo email comercial tem de ser um endereço de email válido.']);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidCommercialPhones(): array
+    {
+        return [
+            'prefixo português inexistente' => ['941234567'],
+            'estrangeiro sem indicativo' => ['7911123456'],
+            'letras' => ['abc'],
+            'texto à volta do número' => ['Tel: 912345678'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidCommercialPhones')]
+    public function invalid_commercial_phone_is_rejected_and_kept(string $phone): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_phone' => $phone])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_phone' => self::COMMERCIAL_PHONE_MESSAGE]);
+
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    #[Test]
+    public function foreign_commercial_phone_with_country_code_is_stored_in_e164(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_phone' => '+44 7911 123456'])
+            ->assertOk()
+            ->assertJsonPath('data.commercial_phone', '+447911123456');
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'commercial_phone' => '+447911123456']);
+    }
+
+    #[Test]
+    public function commercial_contacts_may_repeat_the_personal_account_contacts(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_email' => $user->email, 'commercial_phone' => $user->phone])
+            ->assertOk()
+            ->assertJsonPath('data.commercial_email', $user->email)
+            ->assertJsonPath('data.commercial_phone', InternationalPhone::normalize($user->phone));
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email, 'phone' => $user->phone]);
+    }
+
+    #[Test]
+    public function commercial_email_shared_with_another_member_is_accepted(): void
+    {
+        $this->memberWithProfile(profile: ['commercial_email' => 'geral@empresa-partilhada.pt']);
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_email' => 'geral@empresa-partilhada.pt'])->assertOk();
+
+        $this->assertSame(2, MemberProfile::where('commercial_email', 'geral@empresa-partilhada.pt')->count());
+    }
+
+    #[Test]
+    public function legacy_commercial_contacts_field_is_ignored(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['business_name' => 'Nova Lda', 'commercial_contacts' => 'geral@silva.pt'])
+            ->assertOk()
+            ->assertJsonPath('data.business_name', 'Nova Lda')
+            ->assertJsonMissingPath('data.commercial_contacts');
+
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    #[Test]
+    public function commercial_email_change_needs_no_current_password_and_keeps_tokens_and_login_email(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        $current = $user->createToken('current');
+        $user->createToken('other');
+
+        $this->withToken($current->plainTextToken)
+            ->putJson(self::URL, ['commercial_email' => 'novo.comercial@silva.pt'])
+            ->assertOk()
+            ->assertJsonPath('data.commercial_email', 'novo.comercial@silva.pt')
+            ->assertJsonPath('data.email', $user->email);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
+        $this->assertSame(2, $user->tokens()->count());
+    }
+
+    #[Test]
+    public function changing_the_account_phone_keeps_the_commercial_phone(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => '939999999'])->assertOk();
+
+        $this->assertStringEndsWith('939999999', $user->fresh()->phone);
+        $this->assertCommercialContactsUnchanged($user);
+    }
+
+    #[Test]
+    public function changing_the_commercial_phone_keeps_the_account_phone(): void
+    {
+        $user = $this->memberWithCommercialContacts();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_phone' => '+351229999999'])
+            ->assertOk()
+            ->assertJsonPath('data.commercial_phone', '+351229999999')
+            ->assertJsonPath('data.phone', $user->phone);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
+    }
+
+    #[Test]
+    public function legacy_profile_without_commercial_contacts_can_update_other_fields(): void
+    {
+        $user = $this->memberWithProfile(profile: ['commercial_email' => null, 'commercial_phone' => null]);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['description' => 'Nova descrição.'])
+            ->assertOk()
+            ->assertJsonPath('data.description', 'Nova descrição.')
+            ->assertJsonPath('data.commercial_email', null)
+            ->assertJsonPath('data.commercial_phone', null);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'description' => 'Nova descrição.',
+            'commercial_email' => null,
+            'commercial_phone' => null,
+        ]);
+    }
+
+    #[Test]
+    public function inactive_member_cannot_change_commercial_contacts(): void
+    {
+        $user = $this->memberWithCommercialContacts('Inactive');
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['commercial_email' => 'novo@silva.pt', 'commercial_phone' => '+351229999999'])
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
+
+        $this->assertCommercialContactsUnchanged($user);
     }
 }
