@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Sector;
+use Illuminate\Database\Seeder;
 
 class SectorSeeder extends Seeder
 {
@@ -29,7 +29,7 @@ class SectorSeeder extends Seeder
             'Serviços Jurídicos e Advocacia',
             'Tecnologias de Informação (TI)',
             'Transportes e Logística',
-            'Turismo e Lazer'
+            'Turismo e Lazer',
         ];
 
         // Ordenar alfabeticamente para manter a base de dados organizada
@@ -37,7 +37,7 @@ class SectorSeeder extends Seeder
 
         foreach ($sectors as $sectorName) {
             Sector::firstOrCreate([
-                'name' => $sectorName
+                'name' => $sectorName,
             ]);
         }
     }

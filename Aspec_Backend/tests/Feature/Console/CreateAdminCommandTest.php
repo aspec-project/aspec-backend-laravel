@@ -13,6 +13,7 @@ class CreateAdminCommandTest extends TestCase
     use RefreshDatabase;
 
     private const EMAIL = 'admin@aspec.pt';
+
     private const PASSWORD = 'Str0ng!Passw0rd#2026';
 
     private function configureAdmin(?string $email = self::EMAIL, ?string $password = self::PASSWORD): void

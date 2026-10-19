@@ -2,10 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Rules\PortuguesePhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
-use App\Rules\PortuguesePhone;
 
 class RegisterMemberRequest extends FormRequest
 {
@@ -17,7 +17,7 @@ class RegisterMemberRequest extends FormRequest
         return true;
     }
 
-        protected function prepareForValidation(): void
+    protected function prepareForValidation(): void
     {
         $this->merge([
             'phone' => PortuguesePhone::normalize(
@@ -34,18 +34,18 @@ class RegisterMemberRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'                 => 'required|string|max:255',
-            'email'                => 'required|email|unique:users,email',
-            'password'             => ['required','string',Password::default(),],
-            'phone'                => ['required','string',new PortuguesePhone(),],
-            'business_name'        => 'required|string|max:255',
-            'sector_id'            => 'required|uuid|exists:sectors,id', 
-            'location_id'          => 'required|uuid|exists:locations,id',
-            'congregation'         => 'required|string|max:255',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'password' => ['required', 'string', Password::default()],
+            'phone' => ['required', 'string', new PortuguesePhone],
+            'business_name' => 'required|string|max:255',
+            'sector_id' => 'required|uuid|exists:sectors,id',
+            'location_id' => 'required|uuid|exists:locations,id',
+            'congregation' => 'required|string|max:255',
             'role_in_congregation' => 'required|string|max:255',
-            'description'          => 'nullable|string|max:1000',
-            'website_url'          => 'nullable|url|max:255',
-            'address'              => 'required|string|max:255',
+            'description' => 'nullable|string|max:1000',
+            'website_url' => 'nullable|url|max:255',
+            'address' => 'required|string|max:255',
         ];
     }
 }

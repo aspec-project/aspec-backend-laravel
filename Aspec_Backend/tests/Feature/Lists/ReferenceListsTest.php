@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Lists;
 
-use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
 class ReferenceListsTest extends TestCase
 {

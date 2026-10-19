@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Enums\InactiveReason;
+use App\Models\AccountStatus;
 use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\Sector;
@@ -460,7 +461,7 @@ class AdminUserIndexTest extends TestCase
 
     private function statusId(string $name): string
     {
-        return \App\Models\AccountStatus::where('name', $name)->value('id');
+        return AccountStatus::where('name', $name)->value('id');
     }
 
     private function itemFor(TestResponse $response, string $id): array

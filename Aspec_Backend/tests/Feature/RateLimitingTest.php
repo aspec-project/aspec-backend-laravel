@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\AccountStatus;
+use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\Role;
+use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -119,7 +121,6 @@ class RateLimitingTest extends TestCase
             ->assertTooManyRequests();
     }
 
-
     // The throttle middleware runs before the controller, so requests rejected for lacking a session still count.
     #[Test]
     public function login_without_session_counts_towards_throttle(): void
@@ -164,12 +165,11 @@ class RateLimitingTest extends TestCase
             ->assertTooManyRequests();
     }
 
-
     #[Test]
     public function registration_is_rate_limited_after_five_attempts(): void
     {
-        $sector = \App\Models\Sector::firstOrFail();
-        $location = \App\Models\Location::firstOrFail();
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
 
         $basePayload = [
             'name' => 'Membro de Teste',

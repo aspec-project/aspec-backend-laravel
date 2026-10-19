@@ -6,6 +6,7 @@ use App\Services\Payments\SubscriptionService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Stripe\Exception\ApiErrorException;
 use Throwable;
 
 class CancelStripeSubscriptionJob implements ShouldQueue
@@ -42,7 +43,7 @@ class CancelStripeSubscriptionJob implements ShouldQueue
      * voltou a Active, e uma sessão ou subscrição nova (depois de um desbloqueio) não é tocada.
      * Idempotente (o que já está cancelado ou fechado não volta a falhar).
      *
-     * @throws \Stripe\Exception\ApiErrorException Propaga para a fila voltar a tentar.
+     * @throws ApiErrorException Propaga para a fila voltar a tentar.
      */
     public function handle(SubscriptionService $subscriptions): void
     {

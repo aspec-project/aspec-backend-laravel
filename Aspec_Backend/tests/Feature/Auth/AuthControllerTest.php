@@ -2,17 +2,15 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\Location;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
-use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
-use App\Enums\InactiveReason;
 
 class AuthControllerTest extends TestCase
 {
@@ -482,7 +480,6 @@ class AuthControllerTest extends TestCase
             ]);
     }
 
-
     #[Test]
     public function logout_handles_bearer_token_and_spa_session_together(): void
     {
@@ -513,8 +510,6 @@ class AuthControllerTest extends TestCase
 
         $this->assertGuest('web');
     }
-
-
 
     #[Test]
     public function approved_user_cannot_login_before_activation(): void
@@ -593,7 +588,6 @@ class AuthControllerTest extends TestCase
             'tokenable_id' => $user->id,
         ]);
     }
-
 
     #[Test]
     public function cancelled_user_cannot_login(): void

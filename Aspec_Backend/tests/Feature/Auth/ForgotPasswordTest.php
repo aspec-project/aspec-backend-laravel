@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Notifications\ResetPasswordNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -130,7 +129,6 @@ class ForgotPasswordTest extends TestCase
         $this->postJson(self::URL, ['email' => 'x@example.com'])
             ->assertTooManyRequests();
     }
-
 
     #[Test]
     public function requests_from_one_ip_are_limited_across_different_emails(): void

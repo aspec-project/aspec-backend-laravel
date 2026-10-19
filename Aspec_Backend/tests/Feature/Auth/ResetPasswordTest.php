@@ -18,6 +18,7 @@ class ResetPasswordTest extends TestCase
     use RefreshDatabase;
 
     private const URL = '/api/auth/reset-password';
+
     private const NEW_PASSWORD = 'NewSecret456!';
 
     private function payload(User $user, string $token, array $overrides = []): array

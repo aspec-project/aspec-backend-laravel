@@ -257,8 +257,6 @@ class EventInstanceAgendaTest extends TestCase
             ->assertTooManyRequests();
     }
 
-
-
     #[Test]
     public function public_agenda_uses_nine_events_by_default_and_accepts_per_page(): void
     {
@@ -302,7 +300,6 @@ class EventInstanceAgendaTest extends TestCase
                 'errors' => ['per_page'],
             ]);
     }
-
 
     #[Test]
     public function public_agenda_searches_event_name_description_category_and_location(): void

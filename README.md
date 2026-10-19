@@ -16,6 +16,15 @@ No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão d
 
 Se o teu `.env` tem `APP_URL=http://localhost` (sem a porta), muda para `http://localhost:8000`, corre `php artisan config:clear` e confirma que existe `public/storage` (senão, `php artisan storage:link`). Sem isto, os logótipos e as imagens do portfólio aparecem partidos no frontend.
 
+## Formatação do código (Pint)
+
+O código segue o estilo do Laravel, verificado pelo [Pint](https://laravel.com/docs/pint). Antes de cada commit, na pasta `Aspec_Backend/`:
+
+```bash
+php vendor/bin/pint --dirty   # formata só os ficheiros alterados
+php vendor/bin/pint --test    # confirma que o projeto inteiro está formatado
+```
+
 ## Primeiro administrador
 
 Na instalação inicial, a partir de `Aspec_Backend`:

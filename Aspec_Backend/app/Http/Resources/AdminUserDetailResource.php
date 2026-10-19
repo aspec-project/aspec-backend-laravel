@@ -18,7 +18,7 @@ class AdminUserDetailResource extends JsonResource
      * accountStatus e memberProfile (com user, sector, location, weekDays, socialPlatforms e
      * portfolios) carregadas.
      *
-     * @param Request $request Pedido atual.
+     * @param  Request  $request  Pedido atual.
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
