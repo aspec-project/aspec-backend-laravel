@@ -33,6 +33,8 @@ class EventInstanceModelTest extends TestCase
             'max_attendees',
             'registration_deadline',
             'organizer_notes',
+            'is_online',
+            'online_url',
             'created_at',
             'updated_at',
         ]));

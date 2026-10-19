@@ -51,6 +51,7 @@ class AdminEventInstanceTest extends TestCase
                 ->setTime(23, 59)
                 ->format('Y-m-d H:i'),
             'organizer_notes' => 'Notas do organizador.',
+            'is_online' => false,
         ];
     }
 
@@ -128,6 +129,152 @@ class AdminEventInstanceTest extends TestCase
             'name' => 'Workshop atualizado',
         ]);
     }
+
+
+    #[Test]
+    public function admin_can_create_an_online_event_without_physical_address(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $response = $this->postJson(self::URL, $payload);
+
+        $response->assertCreated();
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $response->json('data.id'),
+            'is_online' => true,
+            'online_url' => 'https://meet.example.com/event',
+            'address' => null,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_update_an_event_to_online_without_physical_address(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create([
+            'address' => 'Morada anterior',
+            'latitude' => 38.7223,
+            'longitude' => -9.1393,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk();
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'is_online' => true,
+            'online_url' => 'https://meet.example.com/event',
+            'address' => null,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
+    public function online_event_rejects_physical_address_and_coordinates(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        foreach ([
+            ['method' => 'post', 'url' => self::URL],
+            ['method' => 'put', 'url' => self::URL."/{$event->id}"],
+        ] as $request) {
+            $this->{$request['method'].'Json'}($request['url'], $payload)
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => ['address', 'latitude', 'longitude'],
+                ]);
+        }
+    }
+
+    #[Test]
+    public function in_person_event_rejects_online_url(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = false;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        foreach ([
+            ['method' => 'post', 'url' => self::URL],
+            ['method' => 'put', 'url' => self::URL."/{$event->id}"],
+        ] as $request) {
+            $this->{$request['method'].'Json'}($request['url'], $payload)
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => ['online_url'],
+                ]);
+        }
+    }
+
+    #[Test]
+    public function event_creation_and_update_require_is_online(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $payload = $this->validPayload();
+
+        unset($payload['is_online']);
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['is_online'],
+            ]);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['is_online'],
+            ]);
+    }
+
+    #[Test]
+    public function online_event_rejects_an_invalid_online_url(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'not-a-valid-url';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['online_url'],
+            ]);
+    }
+
+
+
 
     #[Test]
     public function admin_can_delete_an_event(): void

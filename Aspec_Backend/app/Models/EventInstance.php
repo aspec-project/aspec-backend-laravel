@@ -27,6 +27,8 @@ class EventInstance extends Model
         'max_attendees',
         'registration_deadline',
         'organizer_notes',
+        'is_online',
+        'online_url',
     ];
 
     protected function casts(): array
@@ -35,6 +37,7 @@ class EventInstance extends Model
             'event_date' => 'date:Y-m-d',
             'registration_deadline' => 'datetime',
             'max_attendees' => 'integer',
+            'is_online' => 'boolean',
         ];
     }
 
