@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Lists;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Location;
+use Illuminate\Http\Request;
 
 class LocationController extends Controller
 {
@@ -16,7 +16,7 @@ class LocationController extends Controller
         $locations = Location::query()
             ->orderBy('name')
             ->get(['id', 'name']);
- 
+
         return $this->successResponse($locations, 'Núcleos obtidos com sucesso.');
     }
 

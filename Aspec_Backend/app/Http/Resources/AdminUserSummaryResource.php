@@ -16,7 +16,7 @@ class AdminUserSummaryResource extends JsonResource
      * Lista branca dos campos do item. Espera as relações role, accountStatus,
      * memberProfile.sector e memberProfile.location carregadas.
      *
-     * @param Request $request Pedido atual.
+     * @param  Request  $request  Pedido atual.
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

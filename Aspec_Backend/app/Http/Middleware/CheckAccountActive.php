@@ -10,6 +10,7 @@ use Symfony\Component\HttpFoundation\Response;
 class CheckAccountActive
 {
     use ApiResponse;
+
     /**
      * Handle an incoming request.
      *
@@ -19,7 +20,7 @@ class CheckAccountActive
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return $this->errorResponse(
                 'Utilizador não autenticado.',
                 Response::HTTP_UNAUTHORIZED

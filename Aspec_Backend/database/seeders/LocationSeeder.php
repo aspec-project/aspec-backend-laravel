@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Location;
+use Illuminate\Database\Seeder;
 
 class LocationSeeder extends Seeder
 {
@@ -30,7 +30,7 @@ class LocationSeeder extends Seeder
             'Setúbal',
             'Viana do Castelo',
             'Vila Real',
-            'Viseu'
+            'Viseu',
         ];
 
         sort($districts);

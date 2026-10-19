@@ -48,22 +48,21 @@ class EventInstanceController extends Controller
                 isset($filters['location_id']),
                 fn (Builder $query) => $query->where('location_id', $filters['location_id'])
             )
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $term = '%'.$search.'%';
 
-                    ->when($search !== '', function (Builder $query) use ($search) {
-            $term = '%'.$search.'%';
-
-            $query->where(function (Builder $query) use ($term) {
-                $query
-                    ->where('name', 'like', $term)
-                    ->orWhere('description', 'like', $term)
-                    ->orWhereHas(
-                        'category',
-                        fn (Builder $categoryQuery) => $categoryQuery->where('name', 'like', $term)
-                    )
-                    ->orWhereHas(
-                        'location',
-                        fn (Builder $locationQuery) => $locationQuery->where('name', 'like', $term)
-                    );
+                $query->where(function (Builder $query) use ($term) {
+                    $query
+                        ->where('name', 'like', $term)
+                        ->orWhere('description', 'like', $term)
+                        ->orWhereHas(
+                            'category',
+                            fn (Builder $categoryQuery) => $categoryQuery->where('name', 'like', $term)
+                        )
+                        ->orWhereHas(
+                            'location',
+                            fn (Builder $locationQuery) => $locationQuery->where('name', 'like', $term)
+                        );
                 });
             })
             ->orderBy('event_date')

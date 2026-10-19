@@ -13,7 +13,7 @@ class EventCategoryResource extends JsonResource
     /**
      * Devolve o id, o nome e a cor (sem timestamps) e, quando a contagem foi carregada (backoffice), o número de eventos.
      *
-     * @param Request $request Pedido HTTP atual.
+     * @param  Request  $request  Pedido HTTP atual.
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

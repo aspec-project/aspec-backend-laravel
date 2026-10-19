@@ -15,7 +15,7 @@ class EnsureAdmin
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return $this->errorResponse(
                 'Não autenticado.',
                 Response::HTTP_UNAUTHORIZED

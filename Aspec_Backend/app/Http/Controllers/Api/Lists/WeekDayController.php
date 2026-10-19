@@ -3,12 +3,11 @@
 namespace App\Http\Controllers\Api\Lists;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\WeekDay;
+use Illuminate\Http\Request;
 
 class WeekDayController extends Controller
 {
-
     /**
      * Display a listing of the resource.
      */

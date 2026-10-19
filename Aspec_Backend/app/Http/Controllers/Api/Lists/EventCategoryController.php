@@ -16,7 +16,7 @@ class EventCategoryController extends Controller
     /**
      * Lista todas as categorias, ordenadas por nome e sem paginação.
      *
-     * @param Request $request Pedido HTTP atual.
+     * @param  Request  $request  Pedido HTTP atual.
      * @return JsonResponse 200 com a lista de categorias.
      */
     public function index(Request $request): JsonResponse

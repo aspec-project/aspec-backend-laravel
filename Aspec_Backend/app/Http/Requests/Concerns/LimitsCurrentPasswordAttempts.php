@@ -5,6 +5,7 @@ namespace App\Http\Requests\Concerns;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Limite de falhas do current_password (5 falhas em 15 minutos, por utilizador),
@@ -41,7 +42,7 @@ trait LimitsCurrentPasswordAttempts
      * Conta uma falha só quando a regra current_password falhou (password errada),
      * não quando o campo falta nem noutros erros de validação.
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException
      */
     protected function failedValidation(Validator $validator): void
     {

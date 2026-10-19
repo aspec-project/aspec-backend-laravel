@@ -24,9 +24,7 @@ class IssueInvoiceJob implements ShouldQueue
      * Guarda só o id da linha `invoices`: o payload fica nas tabelas jobs/failed_jobs, sem
      * dados pessoais nem valores.
      */
-    public function __construct(public string $invoiceId)
-    {
-    }
+    public function __construct(public string $invoiceId) {}
 
     /**
      * Esperas crescentes entre tentativas (segundos): 1 min, 5 min, 15 min, 1 h.

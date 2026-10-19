@@ -24,14 +24,23 @@ class ApiErrorHandlingTest extends TestCase
     use RefreshDatabase;
 
     private const MSG_422 = 'Os dados enviados são inválidos.';
+
     private const MSG_401 = 'Não autenticado.';
+
     private const MSG_403 = 'Não tem permissão para realizar esta ação.';
+
     private const MSG_404 = 'Recurso não encontrado.';
+
     private const MSG_405 = 'Método não permitido.';
+
     private const MSG_419 = 'A sessão expirou. Atualize a página e tente novamente.';
+
     private const MSG_429 = 'Demasiados pedidos. Tente novamente mais tarde.';
+
     private const MSG_500 = 'Ocorreu um erro interno. Tente novamente mais tarde.';
+
     private const MSG_502 = 'Não foi possível contactar o serviço de pagamentos. Tente novamente.';
+
     private const MSG_INVALID_LINK = 'O link é inválido ou expirou.';
 
     protected function setUp(): void
@@ -104,15 +113,18 @@ class ApiErrorHandlingTest extends TestCase
                 throw new \RuntimeException('SQLSTATE[HY000]: detalhe interno secreto');
             });
 
-            Route::get('/success', fn () => (new class {
+            Route::get('/success', fn () => (new class
+            {
                 use ApiResponse;
             })->successResponse(['id' => 1], 'Operação concluída.'));
 
-            Route::get('/trait-error', fn () => (new class {
+            Route::get('/trait-error', fn () => (new class
+            {
                 use ApiResponse;
             })->errorResponse('Erro sem detalhes.', 400));
 
-            Route::get('/trait-error-with-errors', fn () => (new class {
+            Route::get('/trait-error-with-errors', fn () => (new class
+            {
                 use ApiResponse;
             })->errorResponse('Erro com detalhes.', 422, ['field' => ['Mensagem do campo.']]));
         });
