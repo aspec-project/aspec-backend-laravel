@@ -127,9 +127,31 @@ class AnonymizeAndDeleteTest extends TestCase
             'logo_path' => null,
             'description' => null,
             'website_url' => null,
-            'commercial_contacts' => null,
+            'commercial_email' => null,
+            'commercial_phone' => null,
             'address' => null,
         ]);
+    }
+
+    #[Test]
+    public function commercial_contacts_are_erased_from_the_database(): void
+    {
+        $user = User::factory()->create();
+        MemberProfile::factory()->create([
+            'user_id' => $user->id,
+            'commercial_email' => 'comercial.apagar@empresa.test',
+            'commercial_phone' => '+351213456789',
+        ]);
+        $this->assertDatabaseHas('member_profiles', [
+            'user_id' => $user->id,
+            'commercial_email' => 'comercial.apagar@empresa.test',
+            'commercial_phone' => '+351213456789',
+        ]);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseMissing('member_profiles', ['commercial_email' => 'comercial.apagar@empresa.test']);
+        $this->assertDatabaseMissing('member_profiles', ['commercial_phone' => '+351213456789']);
     }
 
     #[Test]

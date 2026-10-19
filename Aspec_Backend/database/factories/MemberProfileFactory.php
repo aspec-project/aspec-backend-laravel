@@ -28,7 +28,8 @@ class MemberProfileFactory extends Factory
             'logo_path' => null,
             'description' => fake()->paragraph(),
             'website_url' => fake()->url(),
-            'commercial_contacts' => fake()->phoneNumber(),
+            'commercial_email' => fake()->companyEmail(),
+            'commercial_phone' => '+351'.fake()->randomElement(['91', '92', '93', '96']).fake()->numerify('#######'),
             'address' => fake()->address(),
         ];
     }

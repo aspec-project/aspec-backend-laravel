@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Directory;
 
+use App\Enums\InactiveReason;
 use App\Models\MemberProfile;
 use App\Models\SocialPlatform;
 use App\Models\User;
@@ -16,19 +17,33 @@ use Tests\TestCase;
 /**
  * O que o diretório nunca pode expor.
  *
- * Telefone e contactos comerciais só para contas Active; o email de login nunca (é a credencial
- * de acesso); congregação e cargo nunca (revelam convicção religiosa, categoria especial do RGPD);
+ * Website, morada, redes sociais e contactos comerciais só para contas Active; o email e o
+ * telefone da conta nunca (são contactos pessoais e o email é a credencial de acesso);
+ * congregação e cargo nunca (revelam convicção religiosa, categoria especial do RGPD);
  * dados internos, de faturação e do Stripe nunca.
+ *
+ * Os valores marcados com ZXQW servem para o assertDontSee. Os URLs são procurados sem barras,
+ * porque o JSON escapa "/" como "\/" e um assertDontSee do URL completo passaria sempre.
  */
 class MemberDataExposureTest extends TestCase
 {
     use BuildsDirectoryMembers, RefreshDatabase;
 
-    private const PHONE = '961234567';
+    private const ACCOUNT_EMAIL = 'dono.ZXQWPESSOAL@empresa.test';
 
-    private const EMAIL = 'dono.do.perfil@empresa.test';
+    private const ACCOUNT_PHONE = '961234567';
 
-    private const COMMERCIAL_CONTACTS = 'Contacto comercial ZXQWCOMERCIAL';
+    private const COMMERCIAL_EMAIL = 'comercial.ZXQW@empresa.test';
+
+    private const COMMERCIAL_PHONE = '+351213456789';
+
+    private const WEBSITE = 'https://zxqw-site.test';
+
+    private const ADDRESS = 'Rua ZXQWMORADA 1';
+
+    private const LINKEDIN_URL = 'https://www.linkedin.com/company/zxqw-linkedin';
+
+    private const INSTAGRAM_URL = 'https://instagram.com/zxqw-instagram';
 
     private const CONGREGATION = 'Congregacao ZXQWIGREJA';
 
@@ -36,9 +51,32 @@ class MemberDataExposureTest extends TestCase
 
     private const NIF = '987654321';
 
+    /** Valores só para contas Active, tal como aparecem no texto do JSON. */
+    private const MEMBERS_ONLY_VALUES = [
+        self::COMMERCIAL_EMAIL,
+        '213456789',
+        'zxqw-site',
+        'ZXQWMORADA',
+        'zxqw-linkedin',
+        'zxqw-instagram',
+    ];
+
+    /** Valores que nunca saem do diretório, para ninguém. */
+    private const NEVER_VALUES = [
+        self::ACCOUNT_EMAIL,
+        'ZXQWPESSOAL',
+        self::ACCOUNT_PHONE,
+        self::CONGREGATION,
+        self::ROLE_IN_CONGREGATION,
+        self::NIF,
+        'cus_ZXQWSTRIPE',
+    ];
+
     /** Chaves que não podem aparecer em lado nenhum do JSON do diretório. */
     private const FORBIDDEN_KEYS = [
         'email',
+        'phone',
+        'commercial_contacts',
         'congregation',
         'role_in_congregation',
         'user_id',
@@ -75,8 +113,8 @@ class MemberDataExposureTest extends TestCase
     private function exposedOwner(): MemberProfile
     {
         $owner = User::factory()->withBilling()->create([
-            'email' => self::EMAIL,
-            'phone' => self::PHONE,
+            'email' => self::ACCOUNT_EMAIL,
+            'phone' => self::ACCOUNT_PHONE,
             'nif' => self::NIF,
             'stripe_id' => 'cus_ZXQWSTRIPE',
             'pm_type' => 'visa',
@@ -86,18 +124,20 @@ class MemberDataExposureTest extends TestCase
 
         $profile = $this->profileFor($owner, [
             'business_name' => 'Empresa Exposta',
-            'commercial_contacts' => self::COMMERCIAL_CONTACTS,
+            'description' => 'Servicos de consultoria.',
+            'commercial_email' => self::COMMERCIAL_EMAIL,
+            'commercial_phone' => self::COMMERCIAL_PHONE,
             'congregation' => self::CONGREGATION,
             'role_in_congregation' => self::ROLE_IN_CONGREGATION,
             'logo_path' => "logos/{$owner->id}/logo.png",
-            'website_url' => 'https://empresa.example',
-            'address' => 'Avenida Central 10, Porto',
+            'website_url' => self::WEBSITE,
+            'address' => self::ADDRESS,
         ]);
         $profile->portfolios()->create(['image_path' => "portfolios/{$owner->id}/foto.jpg"]);
-        $profile->socialPlatforms()->attach(
-            SocialPlatform::where('name', 'Instagram')->value('id'),
-            ['url' => 'https://instagram.com/empresa'],
-        );
+        $profile->socialPlatforms()->attach([
+            SocialPlatform::where('name', 'LinkedIn')->value('id') => ['url' => self::LINKEDIN_URL],
+            SocialPlatform::where('name', 'Instagram')->value('id') => ['url' => self::INSTAGRAM_URL],
+        ]);
 
         return $profile;
     }
@@ -105,7 +145,7 @@ class MemberDataExposureTest extends TestCase
     /**
      * @return array<string, array{string}>
      */
-    public static function viewers(): array
+    public static function listViewers(): array
     {
         return [
             'visitante' => ['visitor'],
@@ -113,10 +153,48 @@ class MemberDataExposureTest extends TestCase
         ];
     }
 
-    private function asViewer(string $viewer): static
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function viewersWithoutContacts(): array
     {
-        if ($viewer === 'active') {
-            $this->withToken($this->listedMember(['business_name' => 'Quem Consulta'])->user->createToken('postman')->plainTextToken);
+        return [
+            'visitante' => ['visitor'],
+            'Pending' => ['pending'],
+            'Approved' => ['approved'],
+            'Inactive blocked' => ['blocked'],
+            'Inactive unpaid' => ['unpaid'],
+            'Inactive cancelled' => ['cancelled'],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function allViewers(): array
+    {
+        return [
+            ...self::viewersWithoutContacts(),
+            'membro Active' => ['active'],
+            'o próprio' => ['owner'],
+            'admin Active' => ['admin'],
+        ];
+    }
+
+    private function asViewer(string $viewer, ?MemberProfile $owner = null): static
+    {
+        $user = match ($viewer) {
+            'visitor' => null,
+            'active' => $this->listedMember(['business_name' => 'Quem Consulta'])->user,
+            'owner' => $owner->user,
+            'admin' => User::factory()->admin()->create(),
+            'pending' => User::factory()->pending()->create(),
+            'approved' => User::factory()->approved()->create(),
+            default => User::factory()->inactive(InactiveReason::from($viewer))->create(),
+        };
+
+        if ($user) {
+            $this->withToken($user->createToken('postman')->plainTextToken);
         }
 
         return $this;
@@ -129,17 +207,64 @@ class MemberDataExposureTest extends TestCase
         $this->assertSame([], array_values($leaked), 'Chaves proibidas no JSON: '.implode(', ', $leaked));
     }
 
-    private function assertNoSecretValues(TestResponse $response): void
+    private function assertDontSeeAny(TestResponse $response, array $values): void
     {
-        $response->assertDontSee(self::EMAIL)
-            ->assertDontSee(self::CONGREGATION)
-            ->assertDontSee(self::ROLE_IN_CONGREGATION)
-            ->assertDontSee(self::NIF)
-            ->assertDontSee('cus_ZXQWSTRIPE');
+        foreach ($values as $value) {
+            $response->assertDontSee($value, false);
+        }
     }
 
     #[Test]
-    #[DataProvider('viewers')]
+    #[DataProvider('viewersWithoutContacts')]
+    public function profile_for_visitor_or_non_active_account_contains_no_contact_value(string $viewer): void
+    {
+        $profile = $this->exposedOwner();
+
+        $response = $this->asViewer($viewer)->showMember($profile->id)
+            ->assertOk()
+            ->assertJsonPath('data.members_only', null)
+            ->assertJsonPath('data.business_name', 'Empresa Exposta');
+
+        $this->assertDontSeeAny($response, [...self::MEMBERS_ONLY_VALUES, ...self::NEVER_VALUES]);
+    }
+
+    #[Test]
+    #[DataProvider('allViewers')]
+    public function profile_never_contains_account_contacts_congregation_or_internal_fields(string $viewer): void
+    {
+        $profile = $this->exposedOwner();
+
+        $response = $this->asViewer($viewer, $profile)->showMember($profile->id)->assertOk();
+
+        $this->assertDontSeeAny($response, self::NEVER_VALUES);
+        $this->assertNoForbiddenKeys($response);
+    }
+
+    #[Test]
+    public function members_only_has_the_profile_owner_contacts_not_the_viewer_contacts(): void
+    {
+        $profile = $this->exposedOwner();
+        $viewer = User::factory()->create(['phone' => '931111111']);
+        $this->profileFor($viewer, [
+            'business_name' => 'Quem Consulta',
+            'commercial_email' => 'quem.consulta@empresa.test',
+            'commercial_phone' => '+351229876543',
+        ]);
+
+        $this->withToken($viewer->createToken('postman')->plainTextToken)
+            ->showMember($profile->id)
+            ->assertOk()
+            ->assertJsonPath('data.members_only.commercial_email', self::COMMERCIAL_EMAIL)
+            ->assertJsonPath('data.members_only.commercial_phone', self::COMMERCIAL_PHONE)
+            ->assertJsonPath('data.members_only.website_url', self::WEBSITE)
+            ->assertJsonPath('data.members_only.address', self::ADDRESS)
+            ->assertDontSee('931111111')
+            ->assertDontSee('quem.consulta@empresa.test')
+            ->assertDontSee('229876543');
+    }
+
+    #[Test]
+    #[DataProvider('listViewers')]
     public function list_items_only_have_the_contract_keys(string $viewer): void
     {
         $this->exposedOwner();
@@ -150,76 +275,55 @@ class MemberDataExposureTest extends TestCase
             $this->assertEqualsCanonicalizing(self::LIST_ITEM_KEYS, array_keys($item));
         }
         $this->assertNoForbiddenKeys($response);
-        foreach (['phone', 'commercial_contacts', 'members_only'] as $key) {
+        foreach (['members_only', 'commercial_email', 'commercial_phone', 'website_url', 'address', 'social_links'] as $key) {
             $this->assertNotContains($key, $this->allJsonKeys($response->json()));
         }
     }
 
     #[Test]
-    #[DataProvider('viewers')]
+    #[DataProvider('listViewers')]
     public function list_json_contains_no_contact_or_congregation_values(string $viewer): void
     {
         $this->exposedOwner();
 
-        $response = $this->asViewer($viewer)->listMembers()->assertOk()->assertJsonPath('data.pagination.total', $viewer === 'active' ? 2 : 1);
-
-        $this->assertNoSecretValues($response);
-        $response->assertDontSee(self::PHONE)->assertDontSee(self::COMMERCIAL_CONTACTS);
-    }
-
-    #[Test]
-    public function visitor_profile_hides_phone_and_commercial_contacts_but_shows_public_showcase(): void
-    {
-        $profile = $this->exposedOwner();
-
-        $this->showMember($profile->id)
+        $response = $this->asViewer($viewer)->listMembers()
             ->assertOk()
-            ->assertJsonPath('data.members_only', null)
-            ->assertDontSee(self::PHONE)
-            ->assertDontSee(self::COMMERCIAL_CONTACTS)
-            ->assertJsonPath('data.address', 'Avenida Central 10, Porto')
-            ->assertJsonPath('data.website_url', 'https://empresa.example')
-            ->assertJsonPath('data.social_links.0.url', 'https://instagram.com/empresa');
+            ->assertJsonPath('data.pagination.total', $viewer === 'active' ? 2 : 1);
+
+        $this->assertDontSeeAny($response, [...self::MEMBERS_ONLY_VALUES, ...self::NEVER_VALUES]);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function contactSearchTerms(): array
+    {
+        return [
+            'email comercial' => [self::COMMERCIAL_EMAIL],
+            'telefone comercial' => [self::COMMERCIAL_PHONE],
+            'telefone comercial sem indicativo' => ['213456789'],
+            'morada' => [self::ADDRESS],
+            'parte da morada' => ['ZXQWMORADA'],
+            'website' => [self::WEBSITE],
+            'parte do website' => ['zxqw-site'],
+            'rede social' => ['zxqw-linkedin'],
+            'email da conta' => [self::ACCOUNT_EMAIL],
+            'telefone da conta' => [self::ACCOUNT_PHONE],
+        ];
     }
 
     #[Test]
-    #[DataProvider('viewers')]
-    public function profile_never_contains_login_email_or_congregation(string $viewer): void
+    #[DataProvider('contactSearchTerms')]
+    public function search_never_matches_contacts_address_or_website(string $term): void
     {
-        $profile = $this->exposedOwner();
+        $this->exposedOwner();
 
-        $response = $this->asViewer($viewer)->showMember($profile->id)->assertOk();
+        $this->listMembers(['search' => 'Exposta'])->assertOk()->assertJsonPath('data.pagination.total', 1);
 
-        $this->assertNoSecretValues($response);
-        foreach (['email', 'congregation', 'role_in_congregation'] as $key) {
-            $this->assertNotContains($key, $this->allJsonKeys($response->json()));
-        }
-    }
-
-    #[Test]
-    #[DataProvider('viewers')]
-    public function profile_never_contains_internal_billing_or_stripe_fields(string $viewer): void
-    {
-        $profile = $this->exposedOwner();
-
-        $response = $this->asViewer($viewer)->showMember($profile->id)->assertOk();
-
-        $this->assertNoForbiddenKeys($response);
-    }
-
-    #[Test]
-    public function members_only_phone_is_the_profile_owner_phone_not_the_viewer_phone(): void
-    {
-        $profile = $this->exposedOwner();
-        $viewer = User::factory()->create(['phone' => '931111111']);
-        $this->profileFor($viewer, ['business_name' => 'Quem Consulta']);
-
-        $this->withToken($viewer->createToken('postman')->plainTextToken)
-            ->showMember($profile->id)
+        $this->listMembers(['search' => $term])
             ->assertOk()
-            ->assertJsonPath('data.members_only.phone', self::PHONE)
-            ->assertJsonPath('data.members_only.commercial_contacts', self::COMMERCIAL_CONTACTS)
-            ->assertDontSee('931111111');
+            ->assertJsonPath('data.items', [])
+            ->assertJsonPath('data.pagination.total', 0);
     }
 
     #[Test]
@@ -258,7 +362,7 @@ class MemberDataExposureTest extends TestCase
     }
 
     #[Test]
-    #[DataProvider('viewers')]
+    #[DataProvider('listViewers')]
     public function profile_response_is_never_cached_by_shared_proxies(string $viewer): void
     {
         $profile = $this->exposedOwner();

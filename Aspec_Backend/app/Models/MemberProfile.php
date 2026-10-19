@@ -25,8 +25,9 @@ class MemberProfile extends Model
         'logo_path',
         'description',
         'website_url',
+        'commercial_email',
+        'commercial_phone',
         'address',
-        'commercial_contacts',
     ];
 
     public function user()

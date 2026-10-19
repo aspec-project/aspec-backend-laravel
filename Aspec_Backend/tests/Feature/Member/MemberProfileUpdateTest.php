@@ -53,7 +53,7 @@ class MemberProfileUpdateTest extends TestCase
         $profile->socialPlatforms()->attach($this->platformId('LinkedIn'), ['url' => 'https://linkedin.com/in/a']);
         $before = $profile->fresh()->only([
             'name', 'congregation', 'role_in_congregation', 'sector_id', 'location_id',
-            'description', 'website_url', 'commercial_contacts', 'address', 'logo_path',
+            'description', 'website_url', 'commercial_email', 'commercial_phone', 'address', 'logo_path',
         ]);
         Sanctum::actingAs($user);
 
@@ -99,14 +99,12 @@ class MemberProfileUpdateTest extends TestCase
         $user = $this->memberWithProfile(profile: [
             'description' => 'Texto',
             'website_url' => 'https://silva.pt',
-            'commercial_contacts' => 'geral@silva.pt',
         ]);
         Sanctum::actingAs($user);
 
         $this->putJson(self::URL, [
             'description' => null,
             'website_url' => '',
-            'commercial_contacts' => null,
         ])
             ->assertOk()
             ->assertJsonPath('data.description', null)
@@ -116,7 +114,6 @@ class MemberProfileUpdateTest extends TestCase
             'id' => $user->memberProfile->id,
             'description' => null,
             'website_url' => null,
-            'commercial_contacts' => null,
         ]);
     }
 

@@ -63,7 +63,8 @@ class UpdateMemberProfileRequest extends FormRequest
             'phone' => ['sometimes', 'required', 'string', new PortuguesePhone],
             'description' => 'nullable|string|max:1000',
             'website_url' => 'nullable|url:http,https|max:255',
-            'commercial_contacts' => 'nullable|string|max:1000',
+            'commercial_email' => 'nullable|string|email:rfc|max:255',
+            'commercial_phone' => 'nullable|string|max:20',
             'address' => 'sometimes|required|string|max:255',
 
             'business_hours' => 'sometimes|array|max:7',
