@@ -17,6 +17,8 @@ class EventInstanceRequest extends FormRequest
     // Regras de validação para a criação e atualização de instâncias de eventos.
     public function rules(): array
     {
+        $isOnline = $this->boolean('is_online');
+
         $rules = [
             'category_id' => ['required', 'uuid', 'exists:event_categories,id'],
             'location_id' => ['required', 'uuid', 'exists:locations,id'],
@@ -25,9 +27,19 @@ class EventInstanceRequest extends FormRequest
             'event_start_time' => ['required', 'date_format:H:i'],
             'event_end_time' => ['required', 'date_format:H:i', 'after:event_start_time'],
             'description' => ['required', 'string', 'max:5000'],
-            'address' => ['required', 'string', 'max:255'],
-            'latitude' => ['required', 'numeric', 'between:-90,90'],
-            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'is_online' => ['required', 'boolean'],
+            'online_url' => $isOnline
+                ? ['required', 'url', 'max:255']
+                : ['prohibited'],
+            'address' => $isOnline
+                ? ['prohibited']
+                : ['required', 'string', 'max:255'],
+            'latitude' => $isOnline
+                ? ['prohibited']
+                : ['required', 'numeric', 'between:-90,90'],
+            'longitude' => $isOnline
+                ? ['prohibited']
+                : ['required', 'numeric', 'between:-180,180'],
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
             'registration_deadline' => ['required', 'date_format:Y-m-d H:i'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -84,6 +96,8 @@ class EventInstanceRequest extends FormRequest
             'longitude' => 'longitude',
             'max_attendees' => 'lotação máxima',
             'registration_deadline' => 'prazo de inscrição',
+            'is_online' => 'evento online',
+            'online_url' => 'link do evento online',
             'organizer_notes' => 'notas do organizador',
         ];
     }
@@ -95,6 +109,14 @@ class EventInstanceRequest extends FormRequest
             'max_attendees.min' => 'A lotação máxima tem de ser pelo menos 1.',
             'latitude.between' => 'A latitude tem de estar entre -90 e 90.',
             'longitude.between' => 'A longitude tem de estar entre -180 e 180.',
+            'is_online.required' => 'Indique se o evento é online.',
+            'is_online.boolean' => 'O campo evento online deve ser verdadeiro ou falso.',
+            'online_url.required' => 'O link é obrigatório para eventos online.',
+            'online_url.url' => 'Indique um link válido para o evento online.',
+            'online_url.prohibited' => 'O link online só pode ser indicado para eventos online.',
+            'address.prohibited' => 'Eventos online não devem ter morada.',
+            'latitude.prohibited' => 'Eventos online não devem ter coordenadas.',
+            'longitude.prohibited' => 'Eventos online não devem ter coordenadas.',
         ];
     }
 }

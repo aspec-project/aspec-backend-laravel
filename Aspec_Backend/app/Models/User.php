@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
@@ -229,6 +230,28 @@ class User extends Authenticatable
 
                 $profile->delete();
             }
+
+            $timezone = config('app.event_timezone', 'Europe/Lisbon');
+            $now = now($timezone);
+            $today = $now->toDateString();
+            $currentTime = $now->format('H:i:s');
+
+            $futureEventIds = DB::table('event_instances')
+                ->where(function (QueryBuilder $query) use ($today, $currentTime) {
+                    $query
+                        ->where('event_date', '>', $today)
+                        ->orWhere(function (QueryBuilder $query) use ($today, $currentTime) {
+                            $query
+                                ->where('event_date', $today)
+                                ->where('event_start_time', '>=', $currentTime);
+                        });
+                })
+                ->select('id');
+
+            DB::table('event_registrations')
+                ->where('user_id', $this->id)
+                ->whereIn('event_instance_id', $futureEventIds)
+                ->delete();
 
             // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
             $this->deletePasswordResetTokens();

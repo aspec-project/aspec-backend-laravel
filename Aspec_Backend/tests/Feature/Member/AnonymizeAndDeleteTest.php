@@ -5,6 +5,8 @@ namespace Tests\Feature\Member;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Models\AccountStatus;
+use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
@@ -637,5 +639,77 @@ class AnonymizeAndDeleteTest extends TestCase
         $admin->anonymizeAndDelete();
 
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $originalEmail]);
+    }
+
+    #[Test]
+    public function future_event_registrations_are_deleted_but_past_ones_are_kept(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $now = now($timezone)->startOfSecond();
+
+        $this->travelTo($now);
+
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $registrationDeadline = $now->copy()->subDay()->format('Y-m-d H:i:s');
+
+        $pastEvent = EventInstance::factory()->create([
+            'event_date' => $now->toDateString(),
+            'event_start_time' => $now->copy()->subHour()->format('H:i:s'),
+            'event_end_time' => $now->copy()->subMinutes(30)->format('H:i:s'),
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $eventStartingNow = EventInstance::factory()->create([
+            'event_date' => $now->toDateString(),
+            'event_start_time' => $now->format('H:i:s'),
+            'event_end_time' => $now->copy()->addHour()->format('H:i:s'),
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $futureEvent = EventInstance::factory()->create([
+            'event_date' => $now->copy()->addDay()->toDateString(),
+            'event_start_time' => '10:00:00',
+            'event_end_time' => '11:00:00',
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $pastRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $pastEvent->id,
+            'user_id' => $user->id,
+        ]);
+
+        $currentRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $eventStartingNow->id,
+            'user_id' => $user->id,
+        ]);
+
+        $futureRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $futureEvent->id,
+            'user_id' => $user->id,
+        ]);
+
+        $otherUsersRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $futureEvent->id,
+            'user_id' => $otherUser->id,
+        ]);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseHas('event_registrations', [
+            'id' => $pastRegistration->id,
+        ]);
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'id' => $currentRegistration->id,
+        ]);
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'id' => $futureRegistration->id,
+        ]);
+
+        $this->assertDatabaseHas('event_registrations', [
+            'id' => $otherUsersRegistration->id,
+        ]);
     }
 }

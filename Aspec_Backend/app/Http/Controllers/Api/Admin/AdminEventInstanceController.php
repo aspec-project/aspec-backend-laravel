@@ -63,7 +63,17 @@ class AdminEventInstanceController extends Controller
         EventInstanceRequest $request,
         EventInstance $eventInstance
     ): JsonResponse {
-        $eventInstance->update($request->validated());
+        $validated = $request->validated();
+
+        if ($validated['is_online']) {
+            $validated['address'] = null;
+            $validated['latitude'] = null;
+            $validated['longitude'] = null;
+        } else {
+            $validated['online_url'] = null;
+        }
+
+        $eventInstance->update($validated);
         $eventInstance->load(['category', 'location']);
 
         return $this->successResponse(
