@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 
 class EventInstanceController extends Controller
 {
+
+
     /**
      * Display a listing of the event instances.
      */
@@ -28,9 +30,18 @@ class EventInstanceController extends Controller
         $today = $now->toDateString();
         $currentTime = $now->format('H:i:s');
         $search = trim((string) ($filters['search'] ?? ''));
+        $viewerId = $request->user('sanctum')?->getAuthIdentifier();
 
         $events = EventInstance::query()
             ->with(['category', 'location'])
+            ->withCount('registrations')
+            ->when(
+                $viewerId !== null,
+                fn (Builder $query) => $query->withExists([
+                    'registrations as is_registered' => fn (Builder $registrationQuery) =>
+                        $registrationQuery->where('user_id', $viewerId),
+                ])
+            )
             ->where(function (Builder $query) use ($today, $currentTime) {
                 $query
                     ->where('event_date', '>', $today)
@@ -69,6 +80,11 @@ class EventInstanceController extends Controller
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->paginate((int) ($filters['per_page'] ?? 9));
+            if ($viewerId === null) {
+                $events->getCollection()->each(
+                    fn (EventInstance $event) => $event->setAttribute('is_registered', false)
+                );
+            }
 
         return $this->successResponse([
             'items' => EventInstanceResource::collection(
@@ -83,12 +99,21 @@ class EventInstanceController extends Controller
         ], 'Agenda de eventos obtida com sucesso.');
     }
 
+
     /**
      * Display the specified event instance.
      */
-    public function show(EventInstance $eventInstance): JsonResponse
+    public function show(Request $request, EventInstance $eventInstance): JsonResponse
     {
+        $viewerId = $request->user('sanctum')?->getAuthIdentifier();
+
         $eventInstance->load(['category', 'location']);
+        $eventInstance->loadCount('registrations');
+        $eventInstance->setAttribute(
+            'is_registered',
+            $viewerId !== null
+                && $eventInstance->registrations()->where('user_id', $viewerId)->exists()
+        );
 
         return $this->successResponse(
             new EventInstanceResource($eventInstance),
