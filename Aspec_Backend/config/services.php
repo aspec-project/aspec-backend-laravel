@@ -55,4 +55,14 @@ return [
         'retry_sleep_ms' => (int) env('INVOICEEXPRESS_RETRY_SLEEP_MS', 500),
     ],
 
+    // Geocodificação de moradas (OpenStreetMap). Política do servidor público: máx. 1 pedido/s,
+    // User-Agent identificável, cache.
+    'nominatim' => [
+        'base_url' => env('NOMINATIM_BASE_URL', 'https://nominatim.openstreetmap.org'),
+        'contact_email' => env('NOMINATIM_CONTACT_EMAIL'),
+        'country_codes' => env('NOMINATIM_COUNTRY_CODES', 'pt'),
+        'timeout' => (int) env('NOMINATIM_TIMEOUT', 5),
+        'cache_days' => (int) env('NOMINATIM_CACHE_DAYS', 30),
+    ],
+
 ];

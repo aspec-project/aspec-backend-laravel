@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Contracts\Geocoder;
 use App\Contracts\InvoiceService;
+use App\Services\Geocoding\NominatimGeocoder;
 use App\Services\Invoicing\InvoiceServiceFactory;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -20,6 +22,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->registerInvoiceService();
+        $this->registerGeocoder();
         $this->configureCashier();
     }
 
@@ -48,6 +51,17 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->bind(InvoiceService::class, fn ($app) => $app->make(InvoiceServiceFactory::class)
             ->make((string) config('services.invoicing.driver')));
+    }
+
+    /**
+     * Liga o contrato Geocoder à implementação com o Nominatim.
+     *
+     * `bind` e não `singleton`: a implementação lê a config em cada chamada, por isso mudar
+     * a config (ex. nos testes) tem efeito imediato.
+     */
+    private function registerGeocoder(): void
+    {
+        $this->app->bind(Geocoder::class, NominatimGeocoder::class);
     }
 
     /**
@@ -156,6 +170,12 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'public-events',
             fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+        );
+
+        // Localizar moradas no backoffice: 30/min por admin, para um só separador não esgotar o limite global de 1/s do Nominatim.
+        RateLimiter::for(
+            'geocode',
+            fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())
         );
     }
 }
