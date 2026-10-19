@@ -120,4 +120,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         ->whereUuid('eventInstance');
     Route::delete('/events/{eventInstance}/registrations', [EventRegistrationController::class, 'destroy'])
         ->whereUuid('eventInstance');
+    Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
+    ->whereUuid('eventInstance');
+    Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
 });
