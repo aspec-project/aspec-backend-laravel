@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('role_in_congregation');
 
             $table->string('logo_path')->nullable();
-            $table->text('description')->nullable(); 
+            $table->text('description')->nullable();
             $table->string('website_url')->nullable();
             $table->text('commercial_contacts')->nullable();
             $table->string('address')->nullable();

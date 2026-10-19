@@ -2,28 +2,28 @@
 
 namespace App\Http\Controllers\Api\Auth;
 
+use App\Enums\InactiveReason;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\RegisterMemberRequest;
-use App\Models\User;
+use App\Http\Requests\ResetPasswordRequest;
+use App\Http\Resources\UserResource;
+use App\Jobs\SendPasswordResetLinkJob;
+use App\Models\AccountStatus;
 use App\Models\MemberProfile;
 use App\Models\Role;
-use App\Models\AccountStatus;
-use App\Traits\ApiResponse;
+use App\Models\User;
+use App\Notifications\PasswordChangedNotification;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Auth;
-use Symfony\Component\HttpFoundation\Response;
-use Illuminate\Http\Request;
-use App\Http\Resources\UserResource;
-use Illuminate\Http\JsonResponse;
-use Laravel\Sanctum\PersonalAccessToken;
-use App\Enums\InactiveReason;
-use App\Http\Requests\ForgotPasswordRequest;
 use Illuminate\Support\Facades\Password;
-use App\Http\Requests\ResetPasswordRequest;
-use App\Notifications\PasswordChangedNotification;
 use Illuminate\Support\Str;
-use App\Jobs\SendPasswordResetLinkJob;
+use Laravel\Sanctum\PersonalAccessToken;
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthController extends Controller
 {
@@ -44,29 +44,27 @@ class AuthController extends Controller
         ]);
     }
 
-
     /**
      * Verifica se o utilizador tem uma conta ativa.
      *
-     * @param User $user O utilizador a verificar.
+     * @param  User  $user  O utilizador a verificar.
      * @return JsonResponse|null Retorna uma resposta de erro se a conta não estiver ativa, caso contrário retorna null.
      */
     private function accountStatusError(User $user): ?JsonResponse
     {
         if ($user->accountStatus?->name !== 'Active') {
             $message = match (true) {
-                $user->accountStatus?->name === 'Approved' =>
-                    'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+                $user->accountStatus?->name === 'Approved' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
 
                 $user->accountStatus?->name === 'Inactive'
-                    && $user->inactive_reason === InactiveReason::Unpaid =>
-                    'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+                    && $user->inactive_reason === InactiveReason::Unpaid => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
 
-                $user->accountStatus?->name === 'Pending' =>
-                    'A sua conta está pendente de aprovação pelo administrador.',
+                $user->accountStatus?->name === 'Inactive'
+                    && $user->inactive_reason === InactiveReason::Cancelled => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
 
-                default =>
-                    'A sua conta não está ativa.',
+                $user->accountStatus?->name === 'Pending' => 'A sua conta está pendente de aprovação pelo administrador.',
+
+                default => 'A sua conta não está ativa.',
             };
 
             return $this->errorResponse(
@@ -78,18 +76,17 @@ class AuthController extends Controller
         return null;
     }
 
-
-
     /**
      * Regista um novo membro no sistema através de submissão de candidatura.
-     * 
+     *
      * Atribui automaticamente o papel de 'Member' e o estado 'Pending' à nova conta.
      * Envolve a criação do utilizador e do respetivo perfil numa transação de base de dados
      * para garantir a integridade dos dados.
      *
-     * @param RegisterMemberRequest $request Dados validados do formulário de registo.
-     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com o utilizador e perfil criados (HTTP 201).
-     * @throws \Illuminate\Database\Eloquent\ModelNotFoundException Se o papel 'Member' ou o estado 'Pending' não forem encontrados.
+     * @param  RegisterMemberRequest  $request  Dados validados do formulário de registo.
+     * @return JsonResponse Resposta formatada de sucesso com o utilizador e perfil criados (HTTP 201).
+     *
+     * @throws ModelNotFoundException Se o papel 'Member' ou o estado 'Pending' não forem encontrados.
      */
     public function register(RegisterMemberRequest $request)
     {
@@ -99,24 +96,24 @@ class AuthController extends Controller
         $result = DB::transaction(function () use ($request, $memberRole, $pendingStatus) {
 
             $user = User::create([
-                'email'             => $request->email,
-                'password'          => Hash::make($request->password),
-                'phone'             => $request->phone,
-                'role_id'           => $memberRole->id,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'phone' => $request->phone,
+                'role_id' => $memberRole->id,
                 'account_status_id' => $pendingStatus->id,
             ]);
 
             $profile = MemberProfile::create([
-                'user_id'              => $user->id,
-                'sector_id'            => $request->sector_id,
-                'location_id'          => $request->location_id,
-                'name'                 => $request->name,
-                'business_name'        => $request->business_name,
-                'congregation'         => $request->congregation,
+                'user_id' => $user->id,
+                'sector_id' => $request->sector_id,
+                'location_id' => $request->location_id,
+                'name' => $request->name,
+                'business_name' => $request->business_name,
+                'congregation' => $request->congregation,
                 'role_in_congregation' => $request->role_in_congregation,
-                'description'          => $request->description,
-                'website_url'          => $request->website_url,
-                'address'              => $request->address,
+                'description' => $request->description,
+                'website_url' => $request->website_url,
+                'address' => $request->address,
             ]);
 
             return compact('user', 'profile');
@@ -134,9 +131,6 @@ class AuthController extends Controller
         );
     }
 
-
-
-
     /**
      * Autentica um utilizador com base nas credenciais fornecidas.
      *
@@ -144,10 +138,9 @@ class AuthController extends Controller
      * Se a autenticação for bem-sucedida, inicia uma sessão para o utilizador.
      * Só aceita pedidos SPA com sessão (origem em `sanctum.stateful`); sem sessão devolve 400.
      *
-     * @param Request $request Pedido HTTP contendo as credenciais do utilizador.
-     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador autenticado (HTTP 200) ou mensagem de erro (HTTP 400/401/403).
+     * @param  Request  $request  Pedido HTTP contendo as credenciais do utilizador.
+     * @return JsonResponse Resposta formatada de sucesso com os dados do utilizador autenticado (HTTP 200) ou mensagem de erro (HTTP 400/401/403).
      */
-
     public function login(Request $request): JsonResponse
     {
         // Antes da validação e das credenciais: sem sessão nunca há login, por isso não se gasta hashing nem se deixa testar passwords por este caminho.
@@ -192,16 +185,13 @@ class AuthController extends Controller
         );
     }
 
-
-
-
     /**
      * Termina a sessão de um utilizador autenticado.
      *
      * Revoga o token de acesso atual, invalidando a autenticação do utilizador.
      *
-     * @param Request $request Pedido HTTP contendo o utilizador autenticado.
-     * @return \Illuminate\Http\JsonResponse Mensagem de sucesso (HTTP 200).
+     * @param  Request  $request  Pedido HTTP contendo o utilizador autenticado.
+     * @return JsonResponse Mensagem de sucesso (HTTP 200).
      */
     public function logout(Request $request): JsonResponse
     {
@@ -231,15 +221,12 @@ class AuthController extends Controller
         );
     }
 
-
-
-
     /**
      * Cria um novo token de acesso para o utilizador autenticado.
      * Usado mais propriamente para aplicações SPA que necessitam de renovar o token sem reautenticar.
      *
-     * @param Request $request Pedido HTTP contendo as credenciais do utilizador.
-     * @return \Illuminate\Http\JsonResponse Mensagem de sucesso (HTTP 200).
+     * @param  Request  $request  Pedido HTTP contendo as credenciais do utilizador.
+     * @return JsonResponse Mensagem de sucesso (HTTP 200).
      */
     public function token(Request $request): JsonResponse
     {
@@ -264,7 +251,6 @@ class AuthController extends Controller
             );
         }
 
-
         $user = $this->loadUserRelations($user);
         if ($response = $this->accountStatusError($user)) {
             return $response;
@@ -281,8 +267,8 @@ class AuthController extends Controller
     /**
      * Retorna os detalhes do utilizador autenticado.
      *
-     * @param Request $request Pedido HTTP contendo o utilizador autenticado.
-     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso com os dados do utilizador (HTTP 200).
+     * @param  Request  $request  Pedido HTTP contendo o utilizador autenticado.
+     * @return JsonResponse Resposta formatada de sucesso com os dados do utilizador (HTTP 200).
      */
     public function me(Request $request): JsonResponse
     {
@@ -297,15 +283,12 @@ class AuthController extends Controller
         );
     }
 
-
-
     /**
      * Envia um link de redefinição de password para o email fornecido, se a conta estiver ativa.
      *
-     * @param ForgotPasswordRequest $request Pedido HTTP contendo o email do utilizador.
-     * @return \Illuminate\Http\JsonResponse Resposta formatada de sucesso indicando que o link foi enviado.
+     * @param  ForgotPasswordRequest  $request  Pedido HTTP contendo o email do utilizador.
+     * @return JsonResponse Resposta formatada de sucesso indicando que o link foi enviado.
      */
-    
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
         $user = User::query()
@@ -322,8 +305,6 @@ class AuthController extends Controller
             'Se o email estiver registado e a conta ativa, receberá um link para redefinir a password.'
         );
     }
-
-
 
     /*
      * Redefine a password do utilizador, se o token for válido e a conta estiver ativa.
@@ -385,11 +366,4 @@ class AuthController extends Controller
             Response::HTTP_OK
         );
     }
-
-
-
-    
-
-
-
 }

@@ -2,43 +2,45 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Location;
+use Illuminate\Database\Seeder;
 
+/**
+ * Distritos de Portugal continental e regiões autónomas (núcleos regionais da ASPEC).
+ */
 class LocationSeeder extends Seeder
 {
+    /** @var list<string> */
+    private const LOCATIONS = [
+        'Aveiro',
+        'Beja',
+        'Braga',
+        'Bragança',
+        'Castelo Branco',
+        'Coimbra',
+        'Évora',
+        'Faro',
+        'Guarda',
+        'Leiria',
+        'Lisboa',
+        'Portalegre',
+        'Porto',
+        'Santarém',
+        'Setúbal',
+        'Viana do Castelo',
+        'Vila Real',
+        'Viseu',
+        'Açores',
+        'Madeira',
+    ];
+
     /**
-     * Run the database seeds.
+     * Cria os distritos e as regiões autónomas que ainda não existem, sem alterar os existentes.
      */
     public function run(): void
     {
-        $districts = [
-            'Aveiro',
-            'Beja',
-            'Braga',
-            'Bragança',
-            'Castelo Branco',
-            'Coimbra',
-            'Évora',
-            'Faro',
-            'Guarda',
-            'Leiria',
-            'Lisboa',
-            'Portalegre',
-            'Porto',
-            'Santarém',
-            'Setúbal',
-            'Viana do Castelo',
-            'Vila Real',
-            'Viseu'
-        ];
-
-        sort($districts);
-
-        foreach ($districts as $district) {
-            Location::firstOrCreate(
-                ['name' => $district]
-            );
+        foreach (self::LOCATIONS as $name) {
+            Location::firstOrCreate(['name' => $name]);
         }
     }
 }

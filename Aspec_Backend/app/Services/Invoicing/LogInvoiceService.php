@@ -51,4 +51,12 @@ class LogInvoiceService implements InvoiceService
 
         return "LOG-{$invoice->date->format('Y')}-{$hash}";
     }
+
+    /**
+     * O driver log não gera documentos: nunca há PDF.
+     */
+    public function pdf(string $providerInvoiceId): ?string
+    {
+        return null;
+    }
 }

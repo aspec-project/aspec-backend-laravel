@@ -14,10 +14,10 @@ use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
-use RuntimeException;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
 use Tests\TestCase;
 
 class UpdatePasswordTest extends TestCase
@@ -25,7 +25,9 @@ class UpdatePasswordTest extends TestCase
     use RefreshDatabase;
 
     private const URL = '/api/account/password';
+
     private const OLD = 'OldSecret123!';
+
     private const NEW = 'NewSecret456!';
 
     private function makeUser(string $role = 'Member', string $status = 'Active', bool $withProfile = true): User

@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\AccountStatus;
+use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\Role;
+use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -119,7 +121,6 @@ class RateLimitingTest extends TestCase
             ->assertTooManyRequests();
     }
 
-
     // The throttle middleware runs before the controller, so requests rejected for lacking a session still count.
     #[Test]
     public function login_without_session_counts_towards_throttle(): void
@@ -164,12 +165,11 @@ class RateLimitingTest extends TestCase
             ->assertTooManyRequests();
     }
 
-
     #[Test]
     public function registration_is_rate_limited_after_five_attempts(): void
     {
-        $sector = \App\Models\Sector::firstOrFail();
-        $location = \App\Models\Location::firstOrFail();
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
 
         $basePayload = [
             'name' => 'Membro de Teste',
@@ -200,5 +200,33 @@ class RateLimitingTest extends TestCase
         $this
             ->postJson('/api/auth/register', $payload)
             ->assertTooManyRequests();
+    }
+
+    #[Test]
+    public function member_directory_is_limited_to_sixty_requests_per_minute_per_ip(): void
+    {
+        for ($i = 1; $i <= 60; $i++) {
+            $this->getJson('/api/members')->assertOk();
+        }
+        $this->getJson('/api/members')->assertTooManyRequests();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->getJson('/api/members')
+            ->assertOk();
+    }
+
+    #[Test]
+    public function member_directory_list_and_profile_share_the_same_counter(): void
+    {
+        $profile = $this->activeMember()->memberProfile;
+
+        for ($i = 1; $i <= 30; $i++) {
+            $this->getJson('/api/members')->assertOk();
+            $this->getJson("/api/members/{$profile->id}")->assertOk();
+        }
+
+        $this->getJson('/api/members')->assertTooManyRequests();
+        $this->getJson("/api/members/{$profile->id}")->assertTooManyRequests();
+        $this->getJson('/api/sectors')->assertOk();
     }
 }

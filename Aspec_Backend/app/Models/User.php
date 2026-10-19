@@ -2,33 +2,36 @@
 
 namespace App\Models;
 
-use App\Notifications\ResetPasswordNotification;
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
+use App\Enums\SubscriptionState;
 use App\Jobs\DeleteStripeCustomerJob;
+use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Subscription as StripeSubscription;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasUuids, HasApiTokens, Billable;
+    use Billable, HasApiTokens, HasFactory, HasUuids, Notifiable, SoftDeletes;
 
     /**
      * Get the attributes that should be cast.
@@ -125,6 +128,109 @@ class User extends Authenticatable
     }
 
     /**
+     * Estado da subscrição derivado das colunas da conta (para o backoffice). O estado da conta
+     * decide primeiro; numa conta Active, isento > carência > trial > ativo. Espelha o scope
+     * inSubscriptionState(): qualquer mudança aqui tem de ser feita lá também.
+     * Espera role, accountStatus e memberProfile carregados (senão faz 3 queries por utilizador),
+     * com memberProfile sem withTrashed(), como no scope.
+     *
+     * @throws \UnhandledMatchError Estado de conta ou motivo de inatividade desconhecido.
+     */
+    public function subscriptionState(): SubscriptionState
+    {
+        return match ($this->accountStatus->name) {
+            'Pending' => SubscriptionState::Pending,
+            'Approved' => SubscriptionState::AwaitingActivation,
+            'Inactive' => match ($this->inactive_reason) {
+                InactiveReason::Blocked => SubscriptionState::Blocked,
+                InactiveReason::Unpaid, InactiveReason::Cancelled => SubscriptionState::Lapsed,
+                InactiveReason::Rejected, InactiveReason::Deleted, null => SubscriptionState::Inactive,
+            },
+            'Active' => match (true) {
+                $this->isSubscriptionExempt() => SubscriptionState::Exempt,
+                $this->grace_ends_at !== null => SubscriptionState::Grace,
+                $this->trial_ends_at?->isFuture() === true => SubscriptionState::Trial,
+                default => SubscriptionState::Active,
+            },
+        };
+    }
+
+    /**
+     * Indica se o utilizador não paga subscrição: administrador técnico, ou seja, papel Admin sem
+     * perfil de membro. Mesma regra que o scope subscriptionExempt().
+     */
+    public function isSubscriptionExempt(): bool
+    {
+        return $this->role?->name === 'Admin' && $this->memberProfile === null;
+    }
+
+    /**
+     * Filtra os utilizadores isentos de subscrição (papel Admin sem perfil de membro não apagado).
+     * Mesma regra que isSubscriptionExempt().
+     */
+    public function scopeSubscriptionExempt(Builder $query): void
+    {
+        $query->whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))
+            ->whereDoesntHave('memberProfile');
+    }
+
+    /**
+     * Filtra os utilizadores num estado da subscrição (versão SQL de subscriptionState()).
+     * Cada estado repete as negações dos que lhe ganham, para que cada utilizador caia em exatamente um.
+     */
+    public function scopeInSubscriptionState(Builder $query, SubscriptionState $state): void
+    {
+        $exempt = fn (Builder $user) => $user->subscriptionExempt();
+
+        match ($state) {
+            SubscriptionState::Pending => $this->whereAccountStatus($query, 'Pending'),
+            SubscriptionState::AwaitingActivation => $this->whereAccountStatus($query, 'Approved'),
+            SubscriptionState::Blocked => $this->whereAccountStatus($query, 'Inactive')
+                ->where('inactive_reason', InactiveReason::Blocked->value),
+            SubscriptionState::Lapsed => $this->whereAccountStatus($query, 'Inactive')
+                ->whereIn('inactive_reason', [InactiveReason::Unpaid->value, InactiveReason::Cancelled->value]),
+            SubscriptionState::Inactive => $this->whereAccountStatus($query, 'Inactive')
+                ->where(fn (Builder $user) => $user->whereNull('inactive_reason')
+                    ->orWhereIn('inactive_reason', [InactiveReason::Rejected->value, InactiveReason::Deleted->value])),
+            SubscriptionState::Exempt => $this->whereAccountStatus($query, 'Active')->subscriptionExempt(),
+            SubscriptionState::Grace => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNotNull('grace_ends_at'),
+            SubscriptionState::Trial => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNull('grace_ends_at')
+                ->where('trial_ends_at', '>', now()),
+            SubscriptionState::Active => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNull('grace_ends_at')
+                ->where(fn (Builder $user) => $user->whereNull('trial_ends_at')
+                    ->orWhere('trial_ends_at', '<=', now())),
+        };
+    }
+
+    /**
+     * Número de utilizadores em cada estado da subscrição, dentro da consulta base (ex.: a pesquisa
+     * da lista do admin). Usa o mesmo scope do filtro, por isso as contagens nunca divergem dele.
+     *
+     * @return array<string, int> Valor do estado => contagem, para todos os estados (zeros incluídos).
+     */
+    public static function subscriptionStateCounts(Builder $query): array
+    {
+        $counts = [];
+
+        foreach (SubscriptionState::cases() as $state) {
+            $counts[$state->value] = (clone $query)->inSubscriptionState($state)->count();
+        }
+
+        return $counts;
+    }
+
+    private function whereAccountStatus(Builder $query, string $status): Builder
+    {
+        return $query->whereHas('accountStatus', fn (Builder $accountStatus) => $accountStatus->where('name', $status));
+    }
+
+    /**
      * Indica se o utilizador tem uma subscrição em curso (trial, ativa ou em carência; as
      * terminadas e as incompletas não contam).
      *
@@ -171,10 +277,10 @@ class User extends Authenticatable
         }
 
         return [
-            'line1'       => $this->billing_address,
+            'line1' => $this->billing_address,
             'postal_code' => $this->billing_postal_code,
-            'city'        => $this->billing_city,
-            'country'     => 'PT',
+            'city' => $this->billing_city,
+            'country' => 'PT',
         ];
     }
 
@@ -200,6 +306,7 @@ class User extends Authenticatable
      * As sessões são apagadas na ligação por omissão, dentro da transação (SESSION_CONNECTION tem de
      * ficar vazio); os ficheiros só depois do commit, para não se perderem num rollback.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
+     * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
      */
     public function anonymizeAndDelete(): void
@@ -211,15 +318,15 @@ class User extends Authenticatable
 
             if ($profile) {
                 $profile->update([
-                    'name'                 => 'Utilizador Anónimo',
-                    'business_name'        => 'Empresa Removida',
-                    'congregation'         => 'N/A',
+                    'name' => 'Utilizador Anónimo',
+                    'business_name' => 'Empresa Removida',
+                    'congregation' => 'N/A',
                     'role_in_congregation' => 'N/A',
-                    'logo_path'            => null,
-                    'description'          => null,
-                    'website_url'          => null,
-                    'commercial_contacts'  => null,
-                    'address'              => null,
+                    'logo_path' => null,
+                    'description' => null,
+                    'website_url' => null,
+                    'commercial_contacts' => null,
+                    'address' => null,
                 ]);
 
                 $profile->socialPlatforms()->detach();
@@ -229,27 +336,49 @@ class User extends Authenticatable
                 $profile->delete();
             }
 
+            $timezone = config('app.event_timezone', 'Europe/Lisbon');
+            $now = now($timezone);
+            $today = $now->toDateString();
+            $currentTime = $now->format('H:i:s');
+
+            $futureEventIds = DB::table('event_instances')
+                ->where(function (QueryBuilder $query) use ($today, $currentTime) {
+                    $query
+                        ->where('event_date', '>', $today)
+                        ->orWhere(function (QueryBuilder $query) use ($today, $currentTime) {
+                            $query
+                                ->where('event_date', $today)
+                                ->where('event_start_time', '>=', $currentTime);
+                        });
+                })
+                ->select('id');
+
+            DB::table('event_registrations')
+                ->where('user_id', $this->id)
+                ->whereIn('event_instance_id', $futureEventIds)
+                ->delete();
+
             // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
             $this->deletePasswordResetTokens();
 
             $this->forceFill([
-                'email'                      => 'deleted_' . Str::uuid() . '@aspec.local',
-                'phone'                      => '000000000',
-                'password'                   => Hash::make(Str::random(32)),
-                'remember_token'             => null,
-                'email_verified_at'          => null,
-                'trial_ends_at'              => null,
-                'grace_ends_at'              => null,
+                'email' => 'deleted_'.Str::uuid().'@aspec.local',
+                'phone' => '000000000',
+                'password' => Hash::make(Str::random(32)),
+                'remember_token' => null,
+                'email_verified_at' => null,
+                'trial_ends_at' => null,
+                'grace_ends_at' => null,
                 'stripe_checkout_session_id' => null,
-                'billing_name'               => null,
-                'nif'                        => null,
-                'billing_address'            => null,
-                'billing_postal_code'        => null,
-                'billing_city'               => null,
-                'pm_type'                    => null,
-                'pm_last_four'               => null,
-                'account_status_id'          => AccountStatus::where('name', 'Inactive')->value('id'),
-                'inactive_reason'            => InactiveReason::Deleted,
+                'billing_name' => null,
+                'nif' => null,
+                'billing_address' => null,
+                'billing_postal_code' => null,
+                'billing_city' => null,
+                'pm_type' => null,
+                'pm_last_four' => null,
+                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+                'inactive_reason' => InactiveReason::Deleted,
             ]);
 
             if ($stripeCustomerDeleted) {
@@ -262,7 +391,7 @@ class User extends Authenticatable
                 ->where('stripe_status', '!=', StripeSubscription::STATUS_CANCELED)
                 ->update([
                     'stripe_status' => StripeSubscription::STATUS_CANCELED,
-                    'ends_at'       => now(),
+                    'ends_at' => now(),
                 ]);
 
             $this->tokens()->delete();
@@ -310,8 +439,8 @@ class User extends Authenticatable
             return true;
         } catch (ApiErrorException $e) {
             Log::warning('Falha ao apagar o cliente Stripe; job de recurso agendado.', [
-                'user_id'           => $this->id,
-                'exception'         => $e::class,
+                'user_id' => $this->id,
+                'exception' => $e::class,
                 'stripe_request_id' => $e->getRequestId(),
             ]);
 
@@ -356,20 +485,14 @@ class User extends Authenticatable
                 ->delete();
         });
     }
-    
 
     /**
      * Envia a notificação de redefinição de password.
      *
-     * @param string $token
+     * @param  string  $token
      */
-    
     public function sendPasswordResetNotification($token): void
     {
         $this->notify(new ResetPasswordNotification($token));
     }
-
-
-
-
 }

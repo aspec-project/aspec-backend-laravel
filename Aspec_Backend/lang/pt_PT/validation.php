@@ -78,6 +78,7 @@ return [
     'in_array' => 'O campo :attribute tem de existir em :other.',
     'in_array_keys' => 'O campo :attribute tem de conter pelo menos uma das seguintes chaves: :values.',
     'integer' => 'O campo :attribute tem de ser um número inteiro.',
+    'international_phone' => 'O campo :attribute tem de ser um número de telefone válido. Números estrangeiros precisam do indicativo do país (ex.: +44).',
     'ip' => 'O campo :attribute tem de ser um endereço IP válido.',
     'ipv4' => 'O campo :attribute tem de ser um endereço IPv4 válido.',
     'ipv6' => 'O campo :attribute tem de ser um endereço IPv6 válido.',
@@ -220,6 +221,9 @@ return [
         'billing_address' => 'morada de faturação',
         'billing_postal_code' => 'código postal',
         'billing_city' => 'localidade',
+        'search' => 'pesquisa',
+        'min_rating' => 'avaliação mínima',
+        'per_page' => 'resultados por página',
     ],
 
 ];

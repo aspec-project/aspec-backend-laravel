@@ -4,6 +4,7 @@ namespace App\Services\Invoicing;
 
 use App\Contracts\InvoiceService;
 use App\Exceptions\InvoiceIssuingFailed;
+use App\Exceptions\InvoicePdfUnavailable;
 use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
@@ -14,6 +15,8 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Sleep;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -26,6 +29,15 @@ class InvoiceExpressInvoiceService implements InvoiceService
 {
     /** Estados de um documento já finalizado (uma fatura-recibo pode ficar logo "settled"). */
     private const FINAL_STATUSES = ['final', 'settled'];
+
+    /** Pedidos ao /api/pdf enquanto a InvoiceExpress responde 202 (PDF ainda a ser gerado). */
+    private const PDF_ATTEMPTS = 3;
+
+    /** Tempo máximo, em segundos, de cada pedido do PDF (corre dentro de um pedido do membro). */
+    private const PDF_TIMEOUT = 5;
+
+    /** Tamanho máximo aceite para o PDF de uma fatura (10 MB). */
+    private const PDF_MAX_BYTES = 10 * 1024 * 1024;
 
     /**
      * @param  string  $documentType  Tipo de documento na API (por omissão invoice_receipts).
@@ -87,6 +99,106 @@ class InvoiceExpressInvoiceService implements InvoiceService
         );
 
         return $this->sendByEmail($issued, $customer);
+    }
+
+    /**
+     * Pede o PDF do documento à InvoiceExpress e descarrega-o do link que ela devolve.
+     *
+     * 202 quer dizer que o PDF ainda está a ser gerado: repete até 3 vezes, com 1 s de espera.
+     * O link devolvido tem de ser https e o ficheiro tem de ser um PDF até 10 MB. O download é feito
+     * sem a api_key: o link é externo e já vem assinado pela InvoiceExpress.
+     * Corre dentro de um pedido do membro: sem novas tentativas automáticas, timeouts de 5 s e sem
+     * seguir redirecionamentos, o pior caso (3 × 5 s + 2 × 1 s + 5 s) fica abaixo do max_execution_time.
+     *
+     * @param  string  $providerInvoiceId  Id numérico do documento na InvoiceExpress.
+     * @return string Bytes do PDF (este driver nunca devolve null).
+     *
+     * @throws InvalidArgumentException Se o id não for numérico (entra no caminho do URL), antes de qualquer pedido.
+     * @throws InvoicePdfUnavailable Se a InvoiceExpress falhar, continuar a gerar o PDF ou devolver algo que não serve.
+     */
+    public function pdf(string $providerInvoiceId): ?string
+    {
+        if (! ctype_digit($providerInvoiceId)) {
+            throw new InvalidArgumentException('Id de documento InvoiceExpress inválido.');
+        }
+
+        return $this->download($this->pdfUrl($providerInvoiceId));
+    }
+
+    /**
+     * Link temporário do PDF devolvido pelo /api/pdf.
+     * Qualquer exceção do cliente HTTP é trocada por uma sem `previous`: a original tem o URL com a api_key.
+     */
+    private function pdfUrl(string $documentId): string
+    {
+        for ($attempt = 1; $attempt <= self::PDF_ATTEMPTS; $attempt++) {
+            try {
+                $response = $this->pdfClient()
+                    ->baseUrl("https://{$this->accountName}.app.invoicexpress.com")
+                    ->acceptJson()
+                    ->withQueryParameters(['api_key' => $this->apiKey])
+                    ->get("/api/pdf/{$documentId}.json");
+            } catch (Throwable) {
+                throw InvoicePdfUnavailable::unreachable('request');
+            }
+
+            if ($response->status() !== 202) {
+                break;
+            }
+
+            if ($attempt < self::PDF_ATTEMPTS) {
+                Sleep::for(1)->second();
+            }
+        }
+
+        if ($response->status() === 202) {
+            throw InvoicePdfUnavailable::stillGenerating();
+        }
+
+        $url = $response->json('output.pdfUrl');
+
+        if ($response->status() !== 200 || ! is_string($url) || ! str_starts_with($url, 'https://')) {
+            throw InvoicePdfUnavailable::rejected('request', $response->status());
+        }
+
+        return $url;
+    }
+
+    /**
+     * Descarrega o PDF do link da InvoiceExpress, sem a api_key. Um redirecionamento (3xx) é recusado,
+     * tal como um ficheiro acima de 10 MB (pelo Content-Length, quando existe, e pelo corpo recebido).
+     * Nunca regista o URL: é um link público e assinado para o documento fiscal.
+     */
+    private function download(string $url): string
+    {
+        try {
+            $response = $this->pdfClient()->get($url);
+        } catch (Throwable) {
+            throw InvoicePdfUnavailable::unreachable('download');
+        }
+
+        $declaredLength = $response->header('Content-Length');
+        $body = $response->body();
+
+        if (! $response->successful()
+            || ($declaredLength !== '' && (int) $declaredLength > self::PDF_MAX_BYTES)
+            || strlen($body) > self::PDF_MAX_BYTES
+            || ! str_starts_with($body, '%PDF-')) {
+            throw InvoicePdfUnavailable::rejected('download', $response->status());
+        }
+
+        return $body;
+    }
+
+    /**
+     * Cliente HTTP dos pedidos do PDF: timeout curto, sem novas tentativas automáticas e sem seguir
+     * redirecionamentos (um 3xx levaria o pedido, e no /api/pdf a api_key, para outro endereço).
+     */
+    private function pdfClient(): PendingRequest
+    {
+        return Http::timeout(self::PDF_TIMEOUT)
+            ->connectTimeout(self::PDF_TIMEOUT)
+            ->withOptions(['allow_redirects' => false]);
     }
 
     /**

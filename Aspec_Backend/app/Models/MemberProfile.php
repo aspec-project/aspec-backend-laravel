@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class MemberProfile extends Model
@@ -63,5 +64,24 @@ class MemberProfile extends Model
     public function portfolios(): HasMany
     {
         return $this->hasMany(Portfolio::class, 'profile_id');
+    }
+
+    /**
+     * Perfis que aparecem no diretório público: conta Active e perfil não apagado, seja qual for o papel.
+     * Perfis ou utilizadores soft deleted (incluindo anonimizados) ficam de fora pelo SoftDeletes de cada modelo.
+     */
+    public function scopeListedInDirectory(Builder $query): void
+    {
+        $query->whereHas('user', fn (Builder $user) => $user
+            ->whereHas('accountStatus', fn (Builder $status) => $status->where('name', 'Active')));
+    }
+
+    /**
+     * Perfis com média de avaliações visíveis igual ou superior a $min.
+     * Ainda não existem avaliações, por isso nenhum perfil atinge a média mínima e a lista fica vazia.
+     */
+    public function scopeWithMinAverageRating(Builder $query, float $min): void
+    {
+        $query->whereRaw('0 = 1');
     }
 }

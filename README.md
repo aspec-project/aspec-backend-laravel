@@ -16,6 +16,67 @@ No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão d
 
 Se o teu `.env` tem `APP_URL=http://localhost` (sem a porta), muda para `http://localhost:8000`, corre `php artisan config:clear` e confirma que existe `public/storage` (senão, `php artisan storage:link`). Sem isto, os logótipos e as imagens do portfólio aparecem partidos no frontend.
 
+## Formatação do código (Pint)
+
+O código segue o estilo do Laravel, verificado pelo [Pint](https://laravel.com/docs/pint). Antes de cada commit, na pasta `Aspec_Backend/`:
+
+```bash
+php vendor/bin/pint --dirty   # formata só os ficheiros alterados
+php vendor/bin/pint --test    # confirma que o projeto inteiro está formatado
+```
+
+## Primeiro administrador
+
+Na instalação inicial, a partir de `Aspec_Backend`:
+
+1. Execute `php artisan migrate --seed` para criar as tabelas e os dados iniciais.
+2. Defina `ASPEC_ADMIN_EMAIL` e `ASPEC_ADMIN_PASSWORD` no `.env`.(caso precise elas se encontram no .env.example) A password deve cumprir as regras de password da aplicação.
+3. Execute `php artisan aspec:create-admin`.
+4. Remova `ASPEC_ADMIN_PASSWORD` do `.env`.
+
+Se a configuração estiver em cache, gere-a novamente depois de definir as variáveis e antes de executar o comando. Depois de remover a password, gere o cache outra vez para não a manter no ficheiro de configuração em cache.
+
+O comando cria uma conta **Admin Active**, sem perfil de membro. Pode ser executado novamente sem criar outro administrador com o mesmo email. Se o email já pertencer a uma conta que não seja um administrador ativo, o comando recusa a criação e não altera essa conta.
+
+## Dados de demonstração
+
+**Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.
+
+Na pasta `Aspec_Backend/`:
+
+1. `php artisan migrate:fresh --seed` (apaga a base de dados local e cria os dados de referência).
+2. `php artisan db:seed --class=DemoSeeder`
+3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
+
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 10 eventos futuros nas quatro categorias, com datas a partir do dia em que corre. Pode correr outra vez: repõe as contas, os perfis e os eventos (as datas avançam) sem duplicar nada. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+
+Password de todas as contas: `Demo#2026`
+
+| Email | Papel | Estado |
+|---|---|---|
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório) |
+| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
+| `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
+| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
+| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) |
+| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) |
+| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) |
+
+## Email
+
+Por omissão (`MAIL_MAILER=log`) os emails não saem: ficam escritos no `storage/logs/laravel.log`, incluindo os links de ativação. É o modo para desenvolvimento e o que os testes automáticos usam.
+
+Para enviar emails a sério (demonstração), a plataforma usa a conta Gmail do projeto, `geral.teste.aspec@gmail.com`, com uma **palavra-passe de aplicação** (16 letras, criada em myaccount.google.com/apppasswords com a verificação em dois passos ativa). A palavra-passe da conta Google não funciona por SMTP. Pede a palavra-passe de aplicação ao Mário; nunca a pôr no `.env.example`, no git nem em mensagens públicas.
+
+1. No `.env`, trocar o bloco `MAIL_*` pelo bloco comentado do `.env.example` (sem os `#`) e preencher `MAIL_PASSWORD` com a palavra-passe de aplicação, sem espaços. O `MAIL_FROM_ADDRESS` tem de ser o endereço da conta.
+2. `php artisan config:clear`
+3. Testar: `php artisan tinker --execute="Mail::raw('Teste ASPEC', fn (\$m) => \$m->to('o-teu-email')->subject('Teste ASPEC'));"`
+4. A maior parte dos emails da aplicação (ativação, carência, faturas) passa pela fila: é preciso ter `php artisan queue:work` a correr.
+
+Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada ou verificação em dois passos desligada; `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
+
+**Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
@@ -89,3 +150,38 @@ Com `php artisan serve`, `php artisan queue:work`, o `stripe listen` acima e `MA
 5. Abrir o link de reativação → Checkout sem trial com `4242…` → conta Active, sem trial.
 6. `POST /api/subscription/cancel` → `cancel_at_period_end: true` + email; `POST /api/subscription/resume` → `false` + email; cancelar outra vez e terminar já (`stripe subscriptions cancel sub_…` ou "cancelar já" no dashboard) → `customer.subscription.deleted` → conta Inactive (`cancelled`), email "A sua subscrição ASPEC terminou"; reativar pelo link → Active.
 7. Bloquear um membro em carência → continua `blocked`, sem email de reativação (o `customer.subscription.deleted` do cancelamento é ignorado).
+
+### Estado da subscrição (backoffice)
+
+Calculado a partir das colunas da conta, sem coluna própria: `$user->subscriptionState()` (enum `App\Enums\SubscriptionState`, com `label()` em pt-PT), o filtro `User::query()->inSubscriptionState($estado)` e as contagens `User::subscriptionStateCounts($consulta)`. Usado na lista de utilizadores do admin. Ganha o primeiro que se verifica:
+
+| Valor | Label | Condição |
+|---|---|---|
+| `pending` | Pendente | conta Pending |
+| `awaiting_activation` | Por ativar | conta Approved |
+| `blocked` | Bloqueado | Inactive, motivo `blocked` |
+| `lapsed` | Subscrição caída | Inactive, motivo `unpaid` ou `cancelled` |
+| `inactive` | Inativo | Inactive, motivo `rejected`, `deleted` ou vazio |
+| `exempt` | Isento | Active, Admin sem perfil de membro (admin técnico) |
+| `grace` | Em carência | Active, `grace_ends_at` preenchido |
+| `trial` | Em trial | Active, `trial_ends_at` no futuro |
+| `active` | Ativo | restantes contas Active |
+
+Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
+
+### Faturas do membro
+
+- **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.
+- **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `storage/app/private/invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` (disco privado, nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
+- **Email das faturas:** `MAIL_MAILER=log` é só para desenvolvimento local: o email da fatura (com o PDF, que tem NIF e morada) fica escrito no `storage/logs/laravel.log`, por isso limpar esse ficheiro depois de testar. Na apresentação usar um SMTP de teste (Mailpit, Mailtrap ou uma conta de email com password de aplicação).
+- **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 10 por minuto). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
+- **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
+- **InvoiceExpress:** o trial gratuito de 30 dias serve de sandbox (sem comunicação à AT). Criá-lo perto da apresentação (~2/11, para cobrir a semana de 30/11), copiar o nome da conta e a chave da API para `INVOICEEXPRESS_ACCOUNT_NAME` / `INVOICEEXPRESS_API_KEY` e mudar para `INVOICING_DRIVER=invoiceexpress`. "Limpar Conta" (definições da InvoiceExpress) apaga os documentos de teste. As faturas já emitidas com `demo` continuam a descarregar-se pelo driver que as emitiu.
+
+## Diretório
+
+- **Endpoints públicos** (sem login; limite partilhado de 60 pedidos por minuto por IP):
+  - `GET /api/members` — lista paginada, ordenada por empresa, nome e id. Filtros opcionais e combináveis: `search` (nome, empresa ou descrição; até 100 caracteres), `sector_id`, `location_id` (distrito), `min_rating` (1 a 5; devolve uma lista vazia enquanto não existirem avaliações), `page` e `per_page` (12 por omissão, máximo 50). Cada item traz `id`, `name`, `business_name`, `description` (texto completo ou `null`; o corte para o cartão é feito no frontend), `sector`, `location`, `logo_url`, `average_rating` e `reviews_count`.
+  - `GET /api/members/{id}` — perfil público (`id` = id do perfil, o mesmo da lista).
+- **Quem aparece:** contas **Active** com perfil de membro, seja qual for o papel (um admin com perfil aparece; um admin sem perfil nunca). Contas Pending, Approved, Inactive ou apagadas não aparecem e o perfil devolve 404 "Membro não encontrado.", igual a um id que não existe. Contas em trial ou em período de carência continuam a aparecer.
+- **Contactos:** o telefone e os contactos comerciais só vêm em `members_only` para quem consulta com uma conta Active (sessão do frontend ou token Bearer); para os outros `members_only` é `null`. Morada, website, horário, redes sociais e portfólio são públicos. O email da conta e a congregação nunca aparecem no diretório.

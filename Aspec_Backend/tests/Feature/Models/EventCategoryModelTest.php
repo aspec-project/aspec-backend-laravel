@@ -13,12 +13,11 @@ class EventCategoryModelTest extends TestCase
 {
     use RefreshDatabase;
 
-    // T29 — enquanto a tabela event_instances não existir, hasEvents() devolve false sem rebentar.
-    // Quando a tabela chegar (módulo de eventos), o primeiro assert falha de propósito para rever este teste.
+    // T29 — uma categoria sem eventos não tem eventos associados.
     #[Test]
-    public function category_has_no_events_while_event_instances_table_does_not_exist(): void
+    public function category_has_no_events_when_event_instances_table_exists(): void
     {
-        $this->assertFalse(Schema::hasTable('event_instances'));
+        $this->assertTrue(Schema::hasTable('event_instances'));
 
         $category = EventCategory::factory()->create();
 
@@ -33,9 +32,18 @@ class EventCategoryModelTest extends TestCase
 
         $this->assertTrue(Str::isUuid($category->id));
         $this->assertNotEmpty($category->name);
-        $this->assertLessThanOrEqual(100, mb_strlen($category->name));
-        $this->assertMatchesRegularExpression('/^#[0-9A-Fa-f]{6}$/', $category->color);
-        // 4 categorias do seeder + 1 criada pela factory.
-        $this->assertSame(5, EventCategory::count());
+        $this->assertLessThanOrEqual(30, mb_strlen($category->name));
+        $this->assertMatchesRegularExpression('/^#[0-9A-F]{6}$/', $category->color);
+        // 5 categorias do seeder + 1 criada pela factory.
+        $this->assertSame(6, EventCategory::count());
+    }
+
+    #[Test]
+    public function model_stores_the_color_in_uppercase(): void
+    {
+        $category = EventCategory::create(['name' => 'Workshops', 'color' => '#abcdef']);
+
+        $this->assertSame('#ABCDEF', $category->color);
+        $this->assertSame('#ABCDEF', $category->fresh()->color);
     }
 }

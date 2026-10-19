@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Categoria (tipo) de evento, com nome e cor únicos; a cor é usada pelo frontend na agenda.
+ */
 class EventCategory extends Model
 {
     use HasFactory, HasUuids;
@@ -18,18 +21,34 @@ class EventCategory extends Model
     ];
 
     /**
-     * Indica se a categoria tem eventos associados.
-     * A tabela event_instances ainda não existe (módulo de eventos): enquanto não existir,
-     * nenhuma categoria pode ter eventos. Quando existir, passa a consultar a tabela.
+     * Eventos (instâncias) desta categoria.
+     *
+     * @return HasMany<EventInstance, $this>
+     */
+    public function eventInstances(): HasMany
+    {
+        return $this->hasMany(EventInstance::class, 'category_id');
+    }
+
+    /**
+     * Indica se a categoria tem eventos associados (impede a eliminação).
+     *
+     * @return bool true se existir pelo menos um evento desta categoria.
      */
     public function hasEvents(): bool
     {
-        if (! Schema::hasTable('event_instances')) {
-            return false;
-        }
+        return $this->eventInstances()->exists();
+    }
 
-        // DB::table e não uma relação Eloquent: a classe EventInstance ainda não existe,
-        // e assim só dependemos do nome da tabela e da coluna fixados no ERD.
-        return DB::table('event_instances')->where('category_id', $this->id)->exists();
+    /**
+     * Guarda a cor sempre em maiúsculas (#RRGGBB), para a unicidade não depender de maiúsculas.
+     *
+     * @return Attribute<never, string>
+     */
+    protected function color(): Attribute
+    {
+        return Attribute::make(
+            set: fn (string $value) => strtoupper($value),
+        );
     }
 }

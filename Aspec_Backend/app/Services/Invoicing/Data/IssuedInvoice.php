@@ -13,10 +13,10 @@ final readonly class IssuedInvoice
     public const ISSUED_NOT_SENT = 'issued_not_sent';
 
     /**
-     * @param  string  $provider  Driver que emitiu: log ou invoiceexpress.
-     * @param  string|null  $providerInvoiceId  Id do documento no serviço (null no driver log).
+     * @param  string  $provider  Driver que emitiu: log, demo ou invoiceexpress.
+     * @param  string|null  $providerInvoiceId  Id do documento no serviço (null no driver log; caminho do PDF no disco local no demo).
      * @param  string  $number  Número da fatura.
-     * @param  string|null  $pdfUrl  Link público do documento (null no driver log).
+     * @param  string|null  $pdfUrl  Link público do documento (null nos drivers log e demo).
      * @param  string  $status  self::ISSUED ou self::ISSUED_NOT_SENT.
      */
     public function __construct(

@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Schema;
@@ -16,7 +17,6 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
-use Illuminate\Support\Facades\DB;
 
 class UserModelTest extends TestCase
 {
@@ -324,7 +324,6 @@ class UserModelTest extends TestCase
         $this->assertArrayHasKey('inactive_reason', $fresh->getAttributes());
         $this->assertNull($fresh->inactive_reason);
     }
-
 
     #[Test]
     public function deactivate_sets_the_requested_reason_and_clears_grace_period(): void

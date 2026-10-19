@@ -35,7 +35,8 @@ return [
         ],
     ],
 
-    // Faturação dos pagamentos: 'log' (sem serviço externo) ou 'invoiceexpress'.
+    // Faturação dos pagamentos: 'log' (sem serviço externo), 'demo' (PDF local sem validade fiscal,
+    // enviado por email) ou 'invoiceexpress'.
     'invoicing' => [
         'driver' => env('INVOICING_DRIVER', 'log'),
     ],

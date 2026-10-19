@@ -5,6 +5,8 @@ namespace Tests\Feature\Member;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Models\AccountStatus;
+use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
@@ -21,6 +23,7 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Stripe\Exception\ApiConnectionException;
@@ -536,6 +539,49 @@ class AnonymizeAndDeleteTest extends TestCase
         ]);
     }
 
+    #[Test]
+    public function demo_invoice_pdfs_and_rows_are_kept_after_anonymization(): void
+    {
+        // Documento fiscal conservado 10 anos: a obrigação legal prevalece sobre o direito ao apagamento.
+        Storage::fake('local');
+        $user = User::factory()->withBilling()->create();
+        $invoice = Invoice::factory()->for($user)->demo()->issued()->create();
+        $path = $invoice->provider_invoice_id;
+        Storage::disk('local')->put($path, '%PDF-1.4 fatura demo');
+
+        $user->anonymizeAndDelete();
+
+        Storage::disk('local')->assertExists($path);
+        $this->assertSame('%PDF-1.4 fatura demo', Storage::disk('local')->get($path));
+        $this->assertDatabaseHas('invoices', [
+            'id' => $invoice->id,
+            'user_id' => $user->id,
+            'provider' => 'demo',
+            'provider_invoice_id' => $path,
+            'number' => $invoice->number,
+            'status' => 'issued',
+        ]);
+    }
+
+    #[Test]
+    public function anonymized_owner_can_no_longer_download_the_kept_pdf(): void
+    {
+        // Sem login real possível (tokens e sessões apagados); actingAs simula um pedido que ainda chegasse.
+        Storage::fake('local');
+        $user = User::factory()->withBilling()->create();
+        $invoice = Invoice::factory()->for($user)->demo()->issued()->create();
+        Storage::disk('local')->put($invoice->provider_invoice_id, '%PDF-1.4 fatura demo');
+
+        $user->anonymizeAndDelete();
+        Sanctum::actingAs(User::withTrashed()->find($user->id));
+
+        $response = $this->getJson("/api/invoices/{$invoice->id}/pdf");
+
+        $response->assertForbidden();
+        $this->assertStringNotContainsString('%PDF-', $response->getContent());
+        Storage::disk('local')->assertExists($invoice->provider_invoice_id);
+    }
+
     private function createPasswordResetToken(User $user): void
     {
         Password::broker()->createToken($user);
@@ -593,5 +639,77 @@ class AnonymizeAndDeleteTest extends TestCase
         $admin->anonymizeAndDelete();
 
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $originalEmail]);
+    }
+
+    #[Test]
+    public function future_event_registrations_are_deleted_but_past_ones_are_kept(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $now = now($timezone)->startOfSecond();
+
+        $this->travelTo($now);
+
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $registrationDeadline = $now->copy()->subDay()->format('Y-m-d H:i:s');
+
+        $pastEvent = EventInstance::factory()->create([
+            'event_date' => $now->toDateString(),
+            'event_start_time' => $now->copy()->subHour()->format('H:i:s'),
+            'event_end_time' => $now->copy()->subMinutes(30)->format('H:i:s'),
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $eventStartingNow = EventInstance::factory()->create([
+            'event_date' => $now->toDateString(),
+            'event_start_time' => $now->format('H:i:s'),
+            'event_end_time' => $now->copy()->addHour()->format('H:i:s'),
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $futureEvent = EventInstance::factory()->create([
+            'event_date' => $now->copy()->addDay()->toDateString(),
+            'event_start_time' => '10:00:00',
+            'event_end_time' => '11:00:00',
+            'registration_deadline' => $registrationDeadline,
+        ]);
+
+        $pastRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $pastEvent->id,
+            'user_id' => $user->id,
+        ]);
+
+        $currentRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $eventStartingNow->id,
+            'user_id' => $user->id,
+        ]);
+
+        $futureRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $futureEvent->id,
+            'user_id' => $user->id,
+        ]);
+
+        $otherUsersRegistration = EventRegistration::query()->create([
+            'event_instance_id' => $futureEvent->id,
+            'user_id' => $otherUser->id,
+        ]);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertDatabaseHas('event_registrations', [
+            'id' => $pastRegistration->id,
+        ]);
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'id' => $currentRegistration->id,
+        ]);
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'id' => $futureRegistration->id,
+        ]);
+
+        $this->assertDatabaseHas('event_registrations', [
+            'id' => $otherUsersRegistration->id,
+        ]);
     }
 }

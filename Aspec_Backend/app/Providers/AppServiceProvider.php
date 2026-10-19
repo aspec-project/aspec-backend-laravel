@@ -3,8 +3,7 @@
 namespace App\Providers;
 
 use App\Contracts\InvoiceService;
-use App\Services\Invoicing\InvoiceExpressInvoiceService;
-use App\Services\Invoicing\LogInvoiceService;
+use App\Services\Invoicing\InvoiceServiceFactory;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -37,58 +36,18 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Liga o contrato InvoiceService ao driver de `services.invoicing.driver` (log ou invoiceexpress).
+     * Liga o contrato InvoiceService ao driver de `services.invoicing.driver` (log, demo ou invoiceexpress).
      *
      * `bind` e não `singleton`: a config é lida sempre que o contrato é resolvido, por isso
      * mudar a config (ex. nos testes) muda o driver. Driver desconhecido ou InvoiceExpress sem
-     * conta/chave falham logo, com mensagens sem os valores configurados.
+     * conta/chave falham logo, com mensagens sem os valores configurados (ver InvoiceServiceFactory).
      *
      * @throws InvalidArgumentException
      */
     private function registerInvoiceService(): void
     {
-        $this->app->bind(InvoiceService::class, fn () => match (config('services.invoicing.driver')) {
-            'log' => new LogInvoiceService,
-            'invoiceexpress' => $this->makeInvoiceExpressService(config('services.invoiceexpress')),
-            default => throw new InvalidArgumentException('Driver de faturação desconhecido.'),
-        });
-    }
-
-    /**
-     * Cria o driver InvoiceExpress com os valores da config.
-     *
-     * @throws InvalidArgumentException Se faltar o nome da conta ou a chave da API, ou se o nome da
-     *                                  conta ou o tipo de documento tiverem caracteres que mudem o URL.
-     */
-    private function makeInvoiceExpressService(#[\SensitiveParameter] array $config): InvoiceExpressInvoiceService
-    {
-        if (blank($config['account_name'] ?? null) || blank($config['api_key'] ?? null)) {
-            throw new InvalidArgumentException('Faltam o nome da conta ou a chave da API da InvoiceExpress.');
-        }
-
-        // Os dois valores entram no URL: um nome de conta como "evil.example/x?" mudava o host e
-        // mandava a api_key para outro servidor; um tipo com "/" ou "?" mudava o caminho.
-        if (! preg_match('/^[a-z0-9-]+$/i', $config['account_name'])) {
-            throw new InvalidArgumentException('Nome da conta InvoiceExpress inválido.');
-        }
-
-        if (! preg_match('/^[a-z_]+$/', (string) ($config['document_type'] ?? ''))) {
-            throw new InvalidArgumentException('Tipo de documento InvoiceExpress inválido.');
-        }
-
-        return new InvoiceExpressInvoiceService(
-            accountName: $config['account_name'],
-            apiKey: $config['api_key'],
-            documentType: $config['document_type'],
-            sequenceId: filled($config['sequence_id'] ?? null) ? (string) $config['sequence_id'] : null,
-            itemName: $config['item_name'],
-            taxName: $config['tax_name'],
-            vatRate: (int) $config['vat_rate'],
-            taxExemption: filled($config['tax_exemption'] ?? null) ? $config['tax_exemption'] : null,
-            timeout: (int) $config['timeout'],
-            retryTimes: (int) $config['retry_times'],
-            retrySleepMs: (int) $config['retry_sleep_ms'],
-        );
+        $this->app->bind(InvoiceService::class, fn ($app) => $app->make(InvoiceServiceFactory::class)
+            ->make((string) config('services.invoicing.driver')));
     }
 
     /**
@@ -129,6 +88,7 @@ class AppServiceProvider extends ServiceProvider
             'password-update',
             'billing-portal',
             'subscription-change',
+            'invoice-download',
         ];
 
         foreach ($actions as $action) {
@@ -136,11 +96,10 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->user()?->id ?: $request->ip()));
         }
 
-
         $authActions = [
-        'auth-login',
-        'auth-token',
-        'auth-forgot-password',
+            'auth-login',
+            'auth-token',
+            'auth-forgot-password',
         ];
 
         foreach ($authActions as $action) {
@@ -149,7 +108,7 @@ class AppServiceProvider extends ServiceProvider
                 fn (Request $request) => Limit::perMinute(5)
                     ->by(
                         strtolower(trim((string) $request->input('email')))
-                        . '|' . $request->ip()
+                        .'|'.$request->ip()
                     )
             );
         }
@@ -160,7 +119,6 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perHour(20)
                 ->by($request->ip())
         );
-
 
         // Registo: 5/min por IP.
         RateLimiter::for(
@@ -186,6 +144,18 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'auth-reset-password',
             fn (Request $request) => Limit::perMinute(5)->by($request->ip())
+        );
+
+        // Diretório público: 60/min por IP, partilhado por lista e perfil; trava a recolha automática de perfis.
+        RateLimiter::for(
+            'member-directory',
+            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+        );
+
+        // Eventos públicos: 60/min por IP.
+        RateLimiter::for(
+            'public-events',
+            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
         );
     }
 }

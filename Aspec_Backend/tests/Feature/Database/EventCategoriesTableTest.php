@@ -25,8 +25,34 @@ class EventCategoriesTableTest extends TestCase
         $this->expectException(QueryException::class);
         DB::table('event_categories')->insert([
             'id' => (string) Str::uuid(),
-            'name' => 'Formações',
+            'name' => 'Formação',
+            'color' => '#123456',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    #[Test]
+    public function color_column_is_required_in_the_database(): void
+    {
+        $this->expectException(QueryException::class);
+        DB::table('event_categories')->insert([
+            'id' => (string) Str::uuid(),
+            'name' => 'Workshops',
             'color' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    #[Test]
+    public function color_column_is_unique_in_the_database(): void
+    {
+        $this->expectException(QueryException::class);
+        DB::table('event_categories')->insert([
+            'id' => (string) Str::uuid(),
+            'name' => 'Workshops',
+            'color' => '#1565C0',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

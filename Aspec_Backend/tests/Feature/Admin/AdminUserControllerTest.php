@@ -2,25 +2,26 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\AccountStatus;
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
-use PHPUnit\Framework\Attributes\Test;
-use Tests\TestCase;
-use Illuminate\Support\Facades\Auth;
 use App\Enums\InactiveReason;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Notification;
+use App\Jobs\CancelStripeSubscriptionJob;
+use App\Models\AccountStatus;
+use App\Models\MemberProfile;
+use App\Models\User;
 use App\Notifications\ActivationLinkNotification;
 use App\Notifications\ReactivationLinkNotification;
 use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use App\Services\Payments\SubscriptionService;
-use Mockery\MockInterface;
-use App\Jobs\CancelStripeSubscriptionJob;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Laravel\Sanctum\Sanctum;
+use Mockery\MockInterface;
+use PHPUnit\Framework\Attributes\Test;
 use Stripe\Exception\ApiConnectionException;
+use Tests\TestCase;
 
 class AdminUserControllerTest extends TestCase
 {
@@ -200,7 +201,6 @@ class AdminUserControllerTest extends TestCase
         ]);
     }
 
-
     #[Test]
     public function admin_cannot_approve_nonexistent_user(): void
     {
@@ -218,7 +218,6 @@ class AdminUserControllerTest extends TestCase
 
         $response->assertNotFound();
     }
-
 
     #[Test]
     public function admin_can_reject_pending_user_and_revoke_tokens(): void
@@ -270,14 +269,13 @@ class AdminUserControllerTest extends TestCase
             'name' => 'pending-user-token',
         ]);
 
-        \Illuminate\Support\Facades\Auth::forgetGuards();
+        Auth::forgetGuards();
 
         $this
             ->withHeader('Authorization', 'Bearer '.$pendingUserToken)
             ->getJson('/api/auth/me')
             ->assertUnauthorized();
     }
-
 
     #[Test]
     public function regular_user_cannot_reject_pending_user(): void
@@ -313,7 +311,7 @@ class AdminUserControllerTest extends TestCase
 
     #[Test]
     public function unauthenticated_user_cannot_reject_pending_user(): void
-    {  
+    {
         $pendingUser = User::factory()
             ->pending()
             ->create();
@@ -337,7 +335,6 @@ class AdminUserControllerTest extends TestCase
             )->value('id'),
         ]);
     }
-
 
     #[Test]
     public function admin_cannot_approve_active_user(): void
@@ -572,7 +569,6 @@ class AdminUserControllerTest extends TestCase
         $response->assertNotFound();
     }
 
-
     #[Test]
     public function admin_can_block_active_user_and_revoke_tokens(): void
     {
@@ -640,7 +636,6 @@ class AdminUserControllerTest extends TestCase
             ->getJson('/api/auth/me')
             ->assertUnauthorized();
     }
-
 
     #[Test]
     public function unblocking_a_user_who_never_subscribed_sends_the_activation_link(): void
@@ -736,541 +731,698 @@ class AdminUserControllerTest extends TestCase
     }
 
     #[Test]
-public function regular_user_cannot_block_user(): void
-{
-    $member = User::factory()
-        ->create();
-
-    $user = User::factory()
-        ->create();
-
-    Sanctum::actingAs($member);
-
-    $response = $this->patchJson(
-        "/api/admin/users/{$user->id}/block"
-    );
-
-    $response
-        ->assertForbidden()
-        ->assertJson([
-            'success' => false,
-            'message' => 'Não tem permissão para realizar esta ação.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'account_status_id' => AccountStatus::where(
-            'name',
-            'Active'
-        )->value('id'),
-    ]);
-}
-
-#[Test]
-public function regular_user_cannot_unblock_user(): void
-{
-    $member = User::factory()
-        ->create();
-
-    $user = User::factory()
-        ->inactive()
-        ->create();
-
-    Sanctum::actingAs($member);
-
-    $response = $this->patchJson(
-        "/api/admin/users/{$user->id}/unblock"
-    );
-
-    $response
-        ->assertForbidden()
-        ->assertJson([
-            'success' => false,
-            'message' => 'Não tem permissão para realizar esta ação.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-    'id' => $user->id,
-    'account_status_id' => AccountStatus::where(
-        'name',
-        'Inactive'
-    )->value('id'),
-]);
-}
-
-#[Test]
-public function blocking_user_clears_grace_period_and_sets_blocked_reason(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()->create([
-        'grace_ends_at' => now()->addDays(5),
-    ]);
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/block")
-        ->assertOk();
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'inactive_reason' => InactiveReason::Blocked->value,
-        'grace_ends_at' => null,
-        'account_status_id' => AccountStatus::where(
-            'name',
-            'Inactive'
-        )->value('id'),
-    ]);
-}
-
-#[Test]
-public function admin_cannot_unblock_pending_user(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()
-        ->pending()
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/unblock")
-        ->assertStatus(409)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'account_status_id' => AccountStatus::where(
-            'name',
-            'Pending'
-        )->value('id'),
-    ]);
-
-    Notification::assertNothingSent();
-}
-
-#[Test]
-public function admin_cannot_unblock_rejected_user(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()
-        ->inactive(InactiveReason::Rejected)
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/unblock")
-        ->assertStatus(409)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'inactive_reason' => InactiveReason::Rejected->value,
-    ]);
-
-    Notification::assertNothingSent();
-}
-
-#[Test]
-public function admin_cannot_unblock_unpaid_user(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()
-        ->inactive(InactiveReason::Unpaid)
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/unblock")
-        ->assertStatus(409)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'inactive_reason' => InactiveReason::Unpaid->value,
-    ]);
-
-    Notification::assertNothingSent();
-}
-
-#[Test]
-public function admin_cannot_unblock_active_user(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/unblock")
-        ->assertStatus(409)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
-        ]);
-
-    Notification::assertNothingSent();
-}
-
-
-#[Test]
-public function admin_cannot_unblock_another_admin(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $otherAdmin = User::factory()
-        ->admin()
-        ->inactive(InactiveReason::Blocked)
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$otherAdmin->id}/unblock")
-        ->assertStatus(409)
-        ->assertJson([
-            'success' => false,
-            'message' => 'Não pode alterar o estado de um administrador.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $otherAdmin->id,
-        'inactive_reason' => InactiveReason::Blocked->value,
-    ]);
-
-    Notification::assertNothingSent();
-}
-
-#[Test]
-public function admin_cannot_unblock_themselves(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->inactive(InactiveReason::Blocked)
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$admin->id}/unblock")
-        ->assertForbidden()
-        ->assertJson([
-            'success' => false,
-            'message' => 'A conta não está ativa e não pode editar dados.',
-    ]);
-
-    Notification::assertNothingSent();
-}
-
-
-#[Test]
-public function admin_cannot_block_themselves(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$admin->id}/block")
-        ->assertConflict()
-        ->assertJson([
-            'success' => false,
-            'message' => 'Não pode alterar o estado da própria conta.',
-        ]);
-}
-
-
-#[Test]
-public function admin_cannot_block_another_admin(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $otherAdmin = User::factory()
-        ->admin()
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$otherAdmin->id}/block")
-        ->assertConflict()
-        ->assertJson([
-            'success' => false,
-            'message' => 'Não pode alterar o estado de um administrador.',
-        ]);
-}
-
-
-#[Test]
-public function admin_cannot_block_an_already_blocked_user(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $user = User::factory()
-        ->inactive(InactiveReason::Blocked)
-        ->create();
-
-    Sanctum::actingAs($admin);
-
-    $this
-        ->patchJson("/api/admin/users/{$user->id}/block")
-        ->assertConflict()
-        ->assertJson([
-            'success' => false,
-            'message' => 'O utilizador já está bloqueado.',
-        ]);
-
-    $this->assertDatabaseHas('users', [
-        'id' => $user->id,
-        'inactive_reason' => InactiveReason::Blocked->value,
-    ]);
-}
-
-#[Test]
-public function admin_can_list_users_without_status_filter(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    User::factory()->pending()->create();
-    User::factory()->approved()->create();
-    User::factory()->create(); // Active por padrão
-    User::factory()->inactive()->create();
-
-    Sanctum::actingAs($admin);
-
-    $this->getJson('/api/admin/users')
-        ->assertOk()
-        ->assertJsonPath('success', true)
-        ->assertJsonPath(
-            'message',
-            'Lista de utilizadores obtida com sucesso.'
-        )
-        ->assertJsonCount(5, 'data.items')
-        ->assertJsonPath('data.pagination.current_page', 1)
-        ->assertJsonPath('data.pagination.per_page', 15)
-        ->assertJsonPath('data.pagination.total', 5)
-        ->assertJsonPath('data.pagination.last_page', 1);
-}
-
-#[Test]
-public function admin_can_filter_users_by_account_status(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $usersByStatus = [
-        'Pending' => User::factory()->pending()->create(),
-        'Approved' => User::factory()->approved()->create(),
-        'Active' => User::factory()->create(),
-        'Inactive' => User::factory()->inactive()->create(),
-    ];
-
-    Sanctum::actingAs($admin);
-
-    foreach ($usersByStatus as $status => $expectedUser) {
-        $response = $this->getJson('/api/admin/users?status='.$status);
+    public function regular_user_cannot_block_user(): void
+    {
+        $member = User::factory()
+            ->create();
+
+        $user = User::factory()
+            ->create();
+
+        Sanctum::actingAs($member);
+
+        $response = $this->patchJson(
+            "/api/admin/users/{$user->id}/block"
+        );
 
         $response
-            ->assertOk()
-            ->assertJsonCount(
-                $status === 'Active' ? 2 : 1,
-                'data.items'
-            );
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não tem permissão para realizar esta ação.',
+            ]);
 
-        $listedIds = collect($response->json('data.items'))
-            ->pluck('id')
-            ->all();
-
-        $this->assertContains($expectedUser->id, $listedIds);
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Active'
+            )->value('id'),
+        ]);
     }
-}
 
-#[Test]
-public function admin_cannot_filter_users_by_unknown_status(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
+    #[Test]
+    public function regular_user_cannot_unblock_user(): void
+    {
+        $member = User::factory()
+            ->create();
 
-    Sanctum::actingAs($admin);
+        $user = User::factory()
+            ->inactive()
+            ->create();
 
-    $this->getJson('/api/admin/users?status=Unknown')
-        ->assertUnprocessable();
-}
+        Sanctum::actingAs($member);
 
-#[Test]
-public function unauthenticated_user_cannot_list_admin_users(): void
-{
-    $this->getJson('/api/admin/users')
-        ->assertUnauthorized();
-}
+        $response = $this->patchJson(
+            "/api/admin/users/{$user->id}/unblock"
+        );
 
-#[Test]
-public function regular_user_cannot_list_admin_users(): void
-{
-    $member = User::factory()->create();
+        $response
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não tem permissão para realizar esta ação.',
+            ]);
 
-    Sanctum::actingAs($member);
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Inactive'
+            )->value('id'),
+        ]);
+    }
 
-    $this->getJson('/api/admin/users')
-        ->assertForbidden();
-}
+    #[Test]
+    public function blocking_user_clears_grace_period_and_sets_blocked_reason(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
 
-#[Test]
-public function admin_user_list_is_paginated(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    User::factory()->count(16)->create();
-
-    Sanctum::actingAs($admin);
-
-    $this->getJson('/api/admin/users')
-        ->assertOk()
-        ->assertJsonCount(15, 'data.items')
-        ->assertJsonPath('data.pagination.current_page', 1)
-        ->assertJsonPath('data.pagination.per_page', 15)
-        ->assertJsonPath('data.pagination.total', 17)
-        ->assertJsonPath('data.pagination.last_page', 2);
-}
-
-#[Test]
-public function admin_can_search_users_within_the_selected_status(): void
-{
-    $admin = User::factory()
-        ->admin()
-        ->create();
-
-    $pendingUser = User::factory()
-        ->pending()
-        ->create();
-
-    \App\Models\MemberProfile::factory()
-        ->for($pendingUser)
-        ->create([
-            'name' => 'Joao Pesquisa',
-            'business_name' => 'Consultoria Exemplo',
+        $user = User::factory()->create([
+            'grace_ends_at' => now()->addDays(5),
         ]);
 
-    $activeUser = User::factory()->create([
-        'email' => 'joao.active@example.com',
-    ]);
+        Sanctum::actingAs($admin);
 
-    \App\Models\MemberProfile::factory()
-        ->for($activeUser)
-        ->create([
-            'name' => 'Joao Active',
-            'business_name' => 'Outra Empresa',
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'inactive_reason' => InactiveReason::Blocked->value,
+            'grace_ends_at' => null,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Inactive'
+            )->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_unblock_pending_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $user = User::factory()
+            ->pending()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/unblock")
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'account_status_id' => AccountStatus::where(
+                'name',
+                'Pending'
+            )->value('id'),
         ]);
 
-    Sanctum::actingAs($admin);
+        Notification::assertNothingSent();
+    }
 
-    $this->getJson('/api/admin/users?status=Pending&search=Joao')
-        ->assertOk()
-        ->assertJsonCount(1, 'data.items')
-        ->assertJsonPath('data.items.0.id', $pendingUser->id)
-        ->assertJsonPath('data.pagination.total', 1);
-}
+    #[Test]
+    public function admin_cannot_unblock_rejected_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
 
-#[Test]
-public function blocking_user_expires_an_open_checkout_session(): void
-{
-    $admin = User::factory()->admin()->create();
-    $user = User::factory()->create();
-    $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+        $user = User::factory()
+            ->inactive(InactiveReason::Rejected)
+            ->create();
 
-    $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
-        $mock->shouldReceive('expireCheckout')
-            ->once()
-            ->with('cs_test_open');
-    });
+        Sanctum::actingAs($admin);
 
-    Sanctum::actingAs($admin);
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/unblock")
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
+            ]);
 
-    $this->patchJson("/api/admin/users/{$user->id}/block")
-        ->assertOk();
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'inactive_reason' => InactiveReason::Rejected->value,
+        ]);
 
-    $this->assertSame('Inactive', $user->fresh()->accountStatus->name);
-    $this->assertNull($user->fresh()->stripe_checkout_session_id);
-}
+        Notification::assertNothingSent();
+    }
 
-#[Test]
-public function stripe_failure_does_not_prevent_blocking_and_queues_a_retry(): void
-{
-    Queue::fake();
+    #[Test]
+    public function admin_cannot_unblock_unpaid_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
 
-    $admin = User::factory()->admin()->create();
-    $user = User::factory()->create();
-    $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+        $user = User::factory()
+            ->inactive(InactiveReason::Unpaid)
+            ->create();
 
-    $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
-        $mock->shouldReceive('expireCheckout')
-            ->once()
-            ->with('cs_test_open')
-            ->andThrow(ApiConnectionException::factory('falha Stripe'));
-    });
+        Sanctum::actingAs($admin);
 
-    Sanctum::actingAs($admin);
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/unblock")
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
+            ]);
 
-    $this->patchJson("/api/admin/users/{$user->id}/block")
-        ->assertOk()
-        ->assertJsonPath('data.account_status.name', 'Inactive');
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'inactive_reason' => InactiveReason::Unpaid->value,
+        ]);
 
-    $this->assertSame(
-        InactiveReason::Blocked,
-        $user->fresh()->inactive_reason
-    );
+        Notification::assertNothingSent();
+    }
 
-    Queue::assertPushed(
-        CancelStripeSubscriptionJob::class,
-        fn (CancelStripeSubscriptionJob $job) =>
-            $job->userId === $user->id
-            && $job->checkoutSessionId === 'cs_test_open'
-    );
-}
+    #[Test]
+    public function admin_cannot_unblock_active_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
 
+        $user = User::factory()->create();
 
+        Sanctum::actingAs($admin);
 
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/unblock")
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
+            ]);
 
+        Notification::assertNothingSent();
+    }
 
-    
+    #[Test]
+    public function admin_cannot_unblock_another_admin(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $otherAdmin = User::factory()
+            ->admin()
+            ->inactive(InactiveReason::Blocked)
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$otherAdmin->id}/unblock")
+            ->assertStatus(409)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado de um administrador.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $otherAdmin->id,
+            'inactive_reason' => InactiveReason::Blocked->value,
+        ]);
+
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function admin_cannot_unblock_themselves(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->inactive(InactiveReason::Blocked)
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$admin->id}/unblock")
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A conta não está ativa e não pode editar dados.',
+            ]);
+
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function admin_cannot_block_themselves(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$admin->id}/block")
+            ->assertConflict()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado da própria conta.',
+            ]);
+    }
+
+    #[Test]
+    public function admin_cannot_block_another_admin(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $otherAdmin = User::factory()
+            ->admin()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$otherAdmin->id}/block")
+            ->assertConflict()
+            ->assertJson([
+                'success' => false,
+                'message' => 'Não pode alterar o estado de um administrador.',
+            ]);
+    }
+
+    #[Test]
+    public function admin_cannot_block_an_already_blocked_user(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $user = User::factory()
+            ->inactive(InactiveReason::Blocked)
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this
+            ->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertConflict()
+            ->assertJson([
+                'success' => false,
+                'message' => 'O utilizador já está bloqueado.',
+            ]);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'inactive_reason' => InactiveReason::Blocked->value,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_list_users_without_status_filter(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        User::factory()->pending()->create();
+        User::factory()->approved()->create();
+        User::factory()->create(); // Active por padrão
+        User::factory()->inactive()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/users')
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath(
+                'message',
+                'Lista de utilizadores obtida com sucesso.'
+            )
+            ->assertJsonCount(4, 'data.items')
+            ->assertJsonPath('data.pagination.current_page', 1)
+            ->assertJsonPath('data.pagination.per_page', 12)
+            ->assertJsonPath('data.pagination.total', 4)
+            ->assertJsonPath('data.pagination.last_page', 1);
+    }
+
+    #[Test]
+    public function admin_can_filter_users_by_account_status(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $usersByStatus = [
+            'Pending' => User::factory()->pending()->create(),
+            'Approved' => User::factory()->approved()->create(),
+            'Active' => User::factory()->create(),
+            'Inactive' => User::factory()->inactive()->create(),
+        ];
+
+        Sanctum::actingAs($admin);
+
+        foreach ($usersByStatus as $status => $expectedUser) {
+            $response = $this->getJson('/api/admin/users?status='.$status);
+
+            $response
+                ->assertOk()
+                ->assertJsonCount(
+                    1,
+                    'data.items'
+                );
+
+            $listedIds = collect($response->json('data.items'))
+                ->pluck('id')
+                ->all();
+
+            $this->assertContains($expectedUser->id, $listedIds);
+        }
+    }
+
+    #[Test]
+    public function admin_cannot_filter_users_by_unknown_status(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/users?status=Unknown')
+            ->assertUnprocessable();
+    }
+
+    #[Test]
+    public function unauthenticated_user_cannot_list_admin_users(): void
+    {
+        $this->getJson('/api/admin/users')
+            ->assertUnauthorized();
+    }
+
+    #[Test]
+    public function regular_user_cannot_list_admin_users(): void
+    {
+        $member = User::factory()->create();
+
+        Sanctum::actingAs($member);
+
+        $this->getJson('/api/admin/users')
+            ->assertForbidden();
+    }
+
+    #[Test]
+    public function admin_user_list_is_paginated(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        User::factory()->count(16)->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/users')
+            ->assertOk()
+            ->assertJsonCount(12, 'data.items')
+            ->assertJsonPath('data.pagination.current_page', 1)
+            ->assertJsonPath('data.pagination.per_page', 12)
+            ->assertJsonPath('data.pagination.total', 16)
+            ->assertJsonPath('data.pagination.last_page', 2);
+    }
+
+    #[Test]
+    public function admin_can_search_users_within_the_selected_status(): void
+    {
+        $admin = User::factory()
+            ->admin()
+            ->create();
+
+        $pendingUser = User::factory()
+            ->pending()
+            ->create();
+
+        MemberProfile::factory()
+            ->for($pendingUser)
+            ->create([
+                'name' => 'Joao Pesquisa',
+                'business_name' => 'Consultoria Exemplo',
+            ]);
+
+        $activeUser = User::factory()->create([
+            'email' => 'joao.active@example.com',
+        ]);
+
+        MemberProfile::factory()
+            ->for($activeUser)
+            ->create([
+                'name' => 'Joao Active',
+                'business_name' => 'Outra Empresa',
+            ]);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/users?status=Pending&search=Joao')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $pendingUser->id)
+            ->assertJsonPath('data.pagination.total', 1);
+    }
+
+    #[Test]
+    public function blocking_user_expires_an_open_checkout_session(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('expireCheckout')
+                ->once()
+                ->with('cs_test_open');
+        });
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk();
+
+        $this->assertSame('Inactive', $user->fresh()->accountStatus->name);
+        $this->assertNull($user->fresh()->stripe_checkout_session_id);
+    }
+
+    #[Test]
+    public function blocking_user_with_active_subscription_cancels_it_in_stripe(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->withBilling()->create();
+
+        $user->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_test_active',
+            'stripe_status' => 'active',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('cancelNow')
+                ->once()
+                ->withArgs(fn ($subscription) => $subscription->stripe_id === 'sub_test_active');
+        });
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk()
+            ->assertJsonPath('data.account_status.name', 'Inactive');
+
+        $this->assertSame(InactiveReason::Blocked, $user->fresh()->inactive_reason);
+    }
+
+    #[Test]
+    public function stripe_failure_does_not_prevent_blocking_and_queues_a_retry(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+        $user->forceFill(['stripe_checkout_session_id' => 'cs_test_open'])->save();
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('expireCheckout')
+                ->once()
+                ->with('cs_test_open')
+                ->andThrow(ApiConnectionException::factory('falha Stripe'));
+        });
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk()
+            ->assertJsonPath('data.account_status.name', 'Inactive');
+
+        $this->assertSame(
+            InactiveReason::Blocked,
+            $user->fresh()->inactive_reason
+        );
+
+        Queue::assertPushed(
+            CancelStripeSubscriptionJob::class,
+            fn (CancelStripeSubscriptionJob $job) => $job->userId === $user->id
+                && $job->checkoutSessionId === 'cs_test_open'
+        );
+    }
+
+    #[Test]
+    public function admin_can_promote_an_active_member(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$member->id}/promote")
+            ->assertOk()
+            ->assertJsonPath('data.role.name', 'Admin')
+            ->assertJsonPath('data.account_status.name', 'Active');
+
+        $this->assertSame('Admin', $member->fresh()->role->name);
+    }
+
+    #[Test]
+    public function admin_cannot_promote_themselves(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$admin->id}/promote")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Não pode alterar o seu próprio papel.');
+
+        $this->assertSame('Admin', $admin->fresh()->role->name);
+    }
+
+    #[Test]
+    public function admin_cannot_promote_a_non_active_member(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $members = [
+            User::factory()->pending()->create(),
+            User::factory()->approved()->create(),
+            User::factory()->inactive()->create(),
+        ];
+
+        Sanctum::actingAs($admin);
+
+        foreach ($members as $member) {
+            $this->patchJson("/api/admin/users/{$member->id}/promote")
+                ->assertStatus(409)
+                ->assertJsonPath(
+                    'message',
+                    'Apenas contas ativas podem ser promovidas a administrador.'
+                );
+
+            $this->assertSame('Member', $member->fresh()->role->name);
+        }
+    }
+
+    #[Test]
+    public function admin_cannot_promote_another_admin(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $anotherAdmin = User::factory()->admin()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$anotherAdmin->id}/promote")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'O utilizador já é administrador.');
+    }
+
+    #[Test]
+    public function admin_can_demote_another_admin_and_leave_one_admin(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $anotherAdmin = User::factory()->admin()->create();
+        $adminRoleId = $admin->role_id;
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$anotherAdmin->id}/demote")
+            ->assertOk()
+            ->assertJsonPath('data.role.name', 'Member')
+            ->assertJsonPath('data.account_status.name', 'Active');
+
+        $this->assertSame('Member', $anotherAdmin->fresh()->role->name);
+        $this->assertSame(1, User::where('role_id', $adminRoleId)->count());
+    }
+
+    #[Test]
+    public function admin_cannot_demote_themselves(): void
+    {
+        $admin = User::factory()->admin()->create();
+        User::factory()->admin()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$admin->id}/demote")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'Não pode alterar o seu próprio papel.');
+
+        $this->assertSame('Admin', $admin->fresh()->role->name);
+    }
+
+    #[Test]
+    public function admin_cannot_demote_a_member(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $member = User::factory()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$member->id}/demote")
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'O utilizador não é administrador.');
+
+        $this->assertSame('Member', $member->fresh()->role->name);
+    }
+
+    #[Test]
+    public function regular_member_cannot_promote_or_demote_users(): void
+    {
+        $member = User::factory()->create();
+        $target = User::factory()->create();
+
+        Sanctum::actingAs($member);
+
+        $this->patchJson("/api/admin/users/{$target->id}/promote")->assertForbidden();
+        $this->patchJson("/api/admin/users/{$target->id}/demote")->assertForbidden();
+    }
+
+    #[Test]
+    public function unknown_user_returns_404_for_promote_and_demote(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $unknownId = '00000000-0000-4000-8000-000000000000';
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$unknownId}/promote")->assertNotFound();
+        $this->patchJson("/api/admin/users/{$unknownId}/demote")->assertNotFound();
+    }
 }

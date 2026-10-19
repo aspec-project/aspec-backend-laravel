@@ -2,17 +2,15 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\Location;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Auth;
-use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
-use App\Enums\InactiveReason;
 
 class AuthControllerTest extends TestCase
 {
@@ -482,7 +480,6 @@ class AuthControllerTest extends TestCase
             ]);
     }
 
-
     #[Test]
     public function logout_handles_bearer_token_and_spa_session_together(): void
     {
@@ -513,8 +510,6 @@ class AuthControllerTest extends TestCase
 
         $this->assertGuest('web');
     }
-
-
 
     #[Test]
     public function approved_user_cannot_login_before_activation(): void
@@ -587,6 +582,45 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+            ]);
+
+        $this->assertDatabaseMissing('personal_access_tokens', [
+            'tokenable_id' => $user->id,
+        ]);
+    }
+
+    #[Test]
+    public function cancelled_user_cannot_login(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Cancelled)
+            ->create();
+
+        $this
+            ->withHeader('Origin', self::FRONTEND_ORIGIN)
+            ->postJson('/api/auth/login', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+            ]);
+
+        $this->assertGuest('web');
+    }
+
+    #[Test]
+    public function cancelled_user_cannot_create_a_bearer_token(): void
+    {
+        $user = User::factory()
+            ->inactive(InactiveReason::Cancelled)
+            ->create();
+
+        $this
+            ->postJson('/api/auth/token', $this->loginPayload($user))
+            ->assertForbidden()
+            ->assertJson([
+                'success' => false,
+                'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
             ]);
 
         $this->assertDatabaseMissing('personal_access_tokens', [

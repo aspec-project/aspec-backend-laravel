@@ -16,7 +16,7 @@ trait ApiResponse
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $data
+            'data' => $data,
         ], $code);
     }
 
