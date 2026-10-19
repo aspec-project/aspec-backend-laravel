@@ -118,4 +118,6 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         ->whereUuid('invoice')->middleware('throttle:invoice-download');
     Route::post('/events/{eventInstance}/registrations',[EventRegistrationController::class, 'store'])
         ->whereUuid('eventInstance');
+    Route::delete('/events/{eventInstance}/registrations',[EventRegistrationController::class, 'destroy'])
+        ->whereUuid('eventInstance');
 });
