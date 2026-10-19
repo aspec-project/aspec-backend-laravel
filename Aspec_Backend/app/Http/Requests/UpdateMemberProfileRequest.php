@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
+use App\Rules\InternationalPhone;
 use App\Rules\PortuguesePhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -23,8 +24,8 @@ class UpdateMemberProfileRequest extends FormRequest
     }
 
     /**
-     * Primeiro o bloqueio da password atual (trait); depois normaliza o telefone
-     * para se guardar sempre no mesmo formato (9 dígitos, sem espaços nem +351).
+     * Primeiro o bloqueio da password atual (trait); depois normaliza os telefones para se guardarem
+     * sempre no mesmo formato: o da conta com 9 dígitos (sem espaços nem +351), o comercial em E.164.
      */
     protected function prepareForValidation(): void
     {
@@ -33,13 +34,19 @@ class UpdateMemberProfileRequest extends FormRequest
         if ($this->has('phone')) {
             $this->merge(['phone' => PortuguesePhone::normalize($this->input('phone'))]);
         }
+
+        if ($this->has('commercial_phone')) {
+            $this->merge(['commercial_phone' => InternationalPhone::normalize($this->input('commercial_phone'))]);
+        }
     }
 
     /**
      * Regras da atualização parcial do perfil: campo ausente fica inalterado,
      * campos obrigatórios usam sometimes|required e mudar o email exige a password atual.
      * A morada é obrigatória por decisão da equipa (6/10), mas a coluna continua nullable:
-     * há linhas antigas sem morada e o anonymizeAndDelete() limpa-a.
+     * há linhas antigas sem morada e o anonymizeAndDelete() limpa-a. O mesmo vale para o email e o
+     * telefone comerciais (obrigatórios só quando enviados, para um perfil antigo sem eles poder
+     * mudar outros campos); podem repetir os contactos da conta e não são únicos (ex. geral@ partilhado).
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -63,7 +70,8 @@ class UpdateMemberProfileRequest extends FormRequest
             'phone' => ['sometimes', 'required', 'string', new PortuguesePhone],
             'description' => 'nullable|string|max:1000',
             'website_url' => 'nullable|url:http,https|max:255',
-            'commercial_contacts' => 'nullable|string|max:1000',
+            'commercial_email' => 'sometimes|required|string|email:rfc|max:255',
+            'commercial_phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'address' => 'sometimes|required|string|max:255',
 
             'business_hours' => 'sometimes|array|max:7',

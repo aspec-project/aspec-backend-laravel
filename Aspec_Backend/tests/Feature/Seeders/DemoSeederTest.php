@@ -8,9 +8,11 @@ use App\Models\EventInstance;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\User;
+use App\Rules\InternationalPhone;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -100,7 +102,7 @@ class DemoSeederTest extends TestCase
         }
 
         foreach ($profiles->load(['socialPlatforms', 'weekDays']) as $profile) {
-            foreach (['description', 'website_url', 'commercial_contacts', 'address', 'congregation', 'role_in_congregation'] as $field) {
+            foreach (['description', 'website_url', 'commercial_email', 'commercial_phone', 'address', 'congregation', 'role_in_congregation'] as $field) {
                 $this->assertNotEmpty($profile->{$field}, "{$profile->business_name}: {$field}");
             }
 
@@ -111,6 +113,28 @@ class DemoSeederTest extends TestCase
         $withoutHours = $profiles->filter(fn (MemberProfile $profile) => $profile->weekDays->isEmpty());
         $this->assertGreaterThanOrEqual(1, $withoutHours->count());
         $this->assertLessThanOrEqual(2, $withoutHours->count());
+    }
+
+    #[Test]
+    public function every_demo_profile_has_valid_commercial_email_and_e164_phone(): void
+    {
+        $this->runDemoSeeder();
+
+        $profiles = MemberProfile::whereHas('user', fn ($query) => $query->where('email', 'like', 'demo.%@aspec.test'))->get();
+        $this->assertNotEmpty($profiles);
+
+        foreach ($profiles as $profile) {
+            $validator = Validator::make(
+                $profile->only(['commercial_email', 'commercial_phone']),
+                [
+                    'commercial_email' => 'required|string|email:rfc|max:255',
+                    'commercial_phone' => ['required', 'string', new InternationalPhone],
+                ],
+            );
+
+            $this->assertFalse($validator->fails(), "{$profile->business_name}: ".$validator->errors()->toJson());
+            $this->assertSame(InternationalPhone::normalize($profile->commercial_phone), $profile->commercial_phone, $profile->business_name);
+        }
     }
 
     #[Test]

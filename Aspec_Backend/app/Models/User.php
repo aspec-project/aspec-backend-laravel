@@ -325,7 +325,8 @@ class User extends Authenticatable
                     'logo_path' => null,
                     'description' => null,
                     'website_url' => null,
-                    'commercial_contacts' => null,
+                    'commercial_email' => null,
+                    'commercial_phone' => null,
                     'address' => null,
                 ]);
 

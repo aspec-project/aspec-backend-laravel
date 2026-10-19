@@ -28,7 +28,7 @@ class AdminUserShowTest extends TestCase
 
     private const PROFILE_KEYS = [
         'id', 'name', 'business_name', 'congregation', 'role_in_congregation', 'description', 'website_url',
-        'commercial_contacts', 'address', 'email', 'phone', 'sector', 'location', 'logo_url', 'business_hours',
+        'commercial_email', 'commercial_phone', 'address', 'email', 'phone', 'sector', 'location', 'logo_url', 'business_hours',
         'social_links', 'portfolio',
     ];
 
@@ -58,7 +58,8 @@ class AdminUserShowTest extends TestCase
             'role_in_congregation' => 'Diaconisa',
             'description' => 'Contabilidade para pequenas empresas.',
             'website_url' => 'https://santos.pt',
-            'commercial_contacts' => 'geral@santos.pt | 213 456 789',
+            'commercial_email' => 'geral@santos.pt',
+            'commercial_phone' => '+351213456789',
             'address' => 'Av. da Liberdade 100, 1250-146 Lisboa',
             'logo_path' => "logos/{$user->id}/logo.png",
         ]);
@@ -99,7 +100,8 @@ class AdminUserShowTest extends TestCase
         $this->assertSame('Diaconisa', $memberProfile['role_in_congregation']);
         $this->assertSame('Contabilidade para pequenas empresas.', $memberProfile['description']);
         $this->assertSame('https://santos.pt', $memberProfile['website_url']);
-        $this->assertSame('geral@santos.pt | 213 456 789', $memberProfile['commercial_contacts']);
+        $this->assertSame('geral@santos.pt', $memberProfile['commercial_email']);
+        $this->assertSame('+351213456789', $memberProfile['commercial_phone']);
         $this->assertSame('Av. da Liberdade 100, 1250-146 Lisboa', $memberProfile['address']);
         $this->assertSame('maria@santos.pt', $memberProfile['email']);
         $this->assertSame('912345678', $memberProfile['phone']);

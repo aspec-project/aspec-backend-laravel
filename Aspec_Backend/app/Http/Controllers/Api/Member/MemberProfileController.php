@@ -60,7 +60,8 @@ class MemberProfileController extends Controller
                 'location_id',
                 'description',
                 'website_url',
-                'commercial_contacts',
+                'commercial_email',
+                'commercial_phone',
                 'address',
             ]));
 
