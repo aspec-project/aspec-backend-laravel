@@ -4,7 +4,6 @@ namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
 use App\Rules\InternationalPhone;
-use App\Rules\PortuguesePhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,15 +23,15 @@ class UpdateMemberProfileRequest extends FormRequest
     }
 
     /**
-     * Primeiro o bloqueio da password atual (trait); depois normaliza os telefones para se guardarem
-     * sempre no mesmo formato: o da conta com 9 dígitos (sem espaços nem +351), o comercial em E.164.
+     * Primeiro o bloqueio da password atual (trait); depois normaliza os telefones (o da conta e o
+     * comercial) para se guardarem sempre no mesmo formato: E.164, ex. +351912345678.
      */
     protected function prepareForValidation(): void
     {
         $this->limitCurrentPasswordAttempts();
 
         if ($this->has('phone')) {
-            $this->merge(['phone' => PortuguesePhone::normalize($this->input('phone'))]);
+            $this->merge(['phone' => InternationalPhone::normalize($this->input('phone'))]);
         }
 
         if ($this->has('commercial_phone')) {
@@ -67,7 +66,7 @@ class UpdateMemberProfileRequest extends FormRequest
                 Rule::unique('users')->ignore($this->user()->id),
             ],
             'current_password' => 'bail|required_with:email|string|current_password:sanctum',
-            'phone' => ['sometimes', 'required', 'string', new PortuguesePhone],
+            'phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'description' => 'nullable|string|max:1000',
             'website_url' => 'nullable|url:http,https|max:255',
             'commercial_email' => 'sometimes|required|string|email:rfc|max:255',
