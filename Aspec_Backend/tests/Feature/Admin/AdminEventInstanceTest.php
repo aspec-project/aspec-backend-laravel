@@ -130,7 +130,6 @@ class AdminEventInstanceTest extends TestCase
         ]);
     }
 
-
     #[Test]
     public function admin_can_create_an_online_event_without_physical_address(): void
     {
@@ -272,9 +271,6 @@ class AdminEventInstanceTest extends TestCase
                 'errors' => ['online_url'],
             ]);
     }
-
-
-
 
     #[Test]
     public function admin_can_delete_an_event(): void

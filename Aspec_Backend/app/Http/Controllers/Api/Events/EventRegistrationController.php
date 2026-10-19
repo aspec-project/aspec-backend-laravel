@@ -65,47 +65,46 @@ class EventRegistrationController extends Controller
         });
     }
 
-
     public function destroy(Request $request, EventInstance $eventInstance): JsonResponse
-{
-    $userId = $request->user()->getAuthIdentifier();
-    $timezone = config('app.event_timezone', 'Europe/Lisbon');
+    {
+        $userId = $request->user()->getAuthIdentifier();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
 
-    return DB::transaction(function () use ($eventInstance, $userId, $timezone): JsonResponse {
-        $event = EventInstance::query()
-            ->whereKey($eventInstance->getKey())
-            ->lockForUpdate()
-            ->firstOrFail();
+        return DB::transaction(function () use ($eventInstance, $userId, $timezone): JsonResponse {
+            $event = EventInstance::query()
+                ->whereKey($eventInstance->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $registration = $event->registrations()
-            ->where('user_id', $userId)
-            ->first();
+            $registration = $event->registrations()
+                ->where('user_id', $userId)
+                ->first();
 
-        if (! $registration) {
-            return $this->errorResponse(
-                'Não existe inscrição sua para este evento.',
-                Response::HTTP_NOT_FOUND
+            if (! $registration) {
+                return $this->errorResponse(
+                    'Não existe inscrição sua para este evento.',
+                    Response::HTTP_NOT_FOUND
+                );
+            }
+
+            $deadline = Carbon::parse(
+                $event->getRawOriginal('registration_deadline'),
+                $timezone
             );
-        }
 
-        $deadline = Carbon::parse(
-            $event->getRawOriginal('registration_deadline'),
-            $timezone
-        );
+            if (now($timezone)->greaterThan($deadline)) {
+                return $this->errorResponse(
+                    'O prazo para cancelar a inscrição terminou.',
+                    Response::HTTP_CONFLICT
+                );
+            }
 
-        if (now($timezone)->greaterThan($deadline)) {
-            return $this->errorResponse(
-                'O prazo para cancelar a inscrição terminou.',
-                Response::HTTP_CONFLICT
+            $registration->delete();
+
+            return $this->successResponse(
+                null,
+                'Inscrição cancelada com sucesso.'
             );
-        }
-
-        $registration->delete();
-
-        return $this->successResponse(
-            null,
-            'Inscrição cancelada com sucesso.'
-        );
-    });
-}
+        });
+    }
 }

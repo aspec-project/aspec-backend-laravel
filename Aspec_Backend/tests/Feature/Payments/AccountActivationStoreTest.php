@@ -4,13 +4,13 @@ namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
 use App\Http\Requests\StartActivationRequest;
-use Illuminate\Routing\Route;
-use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;

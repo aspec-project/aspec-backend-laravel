@@ -66,13 +66,13 @@ class AdminEventInstanceController extends Controller
         $validated = $request->validated();
 
         if ($validated['is_online']) {
-        $validated['address'] = null;
-        $validated['latitude'] = null;
-        $validated['longitude'] = null;
+            $validated['address'] = null;
+            $validated['latitude'] = null;
+            $validated['longitude'] = null;
         } else {
             $validated['online_url'] = null;
         }
-        
+
         $eventInstance->update($validated);
         $eventInstance->load(['category', 'location']);
 

@@ -18,7 +18,7 @@ class AdminEventCategoryController extends Controller
     /**
      * Lista todas as categorias com o número de eventos de cada uma, ordenadas por nome e sem paginação.
      *
-     * @param Request $request Pedido HTTP atual.
+     * @param  Request  $request  Pedido HTTP atual.
      * @return JsonResponse 200 com a lista de categorias.
      */
     public function index(Request $request): JsonResponse
@@ -37,7 +37,7 @@ class AdminEventCategoryController extends Controller
     /**
      * Cria uma categoria só com os campos validados (nome e cor) e devolve-a com o número de eventos (0).
      *
-     * @param EventCategoryRequest $request Pedido com o nome e a cor.
+     * @param  EventCategoryRequest  $request  Pedido com o nome e a cor.
      * @return JsonResponse 201 com a categoria criada.
      */
     public function store(EventCategoryRequest $request): JsonResponse
@@ -55,8 +55,8 @@ class AdminEventCategoryController extends Controller
     /**
      * Atualiza o nome e a cor de uma categoria e devolve-a com o número de eventos.
      *
-     * @param EventCategoryRequest $request Pedido com o nome e a cor.
-     * @param EventCategory $eventCategory Categoria obtida pelo id da rota.
+     * @param  EventCategoryRequest  $request  Pedido com o nome e a cor.
+     * @param  EventCategory  $eventCategory  Categoria obtida pelo id da rota.
      * @return JsonResponse 200 com a categoria atualizada.
      */
     public function update(EventCategoryRequest $request, EventCategory $eventCategory): JsonResponse
@@ -73,7 +73,7 @@ class AdminEventCategoryController extends Controller
     /**
      * Elimina uma categoria, desde que não tenha eventos associados.
      *
-     * @param EventCategory $eventCategory Categoria obtida pelo id da rota.
+     * @param  EventCategory  $eventCategory  Categoria obtida pelo id da rota.
      * @return JsonResponse 200 com data a null, ou 409 se a categoria tiver eventos.
      */
     public function destroy(EventCategory $eventCategory): JsonResponse

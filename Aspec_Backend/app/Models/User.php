@@ -2,33 +2,34 @@
 
 namespace App\Models;
 
-use App\Notifications\ResetPasswordNotification;
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Jobs\DeleteStripeCustomerJob;
+use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription;
 use Laravel\Sanctum\HasApiTokens;
-use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Subscription as StripeSubscription;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, SoftDeletes, HasUuids, HasApiTokens, Billable;
+    use Billable, HasApiTokens, HasFactory, HasUuids, Notifiable, SoftDeletes;
 
     /**
      * Get the attributes that should be cast.
@@ -171,10 +172,10 @@ class User extends Authenticatable
         }
 
         return [
-            'line1'       => $this->billing_address,
+            'line1' => $this->billing_address,
             'postal_code' => $this->billing_postal_code,
-            'city'        => $this->billing_city,
-            'country'     => 'PT',
+            'city' => $this->billing_city,
+            'country' => 'PT',
         ];
     }
 
@@ -212,15 +213,15 @@ class User extends Authenticatable
 
             if ($profile) {
                 $profile->update([
-                    'name'                 => 'Utilizador Anónimo',
-                    'business_name'        => 'Empresa Removida',
-                    'congregation'         => 'N/A',
+                    'name' => 'Utilizador Anónimo',
+                    'business_name' => 'Empresa Removida',
+                    'congregation' => 'N/A',
                     'role_in_congregation' => 'N/A',
-                    'logo_path'            => null,
-                    'description'          => null,
-                    'website_url'          => null,
-                    'commercial_contacts'  => null,
-                    'address'              => null,
+                    'logo_path' => null,
+                    'description' => null,
+                    'website_url' => null,
+                    'commercial_contacts' => null,
+                    'address' => null,
                 ]);
 
                 $profile->socialPlatforms()->detach();
@@ -230,27 +231,49 @@ class User extends Authenticatable
                 $profile->delete();
             }
 
+            $timezone = config('app.event_timezone', 'Europe/Lisbon');
+            $now = now($timezone);
+            $today = $now->toDateString();
+            $currentTime = $now->format('H:i:s');
+
+            $futureEventIds = DB::table('event_instances')
+                ->where(function (QueryBuilder $query) use ($today, $currentTime) {
+                    $query
+                        ->where('event_date', '>', $today)
+                        ->orWhere(function (QueryBuilder $query) use ($today, $currentTime) {
+                            $query
+                                ->where('event_date', $today)
+                                ->where('event_start_time', '>=', $currentTime);
+                        });
+                })
+                ->select('id');
+
+            DB::table('event_registrations')
+                ->where('user_id', $this->id)
+                ->whereIn('event_instance_id', $futureEventIds)
+                ->delete();
+
             // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
             $this->deletePasswordResetTokens();
 
             $this->forceFill([
-                'email'                      => 'deleted_' . Str::uuid() . '@aspec.local',
-                'phone'                      => '000000000',
-                'password'                   => Hash::make(Str::random(32)),
-                'remember_token'             => null,
-                'email_verified_at'          => null,
-                'trial_ends_at'              => null,
-                'grace_ends_at'              => null,
+                'email' => 'deleted_'.Str::uuid().'@aspec.local',
+                'phone' => '000000000',
+                'password' => Hash::make(Str::random(32)),
+                'remember_token' => null,
+                'email_verified_at' => null,
+                'trial_ends_at' => null,
+                'grace_ends_at' => null,
                 'stripe_checkout_session_id' => null,
-                'billing_name'               => null,
-                'nif'                        => null,
-                'billing_address'            => null,
-                'billing_postal_code'        => null,
-                'billing_city'               => null,
-                'pm_type'                    => null,
-                'pm_last_four'               => null,
-                'account_status_id'          => AccountStatus::where('name', 'Inactive')->value('id'),
-                'inactive_reason'            => InactiveReason::Deleted,
+                'billing_name' => null,
+                'nif' => null,
+                'billing_address' => null,
+                'billing_postal_code' => null,
+                'billing_city' => null,
+                'pm_type' => null,
+                'pm_last_four' => null,
+                'account_status_id' => AccountStatus::where('name', 'Inactive')->value('id'),
+                'inactive_reason' => InactiveReason::Deleted,
             ]);
 
             if ($stripeCustomerDeleted) {
@@ -263,7 +286,7 @@ class User extends Authenticatable
                 ->where('stripe_status', '!=', StripeSubscription::STATUS_CANCELED)
                 ->update([
                     'stripe_status' => StripeSubscription::STATUS_CANCELED,
-                    'ends_at'       => now(),
+                    'ends_at' => now(),
                 ]);
 
             $this->tokens()->delete();
@@ -311,8 +334,8 @@ class User extends Authenticatable
             return true;
         } catch (ApiErrorException $e) {
             Log::warning('Falha ao apagar o cliente Stripe; job de recurso agendado.', [
-                'user_id'           => $this->id,
-                'exception'         => $e::class,
+                'user_id' => $this->id,
+                'exception' => $e::class,
                 'stripe_request_id' => $e->getRequestId(),
             ]);
 
@@ -357,20 +380,14 @@ class User extends Authenticatable
                 ->delete();
         });
     }
-    
 
     /**
      * Envia a notificação de redefinição de password.
      *
-     * @param string $token
+     * @param  string  $token
      */
-    
     public function sendPasswordResetNotification($token): void
     {
         $this->notify(new ResetPasswordNotification($token));
     }
-
-
-
-
 }

@@ -7,6 +7,7 @@ use App\Services\Payments\StripeCustomerService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
+use Stripe\Exception\ApiErrorException;
 use Throwable;
 
 class DeleteStripeCustomerJob implements ShouldQueue
@@ -18,9 +19,7 @@ class DeleteStripeCustomerJob implements ShouldQueue
     /**
      * Guarda só o id do utilizador: o payload fica nas tabelas jobs/failed_jobs, sem dados pessoais.
      */
-    public function __construct(public string $userId)
-    {
-    }
+    public function __construct(public string $userId) {}
 
     /**
      * Esperas crescentes entre tentativas (segundos): 1 min, 5 min, 15 min, 1 h.
@@ -36,7 +35,7 @@ class DeleteStripeCustomerJob implements ShouldQueue
      * Apaga o cliente Stripe de um utilizador anonimizado e limpa o stripe_id.
      * Idempotente: sem utilizador ou sem stripe_id não faz nada.
      *
-     * @throws \Stripe\Exception\ApiErrorException Propaga para a fila voltar a tentar.
+     * @throws ApiErrorException Propaga para a fila voltar a tentar.
      */
     public function handle(StripeCustomerService $customers): void
     {
@@ -58,7 +57,7 @@ class DeleteStripeCustomerJob implements ShouldQueue
     public function failed(Throwable $e): void
     {
         Log::error('Não foi possível apagar o cliente Stripe; apagar manualmente no dashboard.', [
-            'user_id'   => $this->userId,
+            'user_id' => $this->userId,
             'exception' => $e::class,
         ]);
     }

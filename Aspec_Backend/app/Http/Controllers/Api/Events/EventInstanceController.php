@@ -11,8 +11,6 @@ use Illuminate\Http\Request;
 
 class EventInstanceController extends Controller
 {
-
-
     /**
      * Display a listing of the event instances.
      */
@@ -38,8 +36,7 @@ class EventInstanceController extends Controller
             ->when(
                 $viewerId !== null,
                 fn (Builder $query) => $query->withExists([
-                    'registrations as is_registered' => fn (Builder $registrationQuery) =>
-                        $registrationQuery->where('user_id', $viewerId),
+                    'registrations as is_registered' => fn (Builder $registrationQuery) => $registrationQuery->where('user_id', $viewerId),
                 ])
             )
             ->where(function (Builder $query) use ($today, $currentTime) {
@@ -59,32 +56,31 @@ class EventInstanceController extends Controller
                 isset($filters['location_id']),
                 fn (Builder $query) => $query->where('location_id', $filters['location_id'])
             )
+            ->when($search !== '', function (Builder $query) use ($search) {
+                $term = '%'.$search.'%';
 
-                    ->when($search !== '', function (Builder $query) use ($search) {
-            $term = '%'.$search.'%';
-
-            $query->where(function (Builder $query) use ($term) {
-                $query
-                    ->where('name', 'like', $term)
-                    ->orWhere('description', 'like', $term)
-                    ->orWhereHas(
-                        'category',
-                        fn (Builder $categoryQuery) => $categoryQuery->where('name', 'like', $term)
-                    )
-                    ->orWhereHas(
-                        'location',
-                        fn (Builder $locationQuery) => $locationQuery->where('name', 'like', $term)
-                    );
+                $query->where(function (Builder $query) use ($term) {
+                    $query
+                        ->where('name', 'like', $term)
+                        ->orWhere('description', 'like', $term)
+                        ->orWhereHas(
+                            'category',
+                            fn (Builder $categoryQuery) => $categoryQuery->where('name', 'like', $term)
+                        )
+                        ->orWhereHas(
+                            'location',
+                            fn (Builder $locationQuery) => $locationQuery->where('name', 'like', $term)
+                        );
                 });
             })
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->paginate((int) ($filters['per_page'] ?? 9));
-            if ($viewerId === null) {
-                $events->getCollection()->each(
-                    fn (EventInstance $event) => $event->setAttribute('is_registered', false)
-                );
-            }
+        if ($viewerId === null) {
+            $events->getCollection()->each(
+                fn (EventInstance $event) => $event->setAttribute('is_registered', false)
+            );
+        }
 
         return $this->successResponse([
             'items' => EventInstanceResource::collection(
@@ -98,7 +94,6 @@ class EventInstanceController extends Controller
             ],
         ], 'Agenda de eventos obtida com sucesso.');
     }
-
 
     /**
      * Display the specified event instance.

@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\Lists;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Sector;
+use Illuminate\Http\Request;
 
 class SectorController extends Controller
 {

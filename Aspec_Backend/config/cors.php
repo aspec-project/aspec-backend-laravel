@@ -16,22 +16,22 @@ return [
     */
 
     'paths' => [
-    'api/*',
-    'sanctum/csrf-cookie',
-],
+        'api/*',
+        'sanctum/csrf-cookie',
+    ],
 
-'allowed_origins' => [
-    env('FRONTEND_URL', 'http://localhost:5173'),
-],
+    'allowed_origins' => [
+        env('FRONTEND_URL', 'http://localhost:5173'),
+    ],
 
-'allowed_methods' => ['*'],
+    'allowed_methods' => ['*'],
 
-'allowed_headers' => ['*'],
+    'allowed_headers' => ['*'],
 
-'exposed_headers' => [],
+    'exposed_headers' => [],
 
-'max_age' => 7200,
+    'max_age' => 7200,
 
-'supports_credentials' => true,
+    'supports_credentials' => true,
 
 ];

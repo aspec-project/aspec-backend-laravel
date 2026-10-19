@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
+use App\Http\Controllers\Api\Events\EventRegistrationController;
 use App\Http\Controllers\Api\Lists\EventCategoryController;
 use App\Http\Controllers\Api\Lists\LocationController;
 use App\Http\Controllers\Api\Lists\SectorController;
@@ -23,7 +24,6 @@ use App\Http\Controllers\Api\Payments\StripeWebhookController;
 use App\Http\Controllers\Api\Payments\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
-use App\Http\Controllers\Api\Events\EventRegistrationController;
 
 Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
 
@@ -116,8 +116,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/invoices', [InvoiceController::class, 'index']);
     Route::get('/invoices/{invoice}/pdf', [InvoicePdfController::class, 'show'])
         ->whereUuid('invoice')->middleware('throttle:invoice-download');
-    Route::post('/events/{eventInstance}/registrations',[EventRegistrationController::class, 'store'])
+    Route::post('/events/{eventInstance}/registrations', [EventRegistrationController::class, 'store'])
         ->whereUuid('eventInstance');
-    Route::delete('/events/{eventInstance}/registrations',[EventRegistrationController::class, 'destroy'])
+    Route::delete('/events/{eventInstance}/registrations', [EventRegistrationController::class, 'destroy'])
         ->whereUuid('eventInstance');
 });
