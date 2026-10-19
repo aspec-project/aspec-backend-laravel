@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EventInstance extends Model
 {
@@ -49,5 +50,10 @@ class EventInstance extends Model
     public function location(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'location_id');
+    }
+
+    public function registrations(): HasMany
+    {
+        return $this->hasMany(EventRegistration::class);
     }
 }

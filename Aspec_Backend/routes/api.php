@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Payments\StripeWebhookController;
 use App\Http\Controllers\Api\Payments\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
+use App\Http\Controllers\Api\Events\EventRegistrationController;
 
 Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
 
@@ -115,4 +116,6 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/invoices', [InvoiceController::class, 'index']);
     Route::get('/invoices/{invoice}/pdf', [InvoicePdfController::class, 'show'])
         ->whereUuid('invoice')->middleware('throttle:invoice-download');
+    Route::post('/events/{eventInstance}/registrations',[EventRegistrationController::class, 'store'])
+        ->whereUuid('eventInstance');
 });
