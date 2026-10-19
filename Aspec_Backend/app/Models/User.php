@@ -4,10 +4,12 @@ namespace App\Models;
 
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
+use App\Enums\SubscriptionState;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -123,6 +125,109 @@ class User extends Authenticatable
             $status === 'Inactive' && $reactivatable => ActivationType::Reactivation,
             default => null,
         };
+    }
+
+    /**
+     * Estado da subscrição derivado das colunas da conta (para o backoffice). O estado da conta
+     * decide primeiro; numa conta Active, isento > carência > trial > ativo. Espelha o scope
+     * inSubscriptionState(): qualquer mudança aqui tem de ser feita lá também.
+     * Espera role, accountStatus e memberProfile carregados (senão faz 3 queries por utilizador),
+     * com memberProfile sem withTrashed(), como no scope.
+     *
+     * @throws \UnhandledMatchError Estado de conta ou motivo de inatividade desconhecido.
+     */
+    public function subscriptionState(): SubscriptionState
+    {
+        return match ($this->accountStatus->name) {
+            'Pending' => SubscriptionState::Pending,
+            'Approved' => SubscriptionState::AwaitingActivation,
+            'Inactive' => match ($this->inactive_reason) {
+                InactiveReason::Blocked => SubscriptionState::Blocked,
+                InactiveReason::Unpaid, InactiveReason::Cancelled => SubscriptionState::Lapsed,
+                InactiveReason::Rejected, InactiveReason::Deleted, null => SubscriptionState::Inactive,
+            },
+            'Active' => match (true) {
+                $this->isSubscriptionExempt() => SubscriptionState::Exempt,
+                $this->grace_ends_at !== null => SubscriptionState::Grace,
+                $this->trial_ends_at?->isFuture() === true => SubscriptionState::Trial,
+                default => SubscriptionState::Active,
+            },
+        };
+    }
+
+    /**
+     * Indica se o utilizador não paga subscrição: administrador técnico, ou seja, papel Admin sem
+     * perfil de membro. Mesma regra que o scope subscriptionExempt().
+     */
+    public function isSubscriptionExempt(): bool
+    {
+        return $this->role?->name === 'Admin' && $this->memberProfile === null;
+    }
+
+    /**
+     * Filtra os utilizadores isentos de subscrição (papel Admin sem perfil de membro não apagado).
+     * Mesma regra que isSubscriptionExempt().
+     */
+    public function scopeSubscriptionExempt(Builder $query): void
+    {
+        $query->whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))
+            ->whereDoesntHave('memberProfile');
+    }
+
+    /**
+     * Filtra os utilizadores num estado da subscrição (versão SQL de subscriptionState()).
+     * Cada estado repete as negações dos que lhe ganham, para que cada utilizador caia em exatamente um.
+     */
+    public function scopeInSubscriptionState(Builder $query, SubscriptionState $state): void
+    {
+        $exempt = fn (Builder $user) => $user->subscriptionExempt();
+
+        match ($state) {
+            SubscriptionState::Pending => $this->whereAccountStatus($query, 'Pending'),
+            SubscriptionState::AwaitingActivation => $this->whereAccountStatus($query, 'Approved'),
+            SubscriptionState::Blocked => $this->whereAccountStatus($query, 'Inactive')
+                ->where('inactive_reason', InactiveReason::Blocked->value),
+            SubscriptionState::Lapsed => $this->whereAccountStatus($query, 'Inactive')
+                ->whereIn('inactive_reason', [InactiveReason::Unpaid->value, InactiveReason::Cancelled->value]),
+            SubscriptionState::Inactive => $this->whereAccountStatus($query, 'Inactive')
+                ->where(fn (Builder $user) => $user->whereNull('inactive_reason')
+                    ->orWhereIn('inactive_reason', [InactiveReason::Rejected->value, InactiveReason::Deleted->value])),
+            SubscriptionState::Exempt => $this->whereAccountStatus($query, 'Active')->subscriptionExempt(),
+            SubscriptionState::Grace => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNotNull('grace_ends_at'),
+            SubscriptionState::Trial => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNull('grace_ends_at')
+                ->where('trial_ends_at', '>', now()),
+            SubscriptionState::Active => $this->whereAccountStatus($query, 'Active')
+                ->whereNot($exempt)
+                ->whereNull('grace_ends_at')
+                ->where(fn (Builder $user) => $user->whereNull('trial_ends_at')
+                    ->orWhere('trial_ends_at', '<=', now())),
+        };
+    }
+
+    /**
+     * Número de utilizadores em cada estado da subscrição, dentro da consulta base (ex.: a pesquisa
+     * da lista do admin). Usa o mesmo scope do filtro, por isso as contagens nunca divergem dele.
+     *
+     * @return array<string, int> Valor do estado => contagem, para todos os estados (zeros incluídos).
+     */
+    public static function subscriptionStateCounts(Builder $query): array
+    {
+        $counts = [];
+
+        foreach (SubscriptionState::cases() as $state) {
+            $counts[$state->value] = (clone $query)->inSubscriptionState($state)->count();
+        }
+
+        return $counts;
+    }
+
+    private function whereAccountStatus(Builder $query, string $status): Builder
+    {
+        return $query->whereHas('accountStatus', fn (Builder $accountStatus) => $accountStatus->where('name', $status));
     }
 
     /**

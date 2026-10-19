@@ -151,6 +151,24 @@ Com `php artisan serve`, `php artisan queue:work`, o `stripe listen` acima e `MA
 6. `POST /api/subscription/cancel` → `cancel_at_period_end: true` + email; `POST /api/subscription/resume` → `false` + email; cancelar outra vez e terminar já (`stripe subscriptions cancel sub_…` ou "cancelar já" no dashboard) → `customer.subscription.deleted` → conta Inactive (`cancelled`), email "A sua subscrição ASPEC terminou"; reativar pelo link → Active.
 7. Bloquear um membro em carência → continua `blocked`, sem email de reativação (o `customer.subscription.deleted` do cancelamento é ignorado).
 
+### Estado da subscrição (backoffice)
+
+Calculado a partir das colunas da conta, sem coluna própria: `$user->subscriptionState()` (enum `App\Enums\SubscriptionState`, com `label()` em pt-PT), o filtro `User::query()->inSubscriptionState($estado)` e as contagens `User::subscriptionStateCounts($consulta)`. Usado na lista de utilizadores do admin. Ganha o primeiro que se verifica:
+
+| Valor | Label | Condição |
+|---|---|---|
+| `pending` | Pendente | conta Pending |
+| `awaiting_activation` | Por ativar | conta Approved |
+| `blocked` | Bloqueado | Inactive, motivo `blocked` |
+| `lapsed` | Subscrição caída | Inactive, motivo `unpaid` ou `cancelled` |
+| `inactive` | Inativo | Inactive, motivo `rejected`, `deleted` ou vazio |
+| `exempt` | Isento | Active, Admin sem perfil de membro (admin técnico) |
+| `grace` | Em carência | Active, `grace_ends_at` preenchido |
+| `trial` | Em trial | Active, `trial_ends_at` no futuro |
+| `active` | Ativo | restantes contas Active |
+
+Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
+
 ### Faturas do membro
 
 - **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.

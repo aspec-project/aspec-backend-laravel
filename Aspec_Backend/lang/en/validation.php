@@ -79,6 +79,7 @@ return [
     'in_array' => 'The :attribute field must exist in :other.',
     'in_array_keys' => 'The :attribute field must contain at least one of the following keys: :values.',
     'integer' => 'The :attribute field must be an integer.',
+    'international_phone' => 'The :attribute field must be a valid phone number. Foreign numbers must include the country code (e.g. +44).',
     'ip' => 'The :attribute field must be a valid IP address.',
     'ipv4' => 'The :attribute field must be a valid IPv4 address.',
     'ipv6' => 'The :attribute field must be a valid IPv6 address.',
