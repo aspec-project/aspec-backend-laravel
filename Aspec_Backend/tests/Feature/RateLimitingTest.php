@@ -183,6 +183,9 @@ class RateLimitingTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
         ];
 
         for ($attempt = 1; $attempt <= 5; $attempt++) {
