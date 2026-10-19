@@ -34,8 +34,8 @@ class EventCategoryModelTest extends TestCase
         $this->assertNotEmpty($category->name);
         $this->assertLessThanOrEqual(30, mb_strlen($category->name));
         $this->assertMatchesRegularExpression('/^#[0-9A-F]{6}$/', $category->color);
-        // 4 categorias do seeder + 1 criada pela factory.
-        $this->assertSame(5, EventCategory::count());
+        // 5 categorias do seeder + 1 criada pela factory.
+        $this->assertSame(6, EventCategory::count());
     }
 
     #[Test]

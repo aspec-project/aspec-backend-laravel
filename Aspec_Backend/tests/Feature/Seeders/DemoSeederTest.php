@@ -137,6 +137,22 @@ class DemoSeederTest extends TestCase
     }
 
     #[Test]
+    public function demo_events_use_the_five_real_categories(): void
+    {
+        $this->runDemoSeeder();
+
+        foreach (['Pequeno-almoço', 'Almoço', 'Jantar', 'Workshop', 'Formação'] as $name) {
+            $this->assertTrue(
+                EventInstance::whereHas('category', fn ($query) => $query->where('name', $name))->exists(),
+                $name
+            );
+        }
+
+        $this->assertSame(5, EventCategory::count());
+        $this->assertFalse(EventInstance::where('name', 'Reunião Regional de Membros')->exists());
+    }
+
+    #[Test]
     #[RequiresPhpExtension('gd')]
     public function stores_logos_and_portfolio_images_on_the_public_disk(): void
     {

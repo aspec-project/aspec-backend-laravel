@@ -18,10 +18,11 @@ class AdminEventCategoryTest extends TestCase
     private const URL = '/api/admin/event-categories';
 
     private const SEEDED_NAMES = [
-        'Formações',
-        'Jantares de Networking',
-        'Pequenos-almoços de Negócios',
-        'Reuniões',
+        'Almoço',
+        'Formação',
+        'Jantar',
+        'Pequeno-almoço',
+        'Workshop',
     ];
 
     private function category(string $name): EventCategory
@@ -39,21 +40,21 @@ class AdminEventCategoryTest extends TestCase
 
     private function assertSeededCategoriesUnchanged(): void
     {
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
         $this->assertEqualsCanonicalizing(self::SEEDED_NAMES, EventCategory::pluck('name')->all());
     }
 
     #[Test]
     public function guest_cannot_use_admin_category_endpoints(): void
     {
-        $formacoes = $this->category('Formações');
-        $reunioes = $this->category('Reuniões');
+        $formacao = $this->category('Formação');
+        $workshop = $this->category('Workshop');
 
         $responses = [
             $this->getJson(self::URL),
             $this->postJson(self::URL, ['name' => 'Workshops']),
-            $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Outro nome']),
-            $this->deleteJson(self::URL."/{$reunioes->id}"),
+            $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Outro nome']),
+            $this->deleteJson(self::URL."/{$workshop->id}"),
         ];
 
         foreach ($responses as $response) {
@@ -79,7 +80,7 @@ class AdminEventCategoryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Lista de categorias obtida com sucesso.')
-            ->assertJsonCount(4, 'data')
+            ->assertJsonCount(5, 'data')
             ->assertJsonStructure([
                 'data' => [
                     '*' => ['id', 'name', 'color'],
@@ -96,7 +97,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
-            'color' => '#2E7D32',
+            'color' => '#00796B',
         ]);
 
         $response
@@ -104,14 +105,14 @@ class AdminEventCategoryTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria criada com sucesso.')
             ->assertJsonPath('data.name', 'Workshops')
-            ->assertJsonPath('data.color', '#2E7D32');
+            ->assertJsonPath('data.color', '#00796B');
 
         $this->assertTrue(Str::isUuid($response->json('data.id')));
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $response->json('data.id'),
             'name' => 'Workshops',
-            'color' => '#2E7D32',
+            'color' => '#00796B',
         ]);
     }
 
@@ -120,13 +121,13 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => '  Workshops  ', 'color' => '#2E7D32'])
+        $this->postJson(self::URL, ['name' => '  Workshops  ', 'color' => '#00796B'])
             ->assertStatus(201)
             ->assertJsonPath('data.name', 'Workshops');
 
         $this->assertDatabaseHas('event_categories', ['name' => 'Workshops']);
 
-        $this->postJson(self::URL, ['name' => '   ', 'color' => '#2E7D32'])
+        $this->postJson(self::URL, ['name' => '   ', 'color' => '#00796B'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome é obrigatório.');
     }
@@ -142,7 +143,7 @@ class AdminEventCategoryTest extends TestCase
             ->assertJsonPath('message', 'Os dados enviados são inválidos.')
             ->assertJsonPath('errors.name.0', 'O campo nome é obrigatório.');
 
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
     }
 
     #[Test]
@@ -150,14 +151,14 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 31), 'color' => '#2E7D32'])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 31), 'color' => '#00796B'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome não pode ter mais de 30 caracteres.');
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 30), 'color' => '#2E7D32'])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 30), 'color' => '#00796B'])
             ->assertStatus(201);
 
-        $this->postJson(self::URL, ['name' => str_repeat('ç', 30), 'color' => '#1565C0'])
+        $this->postJson(self::URL, ['name' => str_repeat('ç', 30), 'color' => '#5D4037'])
             ->assertStatus(201);
     }
 
@@ -174,7 +175,7 @@ class AdminEventCategoryTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('name');
 
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
     }
 
     #[Test]
@@ -182,15 +183,15 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Formações'])
+        $this->postJson(self::URL, ['name' => 'Formação'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'Já existe uma categoria com este nome.');
 
-        $this->postJson(self::URL, ['name' => 'JANTARES DE NETWORKING'])
+        $this->postJson(self::URL, ['name' => 'JANTAR'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'Já existe uma categoria com este nome.');
 
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
     }
 
     #[Test]
@@ -236,7 +237,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
-            'color' => '#2E7D32',
+            'color' => '#00796B',
             'id' => $forgedId,
             'created_at' => '2000-01-01',
         ]);
@@ -254,39 +255,39 @@ class AdminEventCategoryTest extends TestCase
     public function admin_can_rename_a_category(): void
     {
         $this->actingAsAdmin();
-        $reunioes = $this->category('Reuniões');
+        $workshop = $this->category('Workshop');
 
-        $this->putJson(self::URL."/{$reunioes->id}", ['name' => 'Reuniões de Núcleo', 'color' => '#0D1F35'])
+        $this->putJson(self::URL."/{$workshop->id}", ['name' => 'Workshop Prático', 'color' => '#C62828'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria atualizada com sucesso.')
-            ->assertJsonPath('data.id', $reunioes->id)
-            ->assertJsonPath('data.name', 'Reuniões de Núcleo');
+            ->assertJsonPath('data.id', $workshop->id)
+            ->assertJsonPath('data.name', 'Workshop Prático');
 
         $this->assertDatabaseHas('event_categories', [
-            'id' => $reunioes->id,
-            'name' => 'Reuniões de Núcleo',
+            'id' => $workshop->id,
+            'name' => 'Workshop Prático',
         ]);
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
     }
 
     #[Test]
     public function updating_with_the_same_name_is_allowed(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
+        $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315A79'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565C0'])
             ->assertOk()
-            ->assertJsonPath('data.name', 'Formações');
+            ->assertJsonPath('data.name', 'Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'FORMAÇÕES', 'color' => '#315A79'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'FORMAÇÃO', 'color' => '#1565C0'])
             ->assertOk()
-            ->assertJsonPath('data.name', 'FORMAÇÕES');
+            ->assertJsonPath('data.name', 'FORMAÇÃO');
 
         $this->assertDatabaseHas('event_categories', [
-            'id' => $formacoes->id,
-            'name' => 'FORMAÇÕES',
+            'id' => $formacao->id,
+            'name' => 'FORMAÇÃO',
         ]);
     }
 
@@ -294,9 +295,9 @@ class AdminEventCategoryTest extends TestCase
     public function cannot_rename_to_an_existing_name(): void
     {
         $this->actingAsAdmin();
-        $reunioes = $this->category('Reuniões');
+        $workshop = $this->category('Workshop');
 
-        $this->putJson(self::URL."/{$reunioes->id}", ['name' => 'formações'])
+        $this->putJson(self::URL."/{$workshop->id}", ['name' => 'formação'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'Já existe uma categoria com este nome.');
 
@@ -307,15 +308,15 @@ class AdminEventCategoryTest extends TestCase
     public function update_requires_a_name(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
+        $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['color' => '#000000'])
+        $this->putJson(self::URL."/{$formacao->id}", ['color' => '#000000'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome é obrigatório.');
 
         $this->assertDatabaseHas('event_categories', [
-            'id' => $formacoes->id,
-            'color' => '#315A79',
+            'id' => $formacao->id,
+            'color' => '#1565C0',
         ]);
     }
 
@@ -323,19 +324,19 @@ class AdminEventCategoryTest extends TestCase
     public function update_requires_a_color(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
+        $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação'])
             ->assertStatus(422)
             ->assertJsonPath('errors.color.0', 'O campo cor é obrigatório.');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => null])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => null])
             ->assertStatus(422)
             ->assertJsonPath('errors.color.0', 'O campo cor é obrigatório.');
 
         $this->assertDatabaseHas('event_categories', [
-            'id' => $formacoes->id,
-            'color' => '#315A79',
+            'id' => $formacao->id,
+            'color' => '#1565C0',
         ]);
     }
 
@@ -360,33 +361,33 @@ class AdminEventCategoryTest extends TestCase
     public function admin_can_delete_a_category_without_events(): void
     {
         $this->actingAsAdmin();
-        $reunioes = $this->category('Reuniões');
+        $workshop = $this->category('Workshop');
 
-        $this->deleteJson(self::URL."/{$reunioes->id}")
+        $this->deleteJson(self::URL."/{$workshop->id}")
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria eliminada com sucesso.')
             ->assertJsonPath('data', null);
 
-        $this->assertDatabaseMissing('event_categories', ['id' => $reunioes->id]);
-        $this->assertSame(3, EventCategory::count());
+        $this->assertDatabaseMissing('event_categories', ['id' => $workshop->id]);
+        $this->assertSame(4, EventCategory::count());
     }
 
     #[Test]
     public function cannot_delete_a_category_with_events(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
-        $event = EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        $formacao = $this->category('Formação');
+        $event = EventInstance::factory()->create(['category_id' => $formacao->id]);
 
-        $this->deleteJson(self::URL."/{$formacoes->id}")
+        $this->deleteJson(self::URL."/{$formacao->id}")
             ->assertStatus(409)
             ->assertJson([
                 'success' => false,
                 'message' => 'Não é possível eliminar uma categoria com eventos associados.',
             ]);
 
-        $this->assertDatabaseHas('event_categories', ['id' => $formacoes->id]);
+        $this->assertDatabaseHas('event_categories', ['id' => $formacao->id]);
         $this->assertDatabaseHas('event_instances', ['id' => $event->id]);
     }
 
@@ -411,14 +412,14 @@ class AdminEventCategoryTest extends TestCase
     public function member_cannot_use_admin_category_endpoints(): void
     {
         Sanctum::actingAs(User::factory()->create());
-        $formacoes = $this->category('Formações');
-        $reunioes = $this->category('Reuniões');
+        $formacao = $this->category('Formação');
+        $workshop = $this->category('Workshop');
 
         $responses = [
             $this->getJson(self::URL),
             $this->postJson(self::URL, ['name' => 'X']),
-            $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'X']),
-            $this->deleteJson(self::URL."/{$reunioes->id}"),
+            $this->putJson(self::URL."/{$formacao->id}", ['name' => 'X']),
+            $this->deleteJson(self::URL."/{$workshop->id}"),
         ];
 
         foreach ($responses as $response) {
@@ -437,11 +438,11 @@ class AdminEventCategoryTest extends TestCase
     public function inactive_admin_cannot_use_admin_category_endpoints(): void
     {
         Sanctum::actingAs(User::factory()->admin()->inactive()->create());
-        $reunioes = $this->category('Reuniões');
+        $workshop = $this->category('Workshop');
 
         $responses = [
             $this->postJson(self::URL, ['name' => 'X']),
-            $this->deleteJson(self::URL."/{$reunioes->id}"),
+            $this->deleteJson(self::URL."/{$workshop->id}"),
         ];
 
         foreach ($responses as $response) {
@@ -461,14 +462,14 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        foreach (['#315a79', '#315A79'] as $color) {
+        foreach (['#1565c0', '#1565C0'] as $color) {
             $this->postJson(self::URL, ['name' => 'Workshops', 'color' => $color])
                 ->assertStatus(422)
                 ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
         }
 
         $this->assertDatabaseMissing('event_categories', ['name' => 'Workshops']);
-        $this->assertSame(4, EventCategory::count());
+        $this->assertSame(5, EventCategory::count());
     }
 
     #[Test]
@@ -476,13 +477,13 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2e7d32'])
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#00796b'])
             ->assertStatus(201)
-            ->assertJsonPath('data.color', '#2E7D32');
+            ->assertJsonPath('data.color', '#00796B');
 
         $this->assertDatabaseHas('event_categories', [
             'name' => 'Workshops',
-            'color' => '#2E7D32',
+            'color' => '#00796B',
         ]);
     }
 
@@ -490,26 +491,26 @@ class AdminEventCategoryTest extends TestCase
     public function updating_keeps_its_own_color_in_any_case(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
+        $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315a79'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565c0'])
             ->assertOk()
-            ->assertJsonPath('data.color', '#315A79');
+            ->assertJsonPath('data.color', '#1565C0');
     }
 
     #[Test]
     public function cannot_update_to_another_categorys_color(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
+        $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#8a7043'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#2e7d32'])
             ->assertStatus(422)
             ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
 
         $this->assertDatabaseHas('event_categories', [
-            'id' => $formacoes->id,
-            'color' => '#315A79',
+            'id' => $formacao->id,
+            'color' => '#1565C0',
         ]);
     }
 
@@ -517,16 +518,16 @@ class AdminEventCategoryTest extends TestCase
     public function admin_list_includes_the_number_of_events_per_category(): void
     {
         $this->actingAsAdmin();
-        $formacoes = $this->category('Formações');
-        $reunioes = $this->category('Reuniões');
+        $formacao = $this->category('Formação');
+        $workshop = $this->category('Workshop');
 
-        EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        EventInstance::factory()->create(['category_id' => $formacao->id]);
         EventInstance::factory()->create([
-            'category_id' => $formacoes->id,
+            'category_id' => $formacao->id,
             'event_date' => today()->subDays(10),
             'registration_deadline' => today()->subDays(11),
         ]);
-        EventInstance::factory()->create(['category_id' => $reunioes->id]);
+        EventInstance::factory()->create(['category_id' => $workshop->id]);
 
         $response = $this->getJson(self::URL);
 
@@ -540,10 +541,11 @@ class AdminEventCategoryTest extends TestCase
 
         $counts = array_column($response->json('data'), 'events_count', 'name');
 
-        $this->assertSame(2, $counts['Formações']);
-        $this->assertSame(1, $counts['Reuniões']);
-        $this->assertSame(0, $counts['Jantares de Networking']);
-        $this->assertSame(0, $counts['Pequenos-almoços de Negócios']);
+        $this->assertSame(2, $counts['Formação']);
+        $this->assertSame(1, $counts['Workshop']);
+        $this->assertSame(0, $counts['Jantar']);
+        $this->assertSame(0, $counts['Pequeno-almoço']);
+        $this->assertSame(0, $counts['Almoço']);
     }
 
     #[Test]
@@ -551,14 +553,14 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2E7D32'])
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#00796B'])
             ->assertStatus(201)
             ->assertJsonPath('data.events_count', 0);
 
-        $formacoes = $this->category('Formações');
-        EventInstance::factory()->create(['category_id' => $formacoes->id]);
+        $formacao = $this->category('Formação');
+        EventInstance::factory()->create(['category_id' => $formacao->id]);
 
-        $this->putJson(self::URL."/{$formacoes->id}", ['name' => 'Formações', 'color' => '#315A79'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565C0'])
             ->assertOk()
             ->assertJsonPath('data.events_count', 1);
     }
