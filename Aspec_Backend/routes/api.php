@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Account\AccountPasswordController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
+use App\Http\Controllers\Api\Admin\AdminGeocodeController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
@@ -95,6 +96,7 @@ Route::prefix('admin')
             ->whereUuid('eventInstance');
         Route::delete('/events/{eventInstance}', [AdminEventInstanceController::class, 'destroy'])
             ->whereUuid('eventInstance');
+        Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
