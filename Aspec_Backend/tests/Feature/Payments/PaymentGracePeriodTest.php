@@ -451,6 +451,26 @@ class PaymentGracePeriodTest extends TestCase
         $this->assertSame(self::FRONTEND_URL.'/conta/subscricao', $mail->actionUrl);
     }
 
+    /**
+     * Mudar o cartão não paga a quota em atraso: sem esta linha o membro julga que resolveu e só
+     * paga na tentativa seguinte do Stripe.
+     */
+    #[Test]
+    public function payment_failed_email_explains_how_to_pay_the_overdue_amount_right_after_the_deadline(): void
+    {
+        $user = User::factory()->create();
+        $graceEndsAt = now()->addDays(7);
+
+        $mail = (new PaymentFailedNotification($graceEndsAt))->toMail($user);
+
+        $line = "Depois de atualizar o cartão, carregue em 'Pagar valor em falta' para regularizar já.";
+        $position = array_search($line, $mail->introLines, true);
+        $this->assertIsInt($position, 'A linha tem de vir antes do botão, com o texto exato.');
+        $this->assertStringStartsWith('A sua conta continua ativa até '.$graceEndsAt->format('d/m/Y'), $mail->introLines[$position - 1] ?? '');
+        $this->assertSame($line, end($mail->introLines));
+        $this->assertNotContains($line, $mail->outroLines);
+    }
+
     public static function updatesWithoutPayment(): array
     {
         return [

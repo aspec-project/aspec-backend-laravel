@@ -36,7 +36,8 @@ class PaymentFailedNotification extends Notification implements ShouldQueue
     }
 
     /**
-     * Prazo da carência e botão para a página da subscrição (o URL é gerado no envio).
+     * Prazo da carência, como pagar já o valor em falta depois de mudar o cartão e botão para a
+     * página da subscrição (o URL é gerado no envio).
      */
     public function toMail(object $notifiable): MailMessage
     {
@@ -46,6 +47,7 @@ class PaymentFailedNotification extends Notification implements ShouldQueue
             ->subject('Não foi possível cobrar a quota ASPEC')
             ->line("Não conseguimos cobrar a quota mensal de {$this->formattedPrice()} €.")
             ->line("A sua conta continua ativa até {$date}. Atualize o cartão até essa data para não perder o acesso; voltaremos a tentar a cobrança.")
+            ->line("Depois de atualizar o cartão, carregue em 'Pagar valor em falta' para regularizar já.")
             ->action('Atualizar cartão', rtrim(config('app.frontend_url'), '/').'/conta/subscricao')
             ->line("Se a quota não for paga até {$date}, a conta fica inativa e deixa de aparecer no diretório.");
     }

@@ -39,7 +39,7 @@ class MemberController extends Controller
             ->orderBy('business_name')
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate($request->integer('per_page', 12));
+            ->paginate($request->validated('per_page') ?? 12);
 
         return $this->successResponse([
             'items' => MemberSummaryResource::collection($members->getCollection())->resolve($request),
