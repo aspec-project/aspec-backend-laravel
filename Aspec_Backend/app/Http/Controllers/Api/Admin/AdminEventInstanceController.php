@@ -43,7 +43,7 @@ class AdminEventInstanceController extends Controller
 
     public function store(EventInstanceRequest $request): JsonResponse
     {
-        $event = EventInstance::create($request->validated());
+        $event = EventInstance::create($request->validatedEventData());
         $event->load(['category', 'location']);
 
         return $this->successResponse(
@@ -67,7 +67,7 @@ class AdminEventInstanceController extends Controller
         EventInstanceRequest $request,
         EventInstance $eventInstance
     ): JsonResponse {
-        $validated = $request->validated();
+        $validated = $request->validatedEventData();
 
         return DB::transaction(function () use ($validated, $eventInstance): JsonResponse {
             $event = EventInstance::query()

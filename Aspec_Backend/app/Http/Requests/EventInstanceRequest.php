@@ -42,7 +42,7 @@ class EventInstanceRequest extends FormRequest
                 ? ['prohibited']
                 : ['required', 'numeric', 'between:-180,180'],
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
-            'registration_deadline' => ['required', 'date_format:Y-m-d H:i'],
+            'registration_deadline' => ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];
 
@@ -50,7 +50,6 @@ class EventInstanceRequest extends FormRequest
             $now = now(config('app.event_timezone', 'Europe/Lisbon'));
 
             $rules['event_date'][] = 'after_or_equal:'.$now->toDateString();
-            $rules['registration_deadline'][] = 'after:'.$now->format('Y-m-d H:i');
         }
 
         return $rules;
@@ -59,19 +58,36 @@ class EventInstanceRequest extends FormRequest
     public function withValidator(ValidatorContract $validator): void
     {
         $validator->after(function (ValidatorContract $validator): void {
-            foreach (['event_date', 'event_start_time', 'registration_deadline'] as $field) {
-                if ($validator->errors()->has($field)) {
-                    return;
-                }
+            if ($validator->errors()->has('registration_deadline')) {
+                return;
             }
 
             $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+            $deadline = Carbon::createFromFormat(
+                '!Y-m-d',
+                $this->input('registration_deadline'),
+                $timezone
+            )->setTime(23, 59);
+
+            if ($this->isMethod('post') && $deadline->lessThanOrEqualTo(now($timezone))) {
+                $validator->errors()->add(
+                    'registration_deadline',
+                    'O prazo de inscrição tem de ser posterior à data e hora atuais.'
+                );
+            }
+
+            if (
+                $validator->errors()->has('event_date')
+                || $validator->errors()->has('event_start_time')
+            ) {
+                return;
+            }
 
             $eventStartsAt = Carbon::parse(
                 $this->input('event_date').' '.$this->input('event_start_time'),
                 $timezone
             );
-            $deadline = Carbon::parse($this->input('registration_deadline'), $timezone);
 
             if ($deadline->greaterThan($eventStartsAt)) {
                 $validator->errors()->add(
@@ -120,5 +136,24 @@ class EventInstanceRequest extends FormRequest
             'longitude.prohibited' => 'Eventos online não devem ter coordenadas.',
             'venue_name' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function validatedEventData(): array
+    {
+        $data = $this->validated();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $data['registration_deadline'] = Carbon::createFromFormat(
+            '!Y-m-d',
+            $data['registration_deadline'],
+            $timezone
+        )
+            ->setTime(23, 59)
+            ->format('Y-m-d H:i:s');
+
+        return $data;
     }
 }

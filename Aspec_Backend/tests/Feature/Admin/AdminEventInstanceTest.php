@@ -51,8 +51,7 @@ class AdminEventInstanceTest extends TestCase
             'registration_deadline' => $eventStartsAt
                 ->copy()
                 ->subDay()
-                ->setTime(23, 59)
-                ->format('Y-m-d H:i'),
+                ->toDateString(),
             'organizer_notes' => 'Notas do organizador.',
             'is_online' => false,
         ];
@@ -98,6 +97,19 @@ class AdminEventInstanceTest extends TestCase
             'name' => $payload['name'],
             'category_id' => $payload['category_id'],
             'location_id' => $payload['location_id'],
+        ]);
+
+        $deadlineAt = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['registration_deadline'],
+            config('app.event_timezone', 'Europe/Lisbon')
+        )
+            ->setTime(23, 59)
+            ->format('Y-m-d H:i:s');
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $response->json('data.id'),
+            'registration_deadline' => $deadlineAt,
         ]);
     }
 
@@ -297,9 +309,7 @@ class AdminEventInstanceTest extends TestCase
         $invalidCases = [
             'event_end_time' => ['event_end_time' => '09:00'],
             'registration_deadline' => [
-                'registration_deadline' => Carbon::parse(
-                    $valid['event_date'].' 11:00'
-                )->format('Y-m-d H:i'),
+                'registration_deadline' => $valid['event_date'],
             ],
             'max_attendees' => ['max_attendees' => 0],
             'latitude' => ['latitude' => -91],
@@ -367,7 +377,7 @@ class AdminEventInstanceTest extends TestCase
         $payload = $this->validPayload();
 
         $payload['event_date'] = $past->copy()->addDay()->format('Y-m-d');
-        $payload['registration_deadline'] = $past->format('Y-m-d H:i');
+        $payload['registration_deadline'] = $past->format('Y-m-d');
 
         $this->postJson(self::URL, $payload)
             ->assertUnprocessable()
@@ -387,7 +397,7 @@ class AdminEventInstanceTest extends TestCase
         $payload = $this->validPayload();
 
         $payload['event_date'] = $past->copy()->addDay()->format('Y-m-d');
-        $payload['registration_deadline'] = $past->format('Y-m-d H:i');
+        $payload['registration_deadline'] = $past->format('Y-m-d');
 
         $this->putJson(self::URL."/{$event->id}", $payload)
             ->assertOk()
@@ -599,5 +609,24 @@ class AdminEventInstanceTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('data.max_attendees', $capacity);
         }
+    }
+
+    #[Test]
+    public function event_creation_and_update_require_event_end_time(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        unset($payload['event_end_time']);
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['event_end_time']);
+
+        $event = EventInstance::factory()->create();
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['event_end_time']);
     }
 }
