@@ -403,6 +403,7 @@ class AdminEventInstanceTest extends TestCase
             'max_attendees' => ['max_attendees' => 100001],
             'description' => ['description' => str_repeat('a', 5001)],
             'organizer_notes' => ['organizer_notes' => str_repeat('a', 2001)],
+            'venue_name' => ['venue_name' => str_repeat('a', 256)],
         ];
 
         foreach ($invalidCases as $field => $override) {
@@ -489,6 +490,26 @@ class AdminEventInstanceTest extends TestCase
         $this->assertDatabaseHas('event_instances', [
             'id' => $event->id,
             'organizer_notes' => 'Notas já existentes.',
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_create_an_event_with_a_venue_name(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['venue_name'] = 'Centro de Congressos de Lisboa';
+
+        $response = $this->postJson(self::URL, $payload);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.venue_name', 'Centro de Congressos de Lisboa');
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $response->json('data.id'),
+            'venue_name' => 'Centro de Congressos de Lisboa',
         ]);
     }
 }

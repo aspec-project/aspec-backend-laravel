@@ -60,6 +60,7 @@ class EventInstanceResource extends JsonResource
             'event_end_time' => substr((string) $this->event_end_time, 0, 5),
             'description' => $this->description,
             'address' => $this->address,
+            'venue_name' => $this->venue_name,
             'latitude' => $this->latitude === null ? null : (float) $this->latitude,
             'longitude' => $this->longitude === null ? null : (float) $this->longitude,
             'max_attendees' => $this->max_attendees,

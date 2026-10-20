@@ -82,7 +82,7 @@ class AuthControllerTest extends TestCase
                 'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.'
             )
             ->assertJsonPath('data.email', 'novo.membro@example.com')
-            ->assertJsonPath('data.phone', '912345678')
+            ->assertJsonPath('data.phone', '+351912345678')
             ->assertJsonPath('data.role.name', 'Member')
             ->assertJsonPath('data.account_status.name', 'Pending')
             ->assertJsonPath(
@@ -108,6 +108,7 @@ class AuthControllerTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'novo.membro@example.com',
+            'phone' => '+351912345678',
             'role_id' => $role->id,
             'account_status_id' => AccountStatus::where(
                 'name',
@@ -989,5 +990,35 @@ class AuthControllerTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['terms_accepted']);
+    }
+
+    #[Test]
+    public function registration_normalizes_a_formatted_portuguese_phone(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'telefone.formatado@example.com',
+            'password' => 'Password123!',
+            'phone' => '213 456 789',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.phone', '+351213456789');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'telefone.formatado@example.com',
+            'phone' => '+351213456789',
+        ]);
     }
 }
