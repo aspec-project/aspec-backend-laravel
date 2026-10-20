@@ -8,6 +8,7 @@ use App\Enums\InvoiceStatus;
 use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
 use App\Models\Invoice;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\SubscriptionActivatedNotification;
 use App\Services\Payments\StripeCustomerService;
@@ -740,11 +741,11 @@ class StripeWebhookTest extends TestCase
     }
 
     #[Test]
-    public function subscription_of_an_admin_changes_nothing(): void
+    public function subscription_of_the_subscription_exempt_admin_changes_nothing(): void
     {
         Notification::fake();
         $this->expectNoCancellation();
-        $admin = $this->customer(User::factory()->admin()->create());
+        $admin = $this->customer(User::factory()->technicalAdmin()->create());
 
         $this->postStripeWebhook($this->subscriptionCreated())->assertOk();
 
@@ -752,6 +753,44 @@ class StripeWebhookTest extends TestCase
         $this->assertSame('Active', $fresh->accountStatus->name);
         $this->assertNull($fresh->trial_ends_at);
         Notification::assertNothingSent();
+    }
+
+    /**
+     * Os administradores (exceto o técnico) pagam como qualquer membro: a nova subscrição de um
+     * admin inativo por falta de pagamento reativa-o, sem novo trial.
+     */
+    #[Test]
+    public function active_subscription_reactivates_an_unpaid_admin_with_a_profile(): void
+    {
+        Notification::fake();
+        $this->expectNoCancellation();
+        $admin = $this->customer(User::factory()->admin()->inactive(InactiveReason::Unpaid)->withBilling()->create());
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+
+        $this->postStripeWebhook($this->subscriptionCreated('active'))->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertSame('Admin', $fresh->role->name);
+        $this->assertNull($fresh->inactive_reason);
+        $this->assertNull($fresh->trial_ends_at);
+        Notification::assertSentToTimes($fresh, SubscriptionActivatedNotification::class, 1);
+    }
+
+    #[Test]
+    public function payment_of_an_admin_with_a_profile_creates_a_pending_invoice_and_queues_its_issuing(): void
+    {
+        Queue::fake();
+        $admin = $this->customer(User::factory()->admin()->withBilling()->create());
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+        $this->subscribe($admin);
+
+        $this->postStripeWebhook($this->paymentEvent(6000, 'in_test_admin'))->assertOk();
+
+        $invoice = Invoice::where('stripe_invoice_id', 'in_test_admin')->firstOrFail();
+        $this->assertSame($admin->id, $invoice->user_id);
+        $this->assertSame(InvoiceStatus::Pending, $invoice->status);
+        Queue::assertPushed(IssueInvoiceJob::class, fn (IssueInvoiceJob $job) => $job->invoiceId === $invoice->id);
     }
 
     #[Test]
