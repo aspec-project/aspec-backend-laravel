@@ -19,18 +19,17 @@ class EventInstanceResource extends JsonResource
             ? max(0, (int) $this->max_attendees - $registrationCount)
             : null;
 
-        $registrationOpen = false;
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $deadline = Carbon::parse(
+            $this->getRawOriginal('registration_deadline'),
+            $timezone
+        );
+        $now = now($timezone);
 
-        if ($hasRegistrationCount) {
-            $timezone = config('app.event_timezone', 'Europe/Lisbon');
-            $deadline = Carbon::parse(
-                $this->getRawOriginal('registration_deadline'),
-                $timezone
-            );
-
-            $registrationOpen = $availableSpots > 0
-                && now($timezone)->lessThanOrEqualTo($deadline);
-        }
+        $deadlineHasPassed = $now->greaterThan($deadline);
+        $registrationOpen = $hasRegistrationCount
+            && $availableSpots > 0
+            && $now->lessThanOrEqualTo($deadline);
 
         $hasIsRegistered = array_key_exists('is_registered', $attributes);
         $isRegistered = $hasIsRegistered && (bool) $attributes['is_registered'];
@@ -41,6 +40,8 @@ class EventInstanceResource extends JsonResource
         $isActiveAdmin = $isAdminRoute
             && $viewer?->accountStatus?->name === 'Active'
             && $viewer?->role?->name === 'Admin';
+
+        $canSeeOnlineUrl = $isActiveAdmin || ($isRegistered && $deadlineHasPassed);
 
         return [
             'id' => $this->id,
@@ -68,7 +69,7 @@ class EventInstanceResource extends JsonResource
             'available_spots' => $this->when($hasRegistrationCount, $availableSpots),
             'registration_open' => $this->when($hasRegistrationCount, $registrationOpen),
             'is_registered' => $this->when($hasIsRegistered, $isRegistered),
-            'online_url' => $this->when($isRegistered || $isActiveAdmin, $this->online_url),
+            'online_url' => $this->when($canSeeOnlineUrl, $this->online_url),
         ];
     }
 }
