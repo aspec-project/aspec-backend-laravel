@@ -55,6 +55,17 @@ class UserFactory extends Factory
     }
 
     /**
+     * Administrador técnico (o que o aspec:create-admin cria): Admin isento de subscrição.
+     * O admin() normal paga como qualquer membro.
+     */
+    public function technicalAdmin(): static
+    {
+        return $this->admin()->state(fn () => [
+            'subscription_exempt' => true,
+        ]);
+    }
+
+    /**
      * Conta à espera de aprovação.
      */
     public function pending(): static

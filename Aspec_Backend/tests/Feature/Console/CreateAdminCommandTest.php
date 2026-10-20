@@ -2,12 +2,18 @@
 
 namespace Tests\Feature\Console;
 
+use App\Models\MemberProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
+/**
+ * php artisan aspec:create-admin cria o administrador técnico: o único utilizador isento de
+ * subscrição (users.subscription_exempt). Os outros administradores pagam como qualquer membro,
+ * por isso o comando nunca isenta uma conta que já existe.
+ */
 class CreateAdminCommandTest extends TestCase
 {
     use RefreshDatabase;
@@ -25,7 +31,7 @@ class CreateAdminCommandTest extends TestCase
     }
 
     #[Test]
-    public function creates_an_active_admin_without_member_profile(): void
+    public function creates_an_active_subscription_exempt_admin_without_member_profile(): void
     {
         $this->configureAdmin();
 
@@ -37,17 +43,54 @@ class CreateAdminCommandTest extends TestCase
         $this->assertSame('Active', $user->accountStatus->name);
         $this->assertNull($user->memberProfile);
         $this->assertTrue(Hash::check(self::PASSWORD, $user->password));
+        $this->assertTrue($user->subscription_exempt);
+        $this->assertTrue($user->isSubscriptionExempt());
     }
 
     #[Test]
-    public function running_twice_does_not_create_a_second_admin(): void
+    public function running_twice_does_not_create_a_second_admin_and_keeps_it_exempt(): void
     {
         $this->configureAdmin();
 
         $this->artisan('aspec:create-admin')->assertSuccessful();
+        $this->artisan('aspec:create-admin')
+            ->expectsOutputToContain('O administrador já existe. Nada a fazer.')
+            ->assertSuccessful();
+
+        $this->assertSame(1, User::count());
+        $this->assertTrue(User::where('email', self::EMAIL)->firstOrFail()->subscription_exempt);
+    }
+
+    #[Test]
+    public function refuses_a_second_technical_admin_with_another_email(): void
+    {
+        $this->configureAdmin();
         $this->artisan('aspec:create-admin')->assertSuccessful();
 
-        $this->assertSame(1, User::where('email', self::EMAIL)->count());
+        $this->configureAdmin('outro.admin@aspec.pt');
+        $this->artisan('aspec:create-admin')
+            ->expectsOutputToContain('Já existe um administrador técnico.')
+            ->assertFailed();
+
+        $this->assertSame(1, User::count());
+        $this->assertDatabaseMissing('users', ['email' => 'outro.admin@aspec.pt']);
+    }
+
+    #[Test]
+    public function does_not_make_an_existing_paying_admin_exempt(): void
+    {
+        $this->configureAdmin();
+        $payingAdmin = User::factory()->admin()->create(['email' => self::EMAIL]);
+        MemberProfile::factory()->create(['user_id' => $payingAdmin->id]);
+
+        $this->artisan('aspec:create-admin')
+            ->expectsOutputToContain('Já existe uma conta com este email que não é o administrador técnico.')
+            ->assertFailed();
+
+        $fresh = $payingAdmin->fresh();
+        $this->assertFalse($fresh->subscription_exempt);
+        $this->assertSame('Admin', $fresh->role->name);
+        $this->assertSame(1, User::count());
     }
 
     #[Test]
@@ -81,5 +124,6 @@ class CreateAdminCommandTest extends TestCase
 
         $user = User::where('email', self::EMAIL)->firstOrFail();
         $this->assertSame('Member', $user->role->name);
+        $this->assertFalse($user->subscription_exempt);
     }
 }
