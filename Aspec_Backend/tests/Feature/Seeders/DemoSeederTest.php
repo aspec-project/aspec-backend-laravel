@@ -78,10 +78,26 @@ class DemoSeederTest extends TestCase
             $this->assertSame($reason, $user->inactive_reason, $email);
             $this->assertNotNull($user->email_verified_at, $email);
             $this->assertNotNull($user->memberProfile, $email);
-            $this->assertMatchesRegularExpression('/^9[1236]\d{7}$/', $user->phone, $email);
+            $this->assertMatchesRegularExpression('/^\+\d{8,15}$/', $user->phone, $email);
+            $this->assertSame($user->phone, InternationalPhone::normalize($user->phone), $email);
         }
 
         $this->assertSame(19, User::where('email', 'like', 'demo.%@aspec.test')->count());
+    }
+
+    #[Test]
+    public function stores_every_phone_in_e164_with_two_foreign_members(): void
+    {
+        $this->runDemoSeeder();
+
+        $phones = User::where('email', 'like', 'demo.%@aspec.test')->pluck('phone');
+
+        foreach ($phones as $phone) {
+            $this->assertMatchesRegularExpression('/^\+\d{8,15}$/', $phone);
+            $this->assertSame($phone, InternationalPhone::normalize($phone));
+        }
+
+        $this->assertGreaterThanOrEqual(2, $phones->reject(fn (string $phone) => str_starts_with($phone, '+351'))->count());
     }
 
     #[Test]

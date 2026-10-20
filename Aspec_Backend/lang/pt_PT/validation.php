@@ -131,7 +131,6 @@ return [
         'uncompromised' => 'O valor de :attribute apareceu numa fuga de dados. Escolha outro valor para :attribute.',
     ],
     'portuguese_nif' => 'O campo :attribute tem de ser um NIF português válido.',
-    'portuguese_phone' => 'O campo :attribute tem de ser um número de telefone português válido.',
     'present' => 'O campo :attribute tem de estar presente.',
     'present_if' => 'O campo :attribute tem de estar presente quando :other é :value.',
     'present_unless' => 'O campo :attribute tem de estar presente, exceto quando :other é :value.',

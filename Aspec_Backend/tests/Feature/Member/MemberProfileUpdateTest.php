@@ -89,9 +89,9 @@ class MemberProfileUpdateTest extends TestCase
         ])
             ->assertOk()
             ->assertJsonPath('data.email', 'novo@exemplo.pt')
-            ->assertJsonPath('data.phone', '939999999');
+            ->assertJsonPath('data.phone', '+351939999999');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'novo@exemplo.pt', 'phone' => '939999999']);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'novo@exemplo.pt', 'phone' => '+351939999999']);
     }
 
     #[Test]
@@ -162,25 +162,80 @@ class MemberProfileUpdateTest extends TestCase
         $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'address' => 'Rua Direita 1']);
     }
 
-    public static function nonPortuguesePhones(): array
+    private const INVALID_PHONE_MESSAGE = 'O campo telefone tem de ser um número de telefone válido. Números estrangeiros precisam do indicativo do país (ex.: +44).';
+
+    public static function invalidPhones(): array
     {
         return [
-            'prefixo inválido' => ['941234567'],
-            'estrangeiro' => ['+447911123456'],
+            'prefixo português não atribuído' => ['941234567'],
+            'estrangeiro sem indicativo' => ['7911123456'],
             'curto' => ['12345'],
+            'indicativo inexistente' => ['+999123456789'],
         ];
     }
 
     #[Test]
-    #[DataProvider('nonPortuguesePhones')]
-    public function non_portuguese_phone_is_rejected_and_kept(string $phone): void
+    #[DataProvider('invalidPhones')]
+    public function invalid_phone_is_rejected_and_kept(string $phone): void
     {
         $user = $this->memberWithProfile();
         Sanctum::actingAs($user);
 
         $this->putJson(self::URL, ['phone' => $phone])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['phone' => 'O campo telefone tem de ser um número de telefone português válido.']);
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['phone' => self::INVALID_PHONE_MESSAGE]);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
+    }
+
+    public static function maliciousPhones(): array
+    {
+        return [
+            'html' => ['<b>912345678</b>'],
+            'texto antes' => ['Tel: 912345678'],
+            'extensão' => ['912345678 ext. 12'],
+            'fórmula' => ['=912345678'],
+            'script' => ['912345678<script>alert(1)</script>'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('maliciousPhones')]
+    public function phone_with_text_around_the_number_is_rejected_and_kept(string $phone): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => $phone])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone' => self::INVALID_PHONE_MESSAGE]);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
+    }
+
+    #[Test]
+    public function phone_sent_as_integer_is_rejected(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => 912345678])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
+    }
+
+    #[Test]
+    public function phone_country_field_is_ignored(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => '7911123456', 'phone_country' => 'GB'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['phone' => self::INVALID_PHONE_MESSAGE]);
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $user->phone]);
     }
@@ -193,9 +248,67 @@ class MemberProfileUpdateTest extends TestCase
 
         $this->putJson(self::URL, ['phone' => '+351 912-345 678'])
             ->assertOk()
-            ->assertJsonPath('data.phone', '912345678');
+            ->assertJsonPath('data.phone', '+351912345678');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => '912345678']);
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => '+351912345678']);
+    }
+
+    public static function acceptedPhones(): array
+    {
+        return [
+            'português sem indicativo' => ['912345678', '+351912345678'],
+            'português com parênteses e hífenes' => ['(+351) 912-345-678', '+351912345678'],
+            'português com 00' => ['00351912345678', '+351912345678'],
+            'fixo de Lisboa' => ['212345678', '+351212345678'],
+            'Reino Unido' => ['+44 7911 123456', '+447911123456'],
+            'Reino Unido com 00' => ['0044 7911 123456', '+447911123456'],
+            'França' => ['+33 6 12 34 56 78', '+33612345678'],
+            'Brasil' => ['+55 11 91234-5678', '+5511912345678'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('acceptedPhones')]
+    public function international_phone_is_accepted_and_stored_in_e164(string $input, string $expected): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => $input])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.phone', $expected);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'phone' => $expected]);
+    }
+
+    #[Test]
+    public function get_profile_returns_the_phone_in_e164(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['phone' => '912345678'])->assertOk();
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.phone', '+351912345678');
+    }
+
+    #[Test]
+    public function directory_shows_the_commercial_phone_in_e164_and_never_the_personal_one(): void
+    {
+        $owner = $this->memberWithProfile();
+        Sanctum::actingAs($owner);
+        $this->putJson(self::URL, ['phone' => '+44 7911 123456', 'commercial_phone' => '+44 20 7946 0958'])->assertOk();
+
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->getJson('/api/members/'.$owner->memberProfile->id)
+            ->assertOk()
+            ->assertJsonPath('data.members_only.commercial_phone', '+442079460958')
+            ->assertJsonMissingPath('data.members_only.phone')
+            ->assertDontSee('+447911123456');
     }
 
     #[Test]

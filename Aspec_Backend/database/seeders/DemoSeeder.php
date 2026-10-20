@@ -365,7 +365,7 @@ class DemoSeeder extends Seeder
             [
                 'email' => 'demo.admin@aspec.test',
                 'role' => 'Admin',
-                'phone' => '912000001',
+                'phone' => '+351912000001',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/mendes-consultoria-gestao'],
                 'portfolio' => 0,
@@ -385,7 +385,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro@aspec.test',
-                'phone' => '912000002',
+                'phone' => '+351912000002',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ferreira-arquitetura-interiores',
@@ -409,7 +409,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro01@aspec.test',
-                'phone' => '913000003',
+                'phone' => '+351913000003',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Facebook' => 'https://www.facebook.com/carvalhoefilhosconstrucoes',
@@ -432,7 +432,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro02@aspec.test',
-                'phone' => '916000004',
+                'phone' => '+351916000004',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/contas-certas-contabilidade'],
                 'portfolio' => 0,
@@ -452,7 +452,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro03@aspec.test',
-                'phone' => '919000005',
+                'phone' => '+351919000005',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/saboresdoalgarve.faro',
@@ -475,7 +475,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro04@aspec.test',
-                'phone' => '921000006',
+                'phone' => '+447911123456',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ribeiro-digital',
@@ -498,7 +498,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro05@aspec.test',
-                'phone' => '924000007',
+                'phone' => '+351924000007',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/martins-advogados-associados'],
                 'portfolio' => 0,
@@ -518,7 +518,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro06@aspec.test',
-                'phone' => '927000008',
+                'phone' => '+351927000008',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Facebook' => 'https://www.facebook.com/clinicabemcuidar',
@@ -541,7 +541,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro07@aspec.test',
-                'phone' => '931000009',
+                'phone' => '+5511912345678',
                 'hours' => null,
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/rota-segura-transportes'],
                 'portfolio' => 0,
@@ -561,7 +561,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro08@aspec.test',
-                'phone' => '934000010',
+                'phone' => '+351934000010',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/casalusa.imobiliaria',
@@ -584,7 +584,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro09@aspec.test',
-                'phone' => '937000011',
+                'phone' => '+351937000011',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ideia-viva-comunicacao',
@@ -608,7 +608,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro10@aspec.test',
-                'phone' => '961000012',
+                'phone' => '+351961000012',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/saber-mais-formacao',
@@ -631,7 +631,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro11@aspec.test',
-                'phone' => '964000013',
+                'phone' => '+351964000013',
                 'hours' => null,
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/quintavaleverde.evora',
@@ -672,7 +672,7 @@ class DemoSeeder extends Seeder
         ];
 
         return [
-            $applicant('demo.pendente01@aspec.test', '912000101', 'Pending', null, [
+            $applicant('demo.pendente01@aspec.test', '+351912000101', 'Pending', null, [
                 'name' => 'Luís Teixeira',
                 'business_name' => 'Teixeira Eletricidade',
                 'sector' => 'Engenharia e Indústria',
@@ -684,7 +684,7 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Igreja Evangélica de Vila Real',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.pendente02@aspec.test', '913000102', 'Pending', null, [
+            $applicant('demo.pendente02@aspec.test', '+351913000102', 'Pending', null, [
                 'name' => 'Joana Moreira',
                 'business_name' => 'Essência Natural Estética',
                 'sector' => 'Estética e Bem-Estar',
@@ -696,7 +696,7 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Comunidade Cristã de Viana',
                 'role_in_congregation' => 'Membro do coro',
             ]),
-            $applicant('demo.pendente03@aspec.test', '916000103', 'Pending', null, [
+            $applicant('demo.pendente03@aspec.test', '+351916000103', 'Pending', null, [
                 'name' => 'André Pinto',
                 'business_name' => 'Caminhos do Douro Turismo',
                 'sector' => 'Turismo e Lazer',
@@ -708,7 +708,7 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Igreja Batista de Bragança',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.aprovado@aspec.test', '919000104', 'Approved', null, [
+            $applicant('demo.aprovado@aspec.test', '+351919000104', 'Approved', null, [
                 'name' => 'Helena Marques',
                 'business_name' => 'Marques Comércio de Papelaria',
                 'sector' => 'Comércio Retalhista',
@@ -720,7 +720,7 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Igreja Evangélica de Castelo Branco',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.inativo.pagamento@aspec.test', '921000105', 'Inactive', InactiveReason::Unpaid, [
+            $applicant('demo.inativo.pagamento@aspec.test', '+351921000105', 'Inactive', InactiveReason::Unpaid, [
                 'name' => 'Paulo Correia',
                 'business_name' => 'Correia Mediação de Seguros',
                 'sector' => 'Contabilidade e Finanças',
@@ -732,7 +732,7 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Comunidade Cristã da Guarda',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.bloqueado@aspec.test', '924000106', 'Inactive', InactiveReason::Blocked, [
+            $applicant('demo.bloqueado@aspec.test', '+351924000106', 'Inactive', InactiveReason::Blocked, [
                 'name' => 'Vítor Santos',
                 'business_name' => 'Santos Reparações Auto',
                 'sector' => 'Transportes e Logística',
