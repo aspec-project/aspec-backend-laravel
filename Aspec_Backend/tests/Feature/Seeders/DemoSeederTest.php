@@ -3,6 +3,7 @@
 namespace Tests\Feature\Seeders;
 
 use App\Enums\InactiveReason;
+use App\Enums\SubscriptionState;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\MemberProfile;
@@ -82,6 +83,23 @@ class DemoSeederTest extends TestCase
         }
 
         $this->assertSame(19, User::where('email', 'like', 'demo.%@aspec.test')->count());
+    }
+
+    /**
+     * O admin da demo tem perfil e paga como os outros administradores: só o aspec:create-admin
+     * cria o administrador técnico isento, e o seeder nunca escreve essa marca.
+     */
+    #[Test]
+    public function demo_admin_is_not_subscription_exempt_and_shows_as_active(): void
+    {
+        $this->runDemoSeeder();
+
+        $admin = $this->demoUser('demo.admin@aspec.test');
+
+        $this->assertFalse($admin->subscription_exempt);
+        $this->assertFalse($admin->isSubscriptionExempt());
+        $this->assertSame(SubscriptionState::Active, $admin->subscriptionState());
+        $this->assertSame(0, User::where('subscription_exempt', true)->count());
     }
 
     #[Test]

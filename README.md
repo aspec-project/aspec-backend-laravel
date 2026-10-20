@@ -36,7 +36,13 @@ Na instalação inicial, a partir de `Aspec_Backend`:
 
 Se a configuração estiver em cache, gere-a novamente depois de definir as variáveis e antes de executar o comando. Depois de remover a password, gere o cache outra vez para não a manter no ficheiro de configuração em cache.
 
-O comando cria uma conta **Admin Active**, sem perfil de membro. Pode ser executado novamente sem criar outro administrador com o mesmo email. Se o email já pertencer a uma conta que não seja um administrador ativo, o comando recusa a criação e não altera essa conta.
+O comando cria o **administrador técnico**: uma conta **Admin Active**, sem perfil de membro e **isenta de subscrição** (`users.subscription_exempt`). É o único isento: os outros administradores (promovidos no backoffice) pagam a subscrição como qualquer membro e, se deixarem de pagar, ficam Inactive e perdem o acesso ao backoffice até pagarem.
+
+- Corre-se depois do `migrate` (a coluna da marca vem de uma migração). As BDs que já tinham um administrador criado pelo comando (Admin sem perfil) ficam com ele marcado como isento pela própria migração.
+- Pode ser executado novamente com o mesmo email sem criar outro administrador.
+- Só existe um administrador técnico: com outro email, recusa ("Já existe um administrador técnico.").
+- Nunca isenta uma conta que já existe: se o email for de um administrador que paga, ou de uma conta que não seja um administrador ativo, recusa e não altera essa conta.
+- A marca não se põe nem se tira pela API (fica fora do `$fillable`); só este comando a escreve.
 
 ## Dados de demonstração
 
@@ -52,9 +58,11 @@ Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais
 
 Password de todas as contas: `Demo#2026`
 
+O seeder não cria o administrador técnico: para mostrar o estado "Isento" no backoffice, correr também `php artisan aspec:create-admin`.
+
 | Email | Papel | Estado |
 |---|---|---|
-| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório) |
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento, aparece "Ativo") |
 | `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
 | `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
 | `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
@@ -162,12 +170,14 @@ Calculado a partir das colunas da conta, sem coluna própria: `$user->subscripti
 | `blocked` | Bloqueado | Inactive, motivo `blocked` |
 | `lapsed` | Subscrição caída | Inactive, motivo `unpaid` ou `cancelled` |
 | `inactive` | Inativo | Inactive, motivo `rejected`, `deleted` ou vazio |
-| `exempt` | Isento | Active, Admin sem perfil de membro (admin técnico) |
+| `exempt` | Isento | Active, `users.subscription_exempt` (só o admin técnico do `aspec:create-admin`) |
 | `grace` | Em carência | Active, `grace_ends_at` preenchido |
 | `trial` | Em trial | Active, `trial_ends_at` no futuro |
 | `active` | Ativo | restantes contas Active |
 
 Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
+
+"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: contas da demo ou admins promovidos antes de os admins pagarem, que não têm subscrição). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
 
 ### Faturas do membro
 
