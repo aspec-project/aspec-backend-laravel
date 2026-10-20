@@ -964,7 +964,11 @@ class AuthControllerTest extends TestCase
             'commercial_phone' => '213 456 789',
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['terms_accepted']);
+            ->assertJsonValidationErrors(['terms_accepted'])
+            ->assertJsonPath(
+                'errors.terms_accepted.0',
+                'O campo aceitação dos termos é obrigatório.'
+            );
     }
 
     #[Test]
@@ -989,7 +993,10 @@ class AuthControllerTest extends TestCase
             'terms_accepted' => false,
         ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['terms_accepted']);
+            ->assertJsonPath(
+                'errors.terms_accepted.0',
+                'O campo aceitação dos termos tem de ser aceite.'
+            );
     }
 
     #[Test]
