@@ -11,7 +11,8 @@ return [
     // Só para mostrar ao membro; quem cobra é o Price do Stripe.
     'price_amount' => (float) env('SUBSCRIPTION_PRICE_AMOUNT', 60.00),
     'currency' => env('CASHIER_CURRENCY', 'eur'),
-    'interval' => 'month',
+    // month ou year; tem de bater certo com o intervalo do Price do Stripe.
+    'interval' => env('SUBSCRIPTION_INTERVAL', 'month'),
     'trial_days' => (int) env('SUBSCRIPTION_TRIAL_DAYS', 30),
     'grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 7),
     'activation_link_days' => (int) env('ACTIVATION_LINK_DAYS', 7),

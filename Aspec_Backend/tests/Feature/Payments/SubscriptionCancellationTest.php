@@ -4,6 +4,7 @@ namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
+use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
@@ -41,6 +42,8 @@ class SubscriptionCancellationTest extends TestCase
     private const FRONTEND_URL = 'http://localhost:5173';
 
     private const NOT_FOUND = 'Não existe subscrição.';
+
+    private const DATA_KEYS = ['status', 'trial_starts_at', 'trial_ends_at', 'trial_days', 'next_payment_at', 'grace_ends_at', 'ends_at', 'cancel_at_period_end', 'price', 'billing'];
 
     private const ALREADY_SCHEDULED = 'O cancelamento da subscrição já está agendado.';
 
@@ -636,5 +639,65 @@ class SubscriptionCancellationTest extends TestCase
         $this->postJson(self::CANCEL_URL)
             ->assertConflict()
             ->assertExactJson(['success' => false, 'message' => self::PAYMENT_OVERDUE]);
+    }
+
+    // --- Mesmo contrato do GET /api/subscription ---
+
+    #[Test]
+    public function cancel_returns_the_same_keys_as_the_subscription_endpoint(): void
+    {
+        $member = $this->member();
+        $startedAt = now()->subDays(5);
+        $member->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_trial_keys',
+            'stripe_status' => 'trialing',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+            'trial_ends_at' => $startedAt->copy()->addDays(30),
+            'created_at' => $startedAt,
+        ]);
+        $this->stripe();
+        Sanctum::actingAs($member);
+
+        $response = $this->postJson(self::CANCEL_URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_starts_at', $startedAt->toIso8601String())
+            ->assertJsonPath('data.trial_days', 30);
+
+        $this->assertEqualsCanonicalizing(self::DATA_KEYS, array_keys($response->json('data')));
+    }
+
+    #[Test]
+    public function cancel_of_an_active_subscription_removes_the_next_payment(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => now()->subDays(10)]);
+        $this->stripe();
+        Sanctum::actingAs($member);
+
+        $this->postJson(self::CANCEL_URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', null);
+    }
+
+    #[Test]
+    public function resume_returns_the_same_keys_and_the_next_payment_again(): void
+    {
+        $member = $this->member();
+        $paidAt = now()->subDays(10);
+        $this->subscriptionFor($member, 'active', ['ends_at' => $this->periodEnd()]);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => $paidAt]);
+        $this->stripe();
+        Sanctum::actingAs($member);
+
+        $response = $this->postJson(self::RESUME_URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_starts_at', null)
+            ->assertJsonPath('data.trial_days', null)
+            ->assertJsonPath('data.next_payment_at', $paidAt->copy()->addMonthNoOverflow()->toIso8601String());
+
+        $this->assertEqualsCanonicalizing(self::DATA_KEYS, array_keys($response->json('data')));
     }
 }

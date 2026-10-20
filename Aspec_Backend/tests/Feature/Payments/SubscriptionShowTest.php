@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
+use App\Models\Invoice;
 use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,7 +25,7 @@ class SubscriptionShowTest extends TestCase
 
     private const NOT_FOUND = 'Não existe subscrição.';
 
-    private const DATA_KEYS = ['status', 'trial_ends_at', 'grace_ends_at', 'ends_at', 'cancel_at_period_end', 'price', 'billing'];
+    private const DATA_KEYS = ['status', 'trial_starts_at', 'trial_ends_at', 'trial_days', 'next_payment_at', 'grace_ends_at', 'ends_at', 'cancel_at_period_end', 'price', 'billing'];
 
     private const BILLING_KEYS = ['billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city'];
 
@@ -346,5 +347,278 @@ class SubscriptionShowTest extends TestCase
         foreach (['Empresa B Lda', '999999990', 'Rua do Membro B 1', '4000-001', 'Porto'] as $otherData) {
             $this->assertStringNotContainsString($otherData, $response->getContent());
         }
+    }
+
+    // --- Início e duração do período experimental ---
+
+    #[Test]
+    public function trial_start_is_the_subscription_creation_and_the_duration_is_returned(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $startedAt = now()->toImmutable();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => $startedAt->addDays(30)]);
+        $this->travel(3)->days();
+        Sanctum::actingAs($member);
+
+        $response = $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_starts_at', $this->iso($startedAt))
+            ->assertJsonPath('data.trial_ends_at', $this->iso($startedAt->addDays(30)))
+            ->assertJsonPath('data.trial_days', 30);
+
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/', (string) $response->json('data.trial_starts_at'));
+    }
+
+    /**
+     * Quem já está em trial mantém a duração com que começou, mesmo que a configuração mude.
+     */
+    #[Test]
+    public function trial_duration_comes_from_the_subscription_dates_not_from_the_config(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        config(['subscription.trial_days' => 30]);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => now()->addDays(60)]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_days', 60);
+    }
+
+    /**
+     * A linha local é criada pelo webhook segundos depois de o Stripe começar a contar o trial.
+     */
+    #[Test]
+    public function webhook_delay_is_rounded_away_in_the_trial_duration(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => now()->addDays(30)->subSeconds(40)]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_days', 30);
+    }
+
+    #[Test]
+    public function reactivated_subscription_without_trial_has_no_trial_fields(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.trial_starts_at', null)
+            ->assertJsonPath('data.trial_ends_at', null)
+            ->assertJsonPath('data.trial_days', null);
+    }
+
+    #[Test]
+    public function finished_trial_dates_are_still_returned(): void
+    {
+        $this->travelTo('2026-08-01 09:00:00');
+        $member = $this->member();
+        $startedAt = now()->toImmutable();
+        $this->subscriptionFor($member, 'active', ['trial_ends_at' => $startedAt->addDays(30)]);
+        $this->travelTo('2026-10-01 09:00:00');
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.trial_starts_at', $this->iso($startedAt))
+            ->assertJsonPath('data.trial_ends_at', $this->iso($startedAt->addDays(30)))
+            ->assertJsonPath('data.trial_days', 30);
+    }
+
+    #[Test]
+    public function grace_period_right_after_the_trial_keeps_the_trial_fields(): void
+    {
+        $this->travelTo('2026-09-01 09:00:00');
+        $member = $this->member();
+        $startedAt = now()->toImmutable();
+        $this->subscriptionFor($member, 'past_due', ['trial_ends_at' => $startedAt->addDays(30)]);
+        $this->travelTo('2026-10-02 09:00:00');
+        $graceEndsAt = now()->addDays(7);
+        $member->forceFill(['grace_ends_at' => $graceEndsAt])->save();
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'past_due')
+            ->assertJsonPath('data.grace_ends_at', $this->iso($graceEndsAt))
+            ->assertJsonPath('data.trial_starts_at', $this->iso($startedAt))
+            ->assertJsonPath('data.trial_days', 30);
+    }
+
+    #[Test]
+    public function data_has_exactly_the_contract_keys_including_the_trial_fields(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => now()->addDays(30)]);
+        Sanctum::actingAs($member);
+
+        $response = $this->getJson(self::URL)->assertOk();
+
+        $this->assertEqualsCanonicalizing(self::DATA_KEYS, array_keys($response->json('data')));
+    }
+
+    // --- Próximo pagamento ---
+
+    #[Test]
+    public function next_payment_during_the_trial_is_the_trial_end(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $trialEndsAt = now()->addDays(30);
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => $trialEndsAt]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', $this->iso($trialEndsAt));
+    }
+
+    #[Test]
+    public function next_payment_of_an_active_subscription_is_one_month_after_the_last_invoice(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-09-15 08:30:00']);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-10-15 08:30:00']);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-08-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2026-11-15T08:30:00+00:00');
+    }
+
+    /**
+     * A linha da fatura nasce quando o Stripe confirma o pagamento; a emissão vem depois.
+     */
+    #[Test]
+    public function invoice_still_being_issued_already_counts_as_the_last_payment(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-09-15 08:30:00']);
+        Invoice::factory()->for($member)->create(['created_at' => '2026-10-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2026-11-15T08:30:00+00:00');
+    }
+
+    #[Test]
+    public function next_payment_follows_the_configured_interval(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        config(['subscription.interval' => 'year']);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-10-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2027-10-15T08:30:00+00:00');
+    }
+
+    #[Test]
+    public function other_members_invoices_never_set_the_next_payment(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-09-15 08:30:00']);
+        Invoice::factory()->for($this->member())->demo()->issued()->create(['created_at' => '2026-10-18 12:00:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2026-10-15T08:30:00+00:00');
+    }
+
+    #[Test]
+    public function active_subscription_without_invoices_has_no_next_payment(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', null);
+    }
+
+    #[Test]
+    public function scheduled_cancellation_has_no_next_payment(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active', ['ends_at' => now()->addDays(25)]);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-10-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.cancel_at_period_end', true)
+            ->assertJsonPath('data.next_payment_at', null);
+    }
+
+    /**
+     * Cancelar durante o trial termina a subscrição no fim do trial, sem nenhuma cobrança.
+     */
+    #[Test]
+    public function scheduled_cancellation_during_the_trial_has_no_next_payment(): void
+    {
+        $this->travelTo('2026-10-01 14:03:11');
+        $member = $this->member();
+        $trialEndsAt = now()->addDays(30);
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => $trialEndsAt, 'ends_at' => $trialEndsAt]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.cancel_at_period_end', true)
+            ->assertJsonPath('data.trial_ends_at', $this->iso($trialEndsAt))
+            ->assertJsonPath('data.trial_days', 30)
+            ->assertJsonPath('data.next_payment_at', null);
+    }
+
+    public static function statusesWithoutNextPayment(): array
+    {
+        return [
+            'past_due' => ['past_due', null],
+            'unpaid' => ['unpaid', null],
+            'incomplete' => ['incomplete', null],
+            'canceled' => ['canceled', '2026-10-19 10:00:00'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('statusesWithoutNextPayment')]
+    public function subscription_that_is_not_trialing_or_active_has_no_next_payment(string $status, ?string $endsAt): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, $status, ['ends_at' => $endsAt]);
+        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-10-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.status', $status)
+            ->assertJsonPath('data.next_payment_at', null);
     }
 }
