@@ -101,6 +101,7 @@ class AuthController extends Controller
                 'phone' => $request->phone,
                 'role_id' => $memberRole->id,
                 'account_status_id' => $pendingStatus->id,
+                'terms_accepted_at' => now(),
             ]);
 
             $profile = MemberProfile::create([
@@ -114,6 +115,8 @@ class AuthController extends Controller
                 'description' => $request->description,
                 'website_url' => $request->website_url,
                 'address' => $request->address,
+                'commercial_email' => $request->commercial_email,
+                'commercial_phone' => $request->commercial_phone,
             ]);
 
             return compact('user', 'profile');

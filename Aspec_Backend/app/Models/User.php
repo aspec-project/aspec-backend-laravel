@@ -46,6 +46,7 @@ class User extends Authenticatable
             'trial_ends_at' => 'datetime',
             'grace_ends_at' => 'datetime',
             'inactive_reason' => InactiveReason::class,
+            'terms_accepted_at' => 'datetime',
         ];
     }
 
@@ -63,6 +64,7 @@ class User extends Authenticatable
         'billing_address',
         'billing_postal_code',
         'billing_city',
+        'terms_accepted_at',
     ];
 
     /**

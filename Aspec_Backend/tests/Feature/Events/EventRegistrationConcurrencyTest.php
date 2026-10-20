@@ -18,11 +18,11 @@ class EventRegistrationConcurrencyTest extends TestCase
     #[Test]
     public function only_one_concurrent_registration_can_take_the_last_spot(): void
     {
-        $this->assertSame(
-            'mysql',
-            DB::connection()->getDriverName(),
-            'Este teste deve correr em MySQL/MariaDB.'
-        );
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            $this->markTestSkipped(
+                'Este teste de concorrência requer MySQL/MariaDB.'
+            );
+        }
 
         $userIds = [];
         $categoryId = null;
