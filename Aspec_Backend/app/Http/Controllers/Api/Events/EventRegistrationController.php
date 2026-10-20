@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Api\Events;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\EventInstanceResource;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
-use App\Models\EventRegistration;
-use App\Http\Resources\EventInstanceResource;
 
 class EventRegistrationController extends Controller
 {
@@ -110,7 +110,6 @@ class EventRegistrationController extends Controller
         });
     }
 
-
     public function registrants(Request $request, EventInstance $eventInstance): JsonResponse
     {
         $registrants = $eventInstance->registrations()
@@ -136,9 +135,6 @@ class EventRegistrationController extends Controller
             'Lista de inscritos obtida com sucesso.'
         );
     }
-
-
-
 
     public function mine(Request $request): JsonResponse
     {

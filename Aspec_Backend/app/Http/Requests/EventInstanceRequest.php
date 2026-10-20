@@ -34,6 +34,7 @@ class EventInstanceRequest extends FormRequest
             'address' => $isOnline
                 ? ['prohibited']
                 : ['required', 'string', 'max:255'],
+            'venue_name' => ['nullable', 'string', 'max:255'],
             'latitude' => $isOnline
                 ? ['prohibited']
                 : ['required', 'numeric', 'between:-90,90'],
@@ -117,6 +118,7 @@ class EventInstanceRequest extends FormRequest
             'address.prohibited' => 'Eventos online não devem ter morada.',
             'latitude.prohibited' => 'Eventos online não devem ter coordenadas.',
             'longitude.prohibited' => 'Eventos online não devem ter coordenadas.',
+            'venue_name' => ['nullable', 'string', 'max:255'],
         ];
     }
 }

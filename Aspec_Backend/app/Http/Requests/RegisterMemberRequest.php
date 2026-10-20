@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Rules\InternationalPhone;
-use App\Rules\PortuguesePhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
@@ -20,11 +19,13 @@ class RegisterMemberRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $this->merge([
-            'phone' => PortuguesePhone::normalize(
-                $this->input('phone')
-            ),
-        ]);
+        if ($this->has('phone')) {
+            $this->merge([
+                'phone' => InternationalPhone::normalize(
+                    $this->input('phone')
+                ),
+            ]);
+        }
         if ($this->has('commercial_phone')) {
             $this->merge([
                 'commercial_phone' => InternationalPhone::normalize(
@@ -45,7 +46,7 @@ class RegisterMemberRequest extends FormRequest
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'string', Password::default()],
-            'phone' => ['required', 'string', new PortuguesePhone],
+            'phone' => ['required', 'string', new InternationalPhone],
             'business_name' => 'required|string|max:255',
             'sector_id' => 'required|uuid|exists:sectors,id',
             'location_id' => 'required|uuid|exists:locations,id',

@@ -23,6 +23,7 @@ class EventInstance extends Model
         'event_end_time',
         'description',
         'address',
+        'venue_name',
         'latitude',
         'longitude',
         'max_attendees',

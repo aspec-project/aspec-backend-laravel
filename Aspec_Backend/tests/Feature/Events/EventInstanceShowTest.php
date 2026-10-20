@@ -24,6 +24,7 @@ class EventInstanceShowTest extends TestCase
             'event_start_time' => '10:00',
             'event_end_time' => '12:00',
             'address' => 'Rua de teste, 10',
+            'venue_name' => 'Centro de Congressos de Lisboa',
             'latitude' => '38.7223000',
             'longitude' => '-9.1393000',
             'max_attendees' => 40,
@@ -38,6 +39,7 @@ class EventInstanceShowTest extends TestCase
             ->assertJsonPath('data.category.id', $event->category_id)
             ->assertJsonPath('data.location.id', $event->location_id)
             ->assertJsonPath('data.address', 'Rua de teste, 10')
+            ->assertJsonPath('data.venue_name', 'Centro de Congressos de Lisboa')
             ->assertJsonPath('data.latitude', 38.7223)
             ->assertJsonPath('data.longitude', -9.1393)
             ->assertJsonPath('data.max_attendees', 40)
