@@ -325,12 +325,16 @@ class AdminUserController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($id);
 
-            if ($user->id === $request->user()->id) {
-                return 'self';
-            }
-
             if ($user->role_id !== $adminRoleId) {
                 return 'not_admin';
+            }
+
+            if ($user->subscription_exempt) {
+                return 'technical_admin';
+            }
+
+            if ($user->id === $request->user()->id) {
+                return 'self';
             }
 
             if ($admins->count() <= 1) {
@@ -349,6 +353,7 @@ class AdminUserController extends Controller
                 'self' => 'Não pode alterar o seu próprio papel.',
                 'not_admin' => 'O utilizador não é administrador.',
                 'last_admin' => 'Tem de existir pelo menos um administrador.',
+                'technical_admin' => 'O administrador técnico não pode ser despromovido.',
             };
 
             return $this->errorResponse($message, Response::HTTP_CONFLICT);

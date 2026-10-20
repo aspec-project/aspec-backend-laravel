@@ -1425,4 +1425,23 @@ class AdminUserControllerTest extends TestCase
         $this->patchJson("/api/admin/users/{$unknownId}/promote")->assertNotFound();
         $this->patchJson("/api/admin/users/{$unknownId}/demote")->assertNotFound();
     }
+
+    #[Test]
+    public function admin_cannot_demote_a_technical_admin(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $technicalAdmin = User::factory()->technicalAdmin()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$technicalAdmin->id}/demote")
+            ->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'O administrador técnico não pode ser despromovido.'
+            );
+
+        $this->assertSame('Admin', $technicalAdmin->fresh()->role->name);
+        $this->assertTrue($technicalAdmin->fresh()->subscription_exempt);
+    }
 }
