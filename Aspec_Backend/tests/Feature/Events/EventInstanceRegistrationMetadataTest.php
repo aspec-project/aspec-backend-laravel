@@ -53,6 +53,7 @@ class EventInstanceRegistrationMetadataTest extends TestCase
             ->assertJsonPath('data.items.0.registration_open', true)
             ->assertJsonPath('data.items.0.is_registered', false)
             ->assertJsonMissingPath('data.items.0.online_url')
+            ->assertJsonPath('data.items.0.is_online', true)
             ->assertJsonPath('data.items.0.address', null)
             ->assertJsonPath('data.items.0.latitude', null)
             ->assertJsonPath('data.items.0.longitude', null);

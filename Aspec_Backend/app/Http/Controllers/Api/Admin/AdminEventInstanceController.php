@@ -6,8 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInstanceRequest;
 use App\Http\Resources\EventInstanceResource;
 use App\Models\EventInstance;
+use App\Notifications\EventCancelledNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminEventInstanceController extends Controller
@@ -65,26 +69,66 @@ class AdminEventInstanceController extends Controller
     ): JsonResponse {
         $validated = $request->validated();
 
-        if ($validated['is_online']) {
-            $validated['address'] = null;
-            $validated['latitude'] = null;
-            $validated['longitude'] = null;
-        } else {
-            $validated['online_url'] = null;
-        }
+        return DB::transaction(function () use ($validated, $eventInstance): JsonResponse {
+            $event = EventInstance::query()
+                ->whereKey($eventInstance->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $eventInstance->update($validated);
-        $eventInstance->load(['category', 'location']);
+            $registrationCount = $event->registrations()->count();
 
-        return $this->successResponse(
-            new EventInstanceResource($eventInstance),
-            'Evento atualizado com sucesso.'
-        );
+            if ((int) $validated['max_attendees'] < $registrationCount) {
+                throw ValidationException::withMessages([
+                    'max_attendees' => 'A lotação máxima não pode ser inferior ao número de inscrições existentes.',
+                ]);
+            }
+
+            if ($validated['is_online']) {
+                $validated['address'] = null;
+                $validated['latitude'] = null;
+                $validated['longitude'] = null;
+            } else {
+                $validated['online_url'] = null;
+            }
+
+            $event->update($validated);
+            $event->load(['category', 'location']);
+
+            return $this->successResponse(
+                new EventInstanceResource($event),
+                'Evento atualizado com sucesso.'
+            );
+        });
     }
 
     public function destroy(EventInstance $eventInstance): JsonResponse
     {
-        $eventInstance->delete();
+        DB::transaction(function () use ($eventInstance): void {
+            $event = EventInstance::query()
+                ->whereKey($eventInstance->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $registrations = $event->registrations()
+                ->with('user')
+                ->get();
+
+            $recipients = $registrations
+                ->pluck('user')
+                ->filter()
+                ->values();
+
+            $notification = new EventCancelledNotification(
+                $event->name,
+                $event->event_date->format('d/m/Y'),
+                substr((string) $event->event_start_time, 0, 5),
+            );
+
+            $event->registrations()->delete();
+            $event->delete();
+
+            Notification::send($recipients, $notification);
+        });
 
         return $this->successResponse(
             null,

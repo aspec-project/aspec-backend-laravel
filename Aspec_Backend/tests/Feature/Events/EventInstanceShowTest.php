@@ -36,6 +36,7 @@ class EventInstanceShowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $event->id)
             ->assertJsonPath('data.name', 'Workshop público')
+            ->assertJsonPath('data.is_online', false)
             ->assertJsonPath('data.category.id', $event->category_id)
             ->assertJsonPath('data.location.id', $event->location_id)
             ->assertJsonPath('data.address', 'Rua de teste, 10')

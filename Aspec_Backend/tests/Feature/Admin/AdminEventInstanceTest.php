@@ -4,10 +4,13 @@ namespace Tests\Feature\Admin;
 
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\Location;
 use App\Models\User;
+use App\Notifications\EventCancelledNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -511,5 +514,90 @@ class AdminEventInstanceTest extends TestCase
             'id' => $response->json('data.id'),
             'venue_name' => 'Centro de Congressos de Lisboa',
         ]);
+    }
+
+    #[Test]
+    public function deleting_an_event_with_registrations_removes_them_and_notifies_each_registrant(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $registrants = User::factory()->count(2)->create();
+
+        foreach ($registrants as $user) {
+            EventRegistration::query()->create([
+                'event_instance_id' => $event->id,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        $this->deleteJson(self::URL."/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data', null);
+
+        foreach ($registrants as $user) {
+            Notification::assertSentToTimes(
+                $user,
+                EventCancelledNotification::class,
+                1
+            );
+        }
+
+        $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $event->id,
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_reduce_capacity_below_existing_registrations(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create(['max_attendees' => 3]);
+
+        foreach (User::factory()->count(2)->create() as $user) {
+            EventRegistration::query()->create([
+                'event_instance_id' => $event->id,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        $payload = $this->validPayload();
+        $payload['max_attendees'] = 1;
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['max_attendees']);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'max_attendees' => 3,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_set_capacity_equal_to_or_above_existing_registrations(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create(['max_attendees' => 3]);
+
+        foreach (User::factory()->count(2)->create() as $user) {
+            EventRegistration::query()->create([
+                'event_instance_id' => $event->id,
+                'user_id' => $user->id,
+            ]);
+        }
+
+        foreach ([2, 4] as $capacity) {
+            $payload = $this->validPayload();
+            $payload['max_attendees'] = $capacity;
+
+            $this->putJson(self::URL."/{$event->id}", $payload)
+                ->assertOk()
+                ->assertJsonPath('data.max_attendees', $capacity);
+        }
     }
 }

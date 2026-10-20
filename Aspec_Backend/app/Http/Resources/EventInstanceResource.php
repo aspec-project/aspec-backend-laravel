@@ -71,6 +71,7 @@ class EventInstanceResource extends JsonResource
             'registration_open' => $this->when($hasRegistrationCount, $registrationOpen),
             'is_registered' => $this->when($hasIsRegistered, $isRegistered),
             'online_url' => $this->when($canSeeOnlineUrl, $this->online_url),
+            'is_online' => $this->is_online,
         ];
     }
 }
