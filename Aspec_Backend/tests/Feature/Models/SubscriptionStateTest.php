@@ -15,7 +15,9 @@ use Tests\TestCase;
 use UnhandledMatchError;
 
 /**
- * Estado da subscrição derivado das colunas de users + papel + perfil (lista do backoffice).
+ * Estado da subscrição derivado das colunas de users e do estado da conta (lista do backoffice).
+ * Só o administrador técnico (marca users.subscription_exempt) é isento: os outros admins pagam,
+ * tenham ou não perfil de membro.
  * Tempo congelado ao segundo: as colunas datetime guardam segundos, por isso a fronteira do trial é exata.
  */
 class SubscriptionStateTest extends TestCase
@@ -79,8 +81,9 @@ class SubscriptionStateTest extends TestCase
         $anonymised->delete();
         $add('inactive_deleted_trashed', $anonymised, 'inactive', trashed: true);
 
-        $add('admin_without_profile', User::factory()->admin()->create(), 'exempt');
-        $add('admin_without_profile_in_grace', User::factory()->admin()->create(['grace_ends_at' => now()->addDays(3)]), 'exempt');
+        $add('technical_admin', User::factory()->technicalAdmin()->create(), 'exempt');
+        $add('technical_admin_in_grace', User::factory()->technicalAdmin()->create(['grace_ends_at' => now()->addDays(3)]), 'exempt');
+        $add('admin_without_profile', User::factory()->admin()->create(), 'active');
 
         $adminWithProfile = User::factory()->admin()->create(['trial_ends_at' => now()->addDays(10)]);
         MemberProfile::factory()->create(['user_id' => $adminWithProfile->id]);
@@ -88,7 +91,7 @@ class SubscriptionStateTest extends TestCase
 
         $adminWithDeletedProfile = User::factory()->admin()->create();
         MemberProfile::factory()->create(['user_id' => $adminWithDeletedProfile->id])->delete();
-        $add('admin_with_soft_deleted_profile', $adminWithDeletedProfile, 'exempt');
+        $add('admin_with_soft_deleted_profile', $adminWithDeletedProfile, 'active');
 
         return $fixtures;
     }
@@ -212,6 +215,7 @@ class SubscriptionStateTest extends TestCase
             array_keys($counts),
         );
         $this->assertSame(User::count(), array_sum($counts));
+        $this->assertSame(2, $counts['exempt']);
 
         $expected = collect($fixtures)
             ->reject(fn (array $fixture) => $fixture['trashed'])
@@ -297,7 +301,9 @@ class SubscriptionStateTest extends TestCase
                 "Regra de isenção diverge em {$key}",
             );
         }
-        $this->assertTrue($this->loadFresh($fixtures['admin_without_profile']['user'])->isSubscriptionExempt());
+        $this->assertTrue($this->loadFresh($fixtures['technical_admin']['user'])->isSubscriptionExempt());
+        $this->assertFalse($this->loadFresh($fixtures['admin_without_profile']['user'])->isSubscriptionExempt());
+        $this->assertFalse($this->loadFresh($fixtures['admin_with_soft_deleted_profile']['user'])->isSubscriptionExempt());
         $this->assertFalse($this->loadFresh($fixtures['admin_with_profile_in_trial']['user'])->isSubscriptionExempt());
         $this->assertFalse($this->loadFresh($fixtures['active_without_trial']['user'])->isSubscriptionExempt());
     }
@@ -319,10 +325,11 @@ class SubscriptionStateTest extends TestCase
         User::factory()->count(4)->create(['trial_ends_at' => now()->addDays(5)]);
         User::factory()->count(3)->inactive(InactiveReason::Unpaid)->create();
         User::factory()->count(2)->admin()->create();
+        User::factory()->technicalAdmin()->create();
         MemberProfile::factory()->create();
 
         $users = User::with(['role', 'accountStatus', 'memberProfile'])->get();
-        $this->assertCount(10, $users);
+        $this->assertCount(11, $users);
 
         DB::flushQueryLog();
         DB::enableQueryLog();
@@ -332,6 +339,44 @@ class SubscriptionStateTest extends TestCase
         $queries = DB::getQueryLog();
         DB::disableQueryLog();
 
+        $this->assertSame([], $queries);
+    }
+
+    /**
+     * A isenção é uma coluna de users: não precisa do papel nem do perfil carregados.
+     */
+    #[Test]
+    public function is_subscription_exempt_runs_no_queries_without_relations_loaded(): void
+    {
+        $technicalAdmin = User::factory()->technicalAdmin()->create();
+        $payingAdmin = User::factory()->admin()->create();
+        $technicalAdmin = User::findOrFail($technicalAdmin->id);
+        $payingAdmin = User::findOrFail($payingAdmin->id);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $technicalAdminIsExempt = $technicalAdmin->isSubscriptionExempt();
+        $payingAdminIsExempt = $payingAdmin->isSubscriptionExempt();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertTrue($technicalAdminIsExempt);
+        $this->assertFalse($payingAdminIsExempt);
+        $this->assertSame([], $queries);
+    }
+
+    #[Test]
+    public function technical_admin_with_only_the_account_status_loaded_is_exempt_without_more_queries(): void
+    {
+        $technicalAdmin = User::with('accountStatus')->findOrFail(User::factory()->technicalAdmin()->create()->id);
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $state = $technicalAdmin->subscriptionState();
+        $queries = DB::getQueryLog();
+        DB::disableQueryLog();
+
+        $this->assertSame(SubscriptionState::Exempt, $state);
         $this->assertSame([], $queries);
     }
 }

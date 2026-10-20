@@ -47,11 +47,13 @@ class User extends Authenticatable
             'grace_ends_at' => 'datetime',
             'inactive_reason' => InactiveReason::class,
             'terms_accepted_at' => 'datetime',
+            'subscription_exempt' => 'boolean',
         ];
     }
 
     /**
      * Os dados de faturação só são gravados a partir de um Form Request validado.
+     * A marca subscription_exempt fica de fora: só o aspec:create-admin a escreve (forceFill).
      */
     protected $fillable = [
         'email',
@@ -76,6 +78,7 @@ class User extends Authenticatable
         'remember_token',
         'grace_ends_at',
         'inactive_reason',
+        'subscription_exempt',
         'stripe_checkout_session_id',
         'nif',
         'billing_name',
@@ -133,8 +136,7 @@ class User extends Authenticatable
      * Estado da subscrição derivado das colunas da conta (para o backoffice). O estado da conta
      * decide primeiro; numa conta Active, isento > carência > trial > ativo. Espelha o scope
      * inSubscriptionState(): qualquer mudança aqui tem de ser feita lá também.
-     * Espera role, accountStatus e memberProfile carregados (senão faz 3 queries por utilizador),
-     * com memberProfile sem withTrashed(), como no scope.
+     * Espera accountStatus carregado (senão faz 1 query por utilizador); a isenção vem da coluna.
      *
      * @throws \UnhandledMatchError Estado de conta ou motivo de inatividade desconhecido.
      */
@@ -158,22 +160,22 @@ class User extends Authenticatable
     }
 
     /**
-     * Indica se o utilizador não paga subscrição: administrador técnico, ou seja, papel Admin sem
-     * perfil de membro. Mesma regra que o scope subscriptionExempt().
+     * Indica se o utilizador não paga subscrição: só o administrador técnico criado pelo
+     * aspec:create-admin (marca users.subscription_exempt). Os outros admins pagam como qualquer
+     * membro. Mesma regra que o scope subscriptionExempt(); não faz queries.
      */
     public function isSubscriptionExempt(): bool
     {
-        return $this->role?->name === 'Admin' && $this->memberProfile === null;
+        return (bool) $this->subscription_exempt;
     }
 
     /**
-     * Filtra os utilizadores isentos de subscrição (papel Admin sem perfil de membro não apagado).
+     * Filtra os utilizadores isentos de subscrição (marca users.subscription_exempt).
      * Mesma regra que isSubscriptionExempt().
      */
     public function scopeSubscriptionExempt(Builder $query): void
     {
-        $query->whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))
-            ->whereDoesntHave('memberProfile');
+        $query->where('subscription_exempt', true);
     }
 
     /**

@@ -38,6 +38,8 @@ class EndGracePeriods extends Command
      *    (SubscriptionService::cancel(), que nunca lança por causa do Stripe).
      * Uma falha do Stripe no passo 1 deixa a conta como está (tenta na hora seguinte) e o
      * comando termina com FAILURE, para aparecer no log do scheduler.
+     * O administrador técnico (isento) nunca é selecionado: não paga, por isso não devia ter
+     * carência, e desativá-lo trancava a plataforma. Os outros admins são tratados como membros.
      */
     public function handle(StripeSubscriptionService $stripe, SubscriptionService $subscriptions): int
     {
@@ -46,6 +48,7 @@ class EndGracePeriods extends Command
         $users = User::where('account_status_id', AccountStatus::where('name', 'Active')->value('id'))
             ->whereNotNull('grace_ends_at')
             ->where('grace_ends_at', '<=', now())
+            ->where('subscription_exempt', false)
             ->get();
 
         foreach ($users as $user) {

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\ReactivationLinkNotification;
 use App\Services\Payments\StripeSubscriptionService;
@@ -153,17 +154,17 @@ class SubscriptionDeletedWebhookTest extends TestCase
     public static function accountsLeftUnchanged(): array
     {
         return [
-            'admin' => ['admin'],
+            'admin técnico (isento)' => ['exempt'],
             'anonimizada' => ['deleted'],
         ];
     }
 
     #[Test]
     #[DataProvider('accountsLeftUnchanged')]
-    public function deleted_subscription_of_an_admin_or_anonymized_account_sends_no_email(string $kind): void
+    public function deleted_subscription_of_the_exempt_admin_or_anonymized_account_sends_no_email(string $kind): void
     {
-        $user = $kind === 'admin'
-            ? $this->customer(User::factory()->admin()->create())
+        $user = $kind === 'exempt'
+            ? $this->customer(User::factory()->technicalAdmin()->create())
             : $this->customer(User::factory()->inactive(InactiveReason::Deleted)->withBilling()->create());
         $this->subscribe($user);
         if ($kind === 'deleted') {
@@ -173,11 +174,29 @@ class SubscriptionDeletedWebhookTest extends TestCase
         $this->postStripeWebhook($this->deleted(reason: 'payment_failed'))->assertOk();
 
         $fresh = User::withTrashed()->find($user->id);
-        if ($kind === 'admin') {
+        if ($kind === 'exempt') {
             $this->assertSame('Active', $fresh->accountStatus->name);
+            $this->assertNull($fresh->inactive_reason);
         } else {
             $this->assertSame(InactiveReason::Deleted, $fresh->inactive_reason);
         }
         Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function deleted_subscription_of_an_admin_with_a_profile_in_grace_deactivates_for_non_payment(): void
+    {
+        $admin = $this->customer(User::factory()->admin()->withBilling()->create());
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+        $admin->forceFill(['grace_ends_at' => now()->addDays(2)])->save();
+        $this->subscribe($admin);
+
+        $this->postStripeWebhook($this->deleted())->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Inactive', $fresh->accountStatus->name);
+        $this->assertSame(InactiveReason::Unpaid, $fresh->inactive_reason);
+        $this->assertNull($fresh->grace_ends_at);
+        Notification::assertSentToTimes($fresh, ReactivationLinkNotification::class, 1);
     }
 }
