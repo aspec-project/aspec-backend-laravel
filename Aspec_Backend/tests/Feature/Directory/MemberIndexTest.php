@@ -95,6 +95,30 @@ class MemberIndexTest extends TestCase
             ->assertJsonPath('data.pagination.last_page', 1);
     }
 
+    /**
+     * Um per_page vazio chega como null (ConvertEmptyStringsToNull) e tem de cair nos 12 do
+     * diretório, não nos 15 que o paginate() usa por omissão.
+     */
+    #[Test]
+    public function empty_per_page_uses_the_default_of_twelve(): void
+    {
+        for ($i = 1; $i <= 16; $i++) {
+            $this->listedMember(['business_name' => sprintf('Empresa %02d', $i)]);
+        }
+
+        foreach (['?per_page=', '?page=1&per_page='] as $query) {
+            $this->getJson(self::MEMBERS_URL.$query)
+                ->assertOk()
+                ->assertJsonCount(12, 'data.items')
+                ->assertJsonPath('data.pagination', [
+                    'current_page' => 1,
+                    'per_page' => 12,
+                    'total' => 16,
+                    'last_page' => 2,
+                ]);
+        }
+    }
+
     #[Test]
     public function empty_directory_returns_first_and_last_page_one(): void
     {
