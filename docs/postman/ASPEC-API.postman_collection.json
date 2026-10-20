@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8745635e-6527-40f4-94b1-4a35efc5219d",
     "name": "ASPEC API",
-    "description": "API REST do backend ASPEC (Laravel 13 + Sanctum). Esta coleção é o **contrato** entre backend e frontend e alimenta o mock server.\n\n## Convenções\n- **Base URL:** `{{base_url}}` (environments *ASPEC — Mock* e *ASPEC — Local*).\n- **Autenticação:** Bearer token (Sanctum). O pedido *Login* guarda o token em `token` (membro) ou `admin_token` (admin). A pasta Admin usa `admin_token`; os pedidos públicos não enviam token.\n- **Headers:** todos os pedidos enviam `Accept: application/json` (script da coleção). Sem ele, os erros não vêm em JSON.\n- **IDs:** UUID, exceto `week_day_id` (1 = segunda … 7 = domingo).\n- **Datas:** `YYYY-MM-DD`; horas `HH:MM`; data/hora ISO 8601.\n- **Mensagens:** em português (pt-PT). Nomes de campos em inglês.\n\n## Formato das respostas\nSucesso:\n```json\n{ \"success\": true, \"message\": \"…\", \"data\": { … } }\n```\nErro:\n```json\n{ \"success\": false, \"message\": \"…\" }\n```\nErro de validação (422) inclui `errors` por campo:\n```json\n{ \"success\": false, \"message\": \"Os dados enviados são inválidos.\", \"errors\": { \"email\": [\"O email já está registado.\"] } }\n```\nListas paginadas: `data = { \"items\": [ … ], \"pagination\": { \"current_page\", \"per_page\", \"total\", \"last_page\" } }`.\n\n## Códigos HTTP\n200 OK · 201 criado · 401 sem token/token inválido · 403 sem permissão ou conta não ativa · 404 não encontrado · 409 conflito (ex.: evento lotado) · 422 validação · 429 demasiados pedidos · 500 erro interno.\n\n## Mock server\nCada pedido tem exemplos de sucesso e de erro. Por omissão o mock devolve o primeiro exemplo; para outro, enviar o header `x-mock-response-name` com o nome do exemplo (ex.: `422 Validação`) ou `x-mock-response-code` (ex.: `422`).\n\n## Estado\nContratos propostos pelo backend. Cada área deve ser validada pelo respetivo responsável; alterações futuras entram aqui primeiro (contract-first). Pastas marcadas **RASCUNHO** ou **Opcional** ainda não estão fechadas.",
+    "description": "API REST do backend ASPEC (Laravel 13 + Sanctum). Esta coleção é o **contrato** entre backend e frontend e alimenta o mock server.\n\n## Convenções\n- **Base URL:** `{{base_url}}` (environments *ASPEC — Mock* e *ASPEC — Local*).\n- **Autenticação:** Bearer token (Sanctum). O pedido *Login* guarda o token em `token` (membro) ou `admin_token` (admin). A pasta Admin usa `admin_token`; os pedidos públicos não enviam token.\n- **Headers:** todos os pedidos enviam `Accept: application/json` (script da coleção). Sem ele, os erros não vêm em JSON.\n- **IDs:** UUID, exceto `week_day_id` (1 = segunda … 7 = domingo).\n- **Datas:** `YYYY-MM-DD`; horas `HH:MM`; data/hora ISO 8601.\n- **Mensagens:** em português (pt-PT). Nomes de campos em inglês.\n\n## Formato das respostas\nSucesso:\n```json\n{ \"success\": true, \"message\": \"…\", \"data\": { … } }\n```\nErro:\n```json\n{ \"success\": false, \"message\": \"…\" }\n```\nErro de validação (422) inclui `errors` por campo:\n```json\n{ \"success\": false, \"message\": \"Os dados enviados são inválidos.\", \"errors\": { \"email\": [\"O email já está registado.\"] } }\n```\nListas paginadas: `data = { \"items\": [ … ], \"pagination\": { \"current_page\", \"per_page\", \"total\", \"last_page\" } }`.\n\n## Códigos HTTP\n200 OK · 201 criado · 401 sem token/token inválido · 403 sem permissão ou conta não ativa · 404 não encontrado · 409 conflito (ex.: evento lotado) · 422 validação · 429 demasiados pedidos · 500 erro interno · 502/503 serviço externo indisponível (502: pagamentos e faturação; 503: localização de moradas).\n\n## Mock server\nCada pedido tem exemplos de sucesso e de erro. Por omissão o mock devolve o primeiro exemplo; para outro, enviar o header `x-mock-response-name` com o nome do exemplo (ex.: `422 Validação`) ou `x-mock-response-code` (ex.: `422`).\n\n## Estado\nContratos propostos pelo backend. Cada área deve ser validada pelo respetivo responsável; alterações futuras entram aqui primeiro (contract-first). Pastas marcadas **RASCUNHO** ou **Opcional** ainda não estão fechadas. Pedidos com **(planeado)** no nome ainda não têm rota no backend (respondem 404) e o contrato pode mudar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -1257,7 +1257,7 @@
                 "sectors"
               ]
             },
-            "description": "Setores de atividade.\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "Setores de atividade, **ordenados por nome**.\n\nPúblico. Usado para preencher selects no frontend.",
             "auth": {
               "type": "noauth"
             }
@@ -1294,7 +1294,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n      \"name\": \"Tecnologias de Informação (TI)\"\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"name\": \"Arquitetura e Design\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Setores obtidos com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"name\": \"Arquitetura e Design\"\n    },\n    {\n      \"id\": \"f47ac10b-58cc-4372-a567-0e02b2c3d479\",\n      \"name\": \"Tecnologias de Informação (TI)\"\n    }\n  ]\n}"
             }
           ],
           "event": [
@@ -1329,7 +1329,7 @@
                 "locations"
               ]
             },
-            "description": "As 20 localidades de Portugal: os 18 distritos de Portugal continental, Açores e Madeira.\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "Os 20 núcleos regionais: os 18 distritos de Portugal continental e as 2 regiões autónomas (Açores e Madeira), por **ordem alfabética portuguesa** (`Açores` primeiro, `Évora` entre `Coimbra` e `Faro`), igual em qualquer base de dados.\n\nPúblico. Usado para preencher selects no frontend.",
             "auth": {
               "type": "noauth"
             }
@@ -1366,7 +1366,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    {\n      \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n      \"name\": \"Porto\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Núcleos obtidos com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"a7c0e1d2-0001-4c00-8c00-000000000001\",\n      \"name\": \"Açores\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0002-4c00-8c00-000000000002\",\n      \"name\": \"Aveiro\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0003-4c00-8c00-000000000003\",\n      \"name\": \"Beja\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0004-4c00-8c00-000000000004\",\n      \"name\": \"Braga\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0005-4c00-8c00-000000000005\",\n      \"name\": \"Bragança\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0006-4c00-8c00-000000000006\",\n      \"name\": \"Castelo Branco\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0007-4c00-8c00-000000000007\",\n      \"name\": \"Coimbra\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0008-4c00-8c00-000000000008\",\n      \"name\": \"Évora\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0009-4c00-8c00-000000000009\",\n      \"name\": \"Faro\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0010-4c00-8c00-000000000010\",\n      \"name\": \"Guarda\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0011-4c00-8c00-000000000011\",\n      \"name\": \"Leiria\"\n    },\n    {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0013-4c00-8c00-000000000013\",\n      \"name\": \"Madeira\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0014-4c00-8c00-000000000014\",\n      \"name\": \"Portalegre\"\n    },\n    {\n      \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n      \"name\": \"Porto\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0016-4c00-8c00-000000000016\",\n      \"name\": \"Santarém\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0017-4c00-8c00-000000000017\",\n      \"name\": \"Setúbal\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0018-4c00-8c00-000000000018\",\n      \"name\": \"Viana do Castelo\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0019-4c00-8c00-000000000019\",\n      \"name\": \"Vila Real\"\n    },\n    {\n      \"id\": \"a7c0e1d2-0020-4c00-8c00-000000000020\",\n      \"name\": \"Viseu\"\n    }\n  ]\n}"
             }
           ],
           "event": [
@@ -1401,7 +1401,7 @@
                 "social-platforms"
               ]
             },
-            "description": "Plataformas aceites em `social_links`.\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "Plataformas aceites em `social_links`, **ordenadas por nome**.\n\nPúblico. Usado para preencher selects no frontend.",
             "auth": {
               "type": "noauth"
             }
@@ -1438,7 +1438,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"name\": \"LinkedIn\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0002-4a00-8000-000000000002\",\n      \"name\": \"Instagram\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0003-4a00-8000-000000000003\",\n      \"name\": \"Facebook\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0004-4a00-8000-000000000004\",\n      \"name\": \"YouTube\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Plataformas sociais obtidas com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"a1b2c3d4-0003-4a00-8000-000000000003\",\n      \"name\": \"Facebook\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0002-4a00-8000-000000000002\",\n      \"name\": \"Instagram\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"name\": \"LinkedIn\"\n    },\n    {\n      \"id\": \"a1b2c3d4-0004-4a00-8000-000000000004\",\n      \"name\": \"YouTube\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -1457,7 +1457,7 @@
                 "week-days"
               ]
             },
-            "description": "IDs 1 (segunda) a 7 (domingo), usados em `business_hours`.\n\nPúblico. Usado para preencher selects no frontend.",
+            "description": "IDs 1 (Segunda-feira) a 7 (Domingo), **ordenados pelo id**, usados em `business_hours`. Os nomes vêm em português.\n\nPúblico. Usado para preencher selects no frontend.",
             "auth": {
               "type": "noauth"
             }
@@ -1494,7 +1494,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"Monday\"\n    },\n    {\n      \"id\": 2,\n      \"name\": \"Tuesday\"\n    },\n    {\n      \"id\": 3,\n      \"name\": \"Wednesday\"\n    },\n    {\n      \"id\": 4,\n      \"name\": \"Thursday\"\n    },\n    {\n      \"id\": 5,\n      \"name\": \"Friday\"\n    },\n    {\n      \"id\": 6,\n      \"name\": \"Saturday\"\n    },\n    {\n      \"id\": 7,\n      \"name\": \"Sunday\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dias da semana obtidos com sucesso.\",\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"Segunda-feira\"\n    },\n    {\n      \"id\": 2,\n      \"name\": \"Terça-feira\"\n    },\n    {\n      \"id\": 3,\n      \"name\": \"Quarta-feira\"\n    },\n    {\n      \"id\": 4,\n      \"name\": \"Quinta-feira\"\n    },\n    {\n      \"id\": 5,\n      \"name\": \"Sexta-feira\"\n    },\n    {\n      \"id\": 6,\n      \"name\": \"Sábado\"\n    },\n    {\n      \"id\": 7,\n      \"name\": \"Domingo\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -1513,7 +1513,7 @@
                 "event-categories"
               ]
             },
-            "description": "**Público** (sem login e sem limite de pedidos).\n\nTodas as categorias de eventos, **ordenadas por nome** e sem paginação. Usado nos filtros da agenda e no formulário de eventos do backoffice.\n\n- `color`: cor da categoria no formato `#RRGGBB` ou `null` (sem cor; o frontend usa `#0D1F35`).\n\nNunca devolve `created_at`/`updated_at`.",
+            "description": "**Público** (sem login e sem limite de pedidos).\n\nTodas as categorias de eventos, **ordenadas por nome** e sem paginação. Usado nos filtros da agenda e no formulário de eventos do backoffice.\n\n- `color`: cor da categoria no formato `#RRGGBB`, sempre preenchida, em maiúsculas e diferente entre categorias.\n\nNão inclui o número de eventos (só no backoffice). Nunca devolve `created_at`/`updated_at`.",
             "auth": {
               "type": "noauth"
             }
@@ -8511,7 +8511,7 @@
       "description": "Backoffice. Requer token de Admin (`admin_token`).",
       "item": [
         {
-          "name": "Dashboard",
+          "name": "Dashboard (planeado)",
           "request": {
             "method": "GET",
             "header": [],
@@ -8526,7 +8526,7 @@
                 "dashboard"
               ]
             },
-            "description": "Totais para os cartões da dashboard."
+            "description": "**(planeado) Ainda não implementado: a rota não existe** (hoje responde 404 \"Recurso não encontrado.\"). Contrato provisório, a definir na ASPEC-226 (dashboard do backoffice).\n\nTotais para os cartões da dashboard."
           },
           "response": [
             {
@@ -8629,7 +8629,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
             }
           ]
         },
@@ -10158,7 +10158,7 @@
                 "event-categories"
               ]
             },
-            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nTodas as categorias, **ordenadas por nome** e sem paginação, para a gestão de categorias e o formulário de eventos do backoffice. Cada categoria: `{id, name, color}` (`color` pode ser `null`).\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa."
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nTodas as categorias, **ordenadas por nome** e sem paginação, para a gestão de categorias e o formulário de eventos do backoffice. Cada categoria: `{id, name, color, events_count}`; `events_count` é o número de eventos da categoria (passados e futuros; cada sessão de uma série conta como um evento). Uma categoria com `events_count` maior que 0 não pode ser eliminada (409).\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa."
           },
           "response": [
             {
@@ -10193,7 +10193,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de categorias obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Almoço\",\n      \"color\": \"#2E7D32\"\n    },\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequeno-almoço\",\n      \"color\": \"#B84A00\"\n    },\n    {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de categorias obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"d1e2f3a4-6666-4b66-8666-666666666666\",\n      \"name\": \"Almoço\",\n      \"color\": \"#2E7D32\",\n      \"events_count\": 1\n    },\n    {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\",\n      \"events_count\": 3\n    },\n    {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\",\n      \"events_count\": 3\n    },\n    {\n      \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n      \"name\": \"Pequeno-almoço\",\n      \"color\": \"#B84A00\",\n      \"events_count\": 3\n    },\n    {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\",\n      \"events_count\": 1\n    }\n  ]\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -10320,10 +10320,10 @@
                 "event-categories"
               ]
             },
-            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nCria uma categoria de eventos.\n\n- `name`: obrigatório, texto, até 100 caracteres, **único sem distinguir maiúsculas** (`formações` colide com `Formação`). Espaços no início e no fim são removidos.\n- `color`: opcional, formato `#RRGGBB` (ex.: `#8A7043`); ausente ou `null` → categoria sem cor.\n- Outros campos são ignorados.\n\nGuarda o `id` da categoria criada em `event_category_id`, usado por \"Atualizar categoria\" e \"Eliminar categoria\".\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 422 validação.",
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos.\n\nCria uma categoria de eventos.\n\n- `name`: obrigatório, texto, **até 30 caracteres**, **único sem distinguir maiúsculas** (`formação` colide com `Formação`). Espaços no início e no fim são removidos.\n- `color`: **obrigatória**, formato `#RRGGBB` (ex.: `#8A7043`), guardada e devolvida **em maiúsculas** e **diferente da cor das outras categorias** (sem distinguir maiúsculas: `#2e7d32` colide com `#2E7D32`).\n- Outros campos são ignorados.\n\nA resposta inclui `events_count` (0 numa categoria nova). Guarda o `id` da categoria criada em `event_category_id`, usado por \"Atualizar categoria\" e \"Eliminar categoria\".\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
+              "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#00796b\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -10355,7 +10355,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#00796b\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10373,7 +10373,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking\",\n    \"color\": \"#315A79\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria criada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking\",\n    \"color\": \"#00796B\",\n    \"events_count\": 0\n  }\n}"
             },
             {
               "name": "422 Nome em falta",
@@ -10398,7 +10398,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"color\": \"#00796B\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10441,7 +10441,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"\n}",
+                  "raw": "{\n  \"name\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\n  \"color\": \"#00796B\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10459,7 +10459,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"O campo nome não pode ter mais de 100 caracteres.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"O campo nome não pode ter mais de 30 caracteres.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Nome repetido",
@@ -10484,7 +10484,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"formações\"\n}",
+                  "raw": "{\n  \"name\": \"formação\",\n  \"color\": \"#00796B\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10503,6 +10503,49 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"Já existe uma categoria com este nome.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Cor em falta",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cor em falta"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Encontro de networking\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"O campo cor é obrigatório.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Cor inválida",
@@ -10548,6 +10591,49 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"A cor tem de estar no formato #RRGGBB (ex.: #8A7043).\"\n    ]\n  }\n}"
             },
             {
+              "name": "422 Cor repetida",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cor repetida"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#2E7D32\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"Já existe uma categoria com esta cor.\"\n    ]\n  }\n}"
+            },
+            {
               "name": "401 Não autenticado",
               "originalRequest": {
                 "method": "POST",
@@ -10570,7 +10656,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#00796b\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10613,7 +10699,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#00796b\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10656,7 +10742,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#315A79\"\n}",
+                  "raw": "{\n  \"name\": \"Encontro de networking\",\n  \"color\": \"#00796b\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10721,10 +10807,10 @@
                 }
               ]
             },
-            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos. Correr antes \"Criar categoria\" para preencher `event_category_id`.\n\nAltera o nome e/ou a cor. As regras são as de \"Criar categoria\"; a unicidade ignora a própria categoria (pode manter o nome ou mudar só as maiúsculas).\n\n- `name`: **obrigatório** também na edição.\n- `color`: **ausente → mantém a cor atual**; `null` → remove a cor.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (id inexistente ou que não é UUID) · 422 validação.",
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). Sem limite de pedidos. Correr antes \"Criar categoria\" para preencher `event_category_id`.\n\nSubstitui o nome e a cor. As regras são as de \"Criar categoria\" e **os dois campos são obrigatórios** também na edição; as regras de unicidade ignoram a própria categoria (pode manter o nome e a cor, ou mudar só as maiúsculas).\n\nA resposta inclui `events_count`.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (id inexistente ou que não é UUID) · 422 validação.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+              "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -10757,7 +10843,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10775,51 +10861,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking para liderança\",\n    \"color\": \"#8A7043\"\n  }\n}"
-            },
-            {
-              "name": "200 Cor removida",
-              "originalRequest": {
-                "method": "PUT",
-                "header": [
-                  {
-                    "key": "x-mock-response-name",
-                    "value": "200 Cor removida"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "admin",
-                    "event-categories",
-                    "d1e2f3a4-7777-4b77-8777-777777777777"
-                  ]
-                },
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": null\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Encontro de networking para liderança\",\n    \"color\": null\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Categoria atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"d1e2f3a4-7777-4b77-8777-777777777777\",\n    \"name\": \"Networking e liderança\",\n    \"color\": \"#5D4037\",\n    \"events_count\": 0\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -10845,7 +10887,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10889,7 +10931,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10933,7 +10975,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Formação\"\n}",
+                  "raw": "{\n  \"name\": \"Formação\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -10952,6 +10994,94 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"name\": [\n      \"Já existe uma categoria com este nome.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Cor em falta",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cor em falta"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Networking e liderança\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"O campo cor é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Cor repetida",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cor repetida"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/event-categories/d1e2f3a4-7777-4b77-8777-777777777777",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "event-categories",
+                    "d1e2f3a4-7777-4b77-8777-777777777777"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#1565C0\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"color\": [\n      \"Já existe uma categoria com esta cor.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -10977,7 +11107,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11021,7 +11151,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -11065,7 +11195,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Encontro de networking para liderança\",\n  \"color\": \"#8A7043\"\n}",
+                  "raw": "{\n  \"name\": \"Networking e liderança\",\n  \"color\": \"#5D4037\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -12200,7 +12330,428 @@
           ]
         },
         {
-          "name": "Inscrições de um evento",
+          "name": "Localizar morada",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id={{location_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "geocode"
+              ],
+              "query": [
+                {
+                  "key": "address",
+                  "value": "Rua Augusta 1",
+                  "description": "Obrigatória. Morada em texto livre (máx. 255 caracteres)."
+                },
+                {
+                  "key": "location_id",
+                  "value": "{{location_id}}",
+                  "description": "Opcional. Distrito ou região (preenchido por \"Localizações\"); o nome é acrescentado à pesquisa."
+                }
+              ]
+            },
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). **Limite: 30 pedidos por minuto por administrador** (depois 429).\n\nLocaliza uma morada no mapa (OpenStreetMap, serviço Nominatim) para o formulário de eventos presenciais do backoffice: o admin carrega em \"Localizar no mapa\", confirma o ponto e envia `latitude`/`longitude` em \"Criar evento\"/\"Atualizar evento\". Não grava nada.\n\n- `address`: obrigatória, texto, até 255 caracteres (espaços a mais são removidos).\n- `location_id`: opcional, id de um distrito ou região (`GET /api/locations`); o nome é acrescentado à pesquisa (ex.: `Rua Augusta 1, Lisboa`).\n\nResposta: `latitude` e `longitude` (7 casas decimais, como as colunas de `event_instances`), `display_name` (morada encontrada) e `attribution`, que o frontend **tem de mostrar** junto ao mapa (licença ODbL). O `display_name` vem do OpenStreetMap, que qualquer pessoa pode editar: mostrar só como texto, nunca como HTML.\n\n**Só por ação explícita (botão), nunca a cada tecla** (sem autocomplete, política do Nominatim). O servidor faz no máximo 1 pedido por segundo ao Nominatim para toda a aplicação e guarda as moradas encontradas em cache durante 30 dias (pedidos repetidos respondem logo e não contam para esse limite).\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 morada não encontrada (corrigir a morada) · 422 validação · 429 mais de 30 pedidos por minuto · 503 serviço de localização indisponível ou ocupado (tentar dentro de instantes)."
+          },
+          "response": [
+            {
+              "name": "200 Localizada",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Localizada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Morada localizada com sucesso.\",\n  \"data\": {\n    \"latitude\": 38.7084591,\n    \"longitude\": -9.1365284,\n    \"display_name\": \"Rua Augusta, Baixa, Santa Maria Maior, Lisboa, 1100-053, Portugal\",\n    \"attribution\": \"© OpenStreetMap contributors\"\n  }\n}"
+            },
+            {
+              "name": "404 Morada não encontrada",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Morada não encontrada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Inexistente 999",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Inexistente 999"
+                    }
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não foi possível encontrar esta morada no mapa. Verifique a morada e tente novamente.\"\n}"
+            },
+            {
+              "name": "422 Morada em falta",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Morada em falta"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"address\": [\n      \"O campo morada é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Distrito inexistente",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Distrito inexistente"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "9f1c2d3e-4b5a-4c6d-8e7f-0a1b2c3d4e5f"
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"location_id\": [\n      \"O valor selecionado para distrito é inválido.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            },
+            {
+              "name": "503 Serviço indisponível",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "503 Serviço indisponível"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Service Unavailable",
+              "code": 503,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O serviço de localização não está disponível de momento. Tente novamente dentro de instantes.\"\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/geocode?address=Rua Augusta 1&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "geocode"
+                  ],
+                  "query": [
+                    {
+                      "key": "address",
+                      "value": "Rua Augusta 1"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    }
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Inscrições de um evento (planeado)",
           "request": {
             "method": "GET",
             "header": [],
@@ -12223,7 +12774,7 @@
                 }
               ]
             },
-            "description": "Lista de inscritos."
+            "description": "**(planeado) Ainda não implementado: a rota não existe** (hoje responde 404 \"Recurso não encontrado.\"). Contrato provisório. A lista de inscritos visível aos membros (nome e empresa) já existe: \"Inscritos de um evento (nomes das empresas)\", na pasta Eventos.\n\nLista de inscritos."
           },
           "response": [
             {
@@ -12332,12 +12883,12 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
             }
           ]
         },
         {
-          "name": "Exportar lista de presenças (CSV)",
+          "name": "Exportar lista de presenças (CSV) (planeado)",
           "request": {
             "method": "GET",
             "header": [],
@@ -12361,7 +12912,7 @@
                 }
               ]
             },
-            "description": "Lista oficial de presenças em CSV (separador `;`, UTF-8). Resposta é um ficheiro, não JSON."
+            "description": "**(planeado) Ainda não implementado: a rota não existe** (hoje responde 404 \"Recurso não encontrado.\"). Contrato provisório, a definir na ASPEC-222 (nome, empresa, email e telefone pessoais dos inscritos).\n\nLista oficial de presenças em CSV (separador `;`, UTF-8). Resposta é um ficheiro, não JSON."
           },
           "response": [
             {
@@ -12473,7 +13024,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
             }
           ]
         },
