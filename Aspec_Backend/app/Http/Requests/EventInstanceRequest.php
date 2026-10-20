@@ -37,10 +37,10 @@ class EventInstanceRequest extends FormRequest
             'venue_name' => ['nullable', 'string', 'max:255'],
             'latitude' => $isOnline
                 ? ['prohibited']
-                : ['required', 'numeric', 'between:-90,90'],
+                : ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'longitude' => $isOnline
                 ? ['prohibited']
-                : ['required', 'numeric', 'between:-180,180'],
+                : ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
             'registration_deadline' => ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
@@ -58,6 +58,17 @@ class EventInstanceRequest extends FormRequest
     public function withValidator(ValidatorContract $validator): void
     {
         $validator->after(function (ValidatorContract $validator): void {
+            if (! $this->boolean('is_online')) {
+                $hasLatitude = $this->filled('latitude');
+                $hasLongitude = $this->filled('longitude');
+
+                if ($hasLatitude !== $hasLongitude) {
+                    $message = 'Envie latitude e longitude em conjunto, ou deixe ambas em branco para localizar a morada.';
+
+                    $validator->errors()->add('latitude', $message);
+                    $validator->errors()->add('longitude', $message);
+                }
+            }
             if ($validator->errors()->has('registration_deadline')) {
                 return;
             }

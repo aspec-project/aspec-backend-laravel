@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Contracts\Geocoder;
+use App\Exceptions\GeocodingUnavailable;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInstanceRequest;
 use App\Http\Resources\EventInstanceResource;
 use App\Models\EventInstance;
+use App\Models\Location;
 use App\Notifications\EventCancelledNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -41,9 +45,60 @@ class AdminEventInstanceController extends Controller
         ], 'Lista de eventos obtida com sucesso.');
     }
 
-    public function store(EventInstanceRequest $request): JsonResponse
+    /**
+     * Geocodifica eventos presenciais quando as coordenadas não foram enviadas.
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function geocodeMissingCoordinates(array &$validated, Geocoder $geocoder): ?JsonResponse
     {
-        $event = EventInstance::create($request->validatedEventData());
+        if ((bool) $validated['is_online']) {
+            return null;
+        }
+
+        if (isset($validated['latitude'], $validated['longitude'])) {
+            return null;
+        }
+
+        $locationName = Location::query()
+            ->whereKey($validated['location_id'])
+            ->value('name');
+
+        $query = Str::squish($validated['address'].', '.$locationName);
+
+        try {
+            $result = $geocoder->geocode($query);
+        } catch (GeocodingUnavailable) {
+            return $this->errorResponse(
+                'O serviço de localização não está disponível de momento. Tente novamente dentro de instantes.',
+                Response::HTTP_SERVICE_UNAVAILABLE
+            );
+        }
+
+        if ($result === null) {
+            return $this->errorResponse(
+                'Não foi possível encontrar esta morada no mapa. Verifique a morada e tente novamente.',
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $validated['latitude'] = $result->latitude;
+        $validated['longitude'] = $result->longitude;
+
+        return null;
+    }
+
+    public function store(EventInstanceRequest $request, Geocoder $geocoder): JsonResponse
+    {
+        $validated = $request->validatedEventData();
+
+        $geocodingError = $this->geocodeMissingCoordinates($validated, $geocoder);
+
+        if ($geocodingError !== null) {
+            return $geocodingError;
+        }
+
+        $event = EventInstance::create($validated);
         $event->load(['category', 'location']);
 
         return $this->successResponse(
@@ -63,11 +118,15 @@ class AdminEventInstanceController extends Controller
         );
     }
 
-    public function update(
-        EventInstanceRequest $request,
-        EventInstance $eventInstance
-    ): JsonResponse {
+    public function update(EventInstanceRequest $request, EventInstance $eventInstance, Geocoder $geocoder): JsonResponse
+    {
         $validated = $request->validatedEventData();
+
+        $geocodingError = $this->geocodeMissingCoordinates($validated, $geocoder);
+
+        if ($geocodingError !== null) {
+            return $geocodingError;
+        }
 
         return DB::transaction(function () use ($validated, $eventInstance): JsonResponse {
             $event = EventInstance::query()

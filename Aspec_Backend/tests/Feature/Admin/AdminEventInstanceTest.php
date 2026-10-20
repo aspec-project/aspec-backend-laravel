@@ -2,16 +2,20 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Contracts\Geocoder;
+use App\Exceptions\GeocodingUnavailable;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\Location;
 use App\Models\User;
 use App\Notifications\EventCancelledNotification;
+use App\Services\Geocoding\Data\GeocodingResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Laravel\Sanctum\Sanctum;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -628,5 +632,161 @@ class AdminEventInstanceTest extends TestCase
         $this->putJson(self::URL."/{$event->id}", $payload)
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['event_end_time']);
+    }
+
+    #[Test]
+    public function admin_can_create_an_in_person_event_without_coordinates_by_geocoding_its_address(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        unset($payload['latitude'], $payload['longitude']);
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+        $result = new GeocodingResult(38.7084591, -9.1365284, 'Rua Augusta, Lisboa');
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query, $result): void {
+            $mock->shouldReceive('geocode')
+                ->once()
+                ->with($query)
+                ->andReturn($result);
+        });
+
+        $response = $this->postJson(self::URL, $payload);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.latitude', 38.7084591)
+            ->assertJsonPath('data.longitude', -9.1365284);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $response->json('data.id'),
+            'latitude' => 38.7084591,
+            'longitude' => -9.1365284,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_update_an_in_person_event_without_coordinates_by_geocoding_its_address(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $payload = $this->validPayload();
+        unset($payload['latitude'], $payload['longitude']);
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+        $result = new GeocodingResult(38.7084591, -9.1365284, 'Rua Augusta, Lisboa');
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query, $result): void {
+            $mock->shouldReceive('geocode')
+                ->once()
+                ->with($query)
+                ->andReturn($result);
+        });
+
+        $response = $this->putJson(self::URL."/{$event->id}", $payload);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.latitude', 38.7084591)
+            ->assertJsonPath('data.longitude', -9.1365284);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'latitude' => 38.7084591,
+            'longitude' => -9.1365284,
+        ]);
+    }
+
+    #[Test]
+    public function event_creation_returns_not_found_when_address_cannot_be_geocoded(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        unset($payload['latitude'], $payload['longitude']);
+
+        $eventsBefore = EventInstance::query()->count();
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query): void {
+            $mock->shouldReceive('geocode')
+                ->once()
+                ->with($query)
+                ->andReturn(null);
+        });
+
+        $this->postJson(self::URL, $payload)
+            ->assertNotFound();
+
+        $this->assertSame($eventsBefore, EventInstance::query()->count());
+    }
+
+    #[Test]
+    public function event_update_returns_service_unavailable_without_changing_the_event(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $originalName = $event->name;
+
+        $payload = $this->validPayload();
+        $payload['name'] = 'Nome que não deve ser guardado';
+        unset($payload['latitude'], $payload['longitude']);
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query): void {
+            $mock->shouldReceive('geocode')
+                ->once()
+                ->with($query)
+                ->andThrow(new GeocodingUnavailable('Serviço indisponível'));
+        });
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertStatus(503);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'name' => $originalName,
+        ]);
+
+        $this->assertDatabaseMissing('event_instances', [
+            'id' => $event->id,
+            'name' => 'Nome que não deve ser guardado',
+        ]);
+    }
+
+    #[Test]
+    public function in_person_event_rejects_only_one_coordinate(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $payload = $this->validPayload();
+        unset($payload['longitude']);
+
+        foreach ([
+            ['method' => 'post', 'url' => self::URL],
+            ['method' => 'put', 'url' => self::URL."/{$event->id}"],
+        ] as $request) {
+            $this->{$request['method'].'Json'}($request['url'], $payload)
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['latitude', 'longitude']);
+        }
     }
 }
