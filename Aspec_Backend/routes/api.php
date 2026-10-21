@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
@@ -96,6 +97,12 @@ Route::prefix('admin')
             ->whereUuid('eventInstance');
         Route::delete('/events/{eventInstance}', [AdminEventInstanceController::class, 'destroy'])
             ->whereUuid('eventInstance');
+        Route::get('/events/{eventInstance}/attendees', [AdminEventAttendeeController::class, 'index'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:event-attendees');
+        Route::get('/events/{eventInstance}/attendees.csv', [AdminEventAttendeeController::class, 'export'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:event-attendees');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
     });
 

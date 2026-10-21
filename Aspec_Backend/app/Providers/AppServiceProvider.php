@@ -177,5 +177,11 @@ class AppServiceProvider extends ServiceProvider
             'geocode',
             fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())
         );
+
+        // Inscritos de um evento (JSON e CSV, limite partilhado): 30/min por admin, por entregarem contactos pessoais em lote.
+        RateLimiter::for(
+            'event-attendees',
+            fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())
+        );
     }
 }
