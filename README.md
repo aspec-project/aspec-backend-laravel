@@ -44,6 +44,16 @@ O comando cria o **administrador técnico**: uma conta **Admin Active**, sem per
 - Nunca isenta uma conta que já existe: se o email for de um administrador que paga, ou de uma conta que não seja um administrador ativo, recusa e não altera essa conta.
 - A marca não se põe nem se tira pela API (fica fora do `$fillable`); só este comando a escreve.
 
+## Anonimizar membro (RGPD)
+
+Não há apagamento de conta pelo próprio membro: o membro pede à ASPEC por email e um administrador anonimiza a conta no backoffice (`POST /api/admin/users/{id}/anonymize`, limite de 5 por hora por administrador). É irreversível.
+
+- **Apaga:** perfil (nome, empresa, descrição, contactos, morada), horários, redes sociais, portfólio e logótipo (ficheiros incluídos), dados de faturação, inscrições em eventos futuros (libertam a vaga), sessões e tokens. O email passa a um endereço anónimo, a conta fica Inactive (motivo: eliminada) e é apagada com soft delete. A subscrição é cancelada no Stripe (e um Checkout aberto expira) e o cliente Stripe é apagado.
+- **Fica:** faturas e PDFs (obrigação fiscal de 10 anos), inscrições em eventos passados (mostradas como "Empresa anonimizada") e um registo de prova em `account_anonymizations` (conta, administrador e data, sem dados pessoais).
+- Contas de administrador são recusadas (409), incluindo a própria e o administrador técnico: para anonimizar um administrador, despromova-o primeiro.
+- O membro recebe um email de confirmação no endereço original e pode voltar a candidatar-se com o mesmo email.
+- Uma conta já anonimizada responde 404 (para a API já não existe). O registo de prova consulta-se por SQL (`account_anonymizations`).
+
 ## Dados de demonstração
 
 **Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.

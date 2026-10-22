@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
+use App\Jobs\CancelStripeSubscriptionJob;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
@@ -312,12 +313,34 @@ class User extends Authenticatable
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
+     * Grava a prova da anonimização (conta, admin, data) na mesma transação: nunca uma sem a outra.
+     * A conta é relida com lockForUpdate: dois pedidos em simultâneo anonimizam e registam uma só vez.
+     * Tudo o resto parte da linha bloqueada (não da cópia em memória), para limpar também o que mudou
+     * entretanto (ex.: faturação gravada por uma ativação em simultâneo). Se o stripe_id da linha
+     * bloqueada não for o que já foi apagado, o DeleteStripeCustomerJob trata dele depois do commit.
+     * Uma sessão de Checkout ainda guardada é expirada depois do commit (CancelStripeSubscriptionJob),
+     * para ninguém conseguir pagar por uma conta apagada.
+     *
+     * @param  User|null  $anonymizedBy  Admin que pediu a anonimização; null fora da API (tinker, comandos).
+     * @return bool false se a conta já estava apagada (nada é alterado); true se foi anonimizada.
      */
-    public function anonymizeAndDelete(): void
+    public function anonymizeAndDelete(?User $anonymizedBy = null): bool
     {
+        $handledStripeId = $this->stripe_id;
         $stripeCustomerDeleted = $this->deleteStripeCustomer();
+        $checkoutSessionId = null;
 
-        DB::transaction(function () use ($stripeCustomerDeleted) {
+        $anonymized = DB::transaction(function () use ($handledStripeId, $stripeCustomerDeleted, $anonymizedBy, &$checkoutSessionId) {
+            $current = static::withTrashed()->whereKey($this->id)->lockForUpdate()->first();
+
+            if ($current === null || $current->trashed()) {
+                return false;
+            }
+
+            $this->setRawAttributes($current->getAttributes(), true);
+            $stripeCustomerDeleted = $stripeCustomerDeleted && $this->stripe_id === $handledStripeId;
+            $checkoutSessionId = $this->stripe_checkout_session_id;
+
             $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
 
             if ($profile) {
@@ -403,17 +426,37 @@ class User extends Authenticatable
 
             DB::table(config('session.table'))->where('user_id', $this->id)->delete();
 
+            AccountAnonymization::create([
+                'user_id' => $this->id,
+                'anonymized_by_user_id' => $anonymizedBy?->id,
+            ]);
+
             $this->delete();
 
             if (! $stripeCustomerDeleted) {
                 DeleteStripeCustomerJob::dispatch($this->id)->afterCommit();
             }
+
+            return true;
         });
+
+        if (! $anonymized) {
+            return false;
+        }
 
         DB::afterCommit(function () {
             Storage::disk('public')->deleteDirectory("logos/{$this->id}");
             Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
         });
+
+        if ($checkoutSessionId !== null) {
+            // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.
+            rescue(function () use ($checkoutSessionId) {
+                CancelStripeSubscriptionJob::dispatch($this->id, [], $checkoutSessionId)->afterCommit();
+            }, report: true);
+        }
+
+        return true;
     }
 
     /**
