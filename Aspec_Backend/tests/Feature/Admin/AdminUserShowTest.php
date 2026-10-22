@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -24,7 +25,7 @@ class AdminUserShowTest extends TestCase
 
     private const NOT_FOUND_BODY = ['success' => false, 'message' => 'Recurso não encontrado.'];
 
-    private const ACCOUNT_KEYS = ['id', 'email', 'phone', 'created_at', 'role', 'account_status', 'inactive_reason', 'member_profile'];
+    private const ACCOUNT_KEYS = ['id', 'email', 'phone', 'created_at', 'role', 'account_status', 'inactive_reason', 'subscription_state', 'member_profile'];
 
     private const PROFILE_KEYS = [
         'id', 'name', 'business_name', 'congregation', 'role_in_congregation', 'description', 'website_url',
@@ -141,7 +142,7 @@ class AdminUserShowTest extends TestCase
         foreach ([
             'billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city',
             'stripe_id', 'pm_type', 'pm_last_four', 'trial_ends_at', 'grace_ends_at', 'stripe_checkout_session_id',
-            'password', 'remember_token', 'role_id', 'account_status_id', 'email_verified_at',
+            'subscription_exempt', 'password', 'remember_token', 'role_id', 'account_status_id', 'email_verified_at',
         ] as $key) {
             $this->assertArrayNotHasKey($key, $data);
         }
@@ -149,6 +150,73 @@ class AdminUserShowTest extends TestCase
         foreach (['user_id', 'logo_path', 'deleted_at'] as $key) {
             $this->assertArrayNotHasKey($key, $data['member_profile']);
         }
+    }
+
+    /**
+     * @return array<string, array{string, string, string}>
+     */
+    public static function subscriptionStates(): array
+    {
+        return [
+            'pendente' => ['pending', 'pending', 'Pendente'],
+            'aprovada, à espera de ativação' => ['approved', 'awaiting_activation', 'Por ativar'],
+            'ativa em período experimental' => ['trial', 'trial', 'Em trial'],
+            'ativa em período de carência' => ['grace', 'grace', 'Em carência'],
+            'ativa sem trial' => ['active', 'active', 'Ativo'],
+            'bloqueada' => ['blocked', 'blocked', 'Bloqueado'],
+            'sem pagamento' => ['unpaid', 'lapsed', 'Subscrição caída'],
+            'cancelada pelo membro' => ['cancelled', 'lapsed', 'Subscrição caída'],
+            'recusada' => ['rejected', 'inactive', 'Inativo'],
+            'inativa sem motivo' => ['inactive', 'inactive', 'Inativo'],
+            'administrador técnico' => ['technical_admin', 'exempt', 'Isento'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('subscriptionStates')]
+    public function detail_returns_the_derived_subscription_state_with_its_label(string $state, string $value, string $label): void
+    {
+        $factory = User::factory();
+
+        $user = match ($state) {
+            'pending' => $factory->pending()->create(),
+            'approved' => $factory->approved()->create(),
+            'trial' => $factory->create(['trial_ends_at' => now()->addDays(10)]),
+            'grace' => $factory->create(['grace_ends_at' => now()->addDays(3)]),
+            'active' => $factory->create(),
+            'blocked' => $factory->inactive(InactiveReason::Blocked)->create(),
+            'unpaid' => $factory->inactive(InactiveReason::Unpaid)->create(),
+            'cancelled' => $factory->inactive(InactiveReason::Cancelled)->create(),
+            'rejected' => $factory->inactive(InactiveReason::Rejected)->create(),
+            'inactive' => $factory->inactive()->create(),
+            'technical_admin' => $factory->technicalAdmin()->create(),
+        };
+
+        $this->show($user->id)
+            ->assertOk()
+            ->assertJsonPath('data.subscription_state', ['value' => $value, 'label' => $label]);
+    }
+
+    #[Test]
+    public function admin_detail_includes_the_global_number_of_admins(): void
+    {
+        $otherAdmin = User::factory()->admin()->create();
+        User::factory()->technicalAdmin()->create();
+
+        $this->show($otherAdmin->id)
+            ->assertOk()
+            ->assertJsonPath('data.admins_count', 3);
+    }
+
+    #[Test]
+    public function member_detail_does_not_include_the_number_of_admins(): void
+    {
+        User::factory()->admin()->create();
+        $member = User::factory()->create();
+
+        $data = $this->show($member->id)->assertOk()->json('data');
+
+        $this->assertArrayNotHasKey('admins_count', $data);
     }
 
     #[Test]
