@@ -44,6 +44,9 @@ class EventInstanceRequest extends FormRequest
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
             'registration_deadline' => ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'justification' => $this->isMethod('put')
+                ? ['sometimes', 'nullable', 'string', 'max:2000']
+                : ['prohibited'],
         ];
 
         if ($this->isMethod('post')) {
@@ -127,6 +130,7 @@ class EventInstanceRequest extends FormRequest
             'is_online' => 'evento online',
             'online_url' => 'link do evento online',
             'organizer_notes' => 'notas do organizador',
+            'justification' => 'justificação',
         ];
     }
 

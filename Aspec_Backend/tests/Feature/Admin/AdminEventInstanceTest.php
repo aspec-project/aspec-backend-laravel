@@ -10,6 +10,7 @@ use App\Models\EventRegistration;
 use App\Models\Location;
 use App\Models\User;
 use App\Notifications\EventCancelledNotification;
+use App\Notifications\EventUpdatedNotification;
 use App\Services\Geocoding\Data\GeocodingResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -546,15 +547,26 @@ class AdminEventInstanceTest extends TestCase
             ]);
         }
 
-        $this->deleteJson(self::URL."/{$event->id}")
+        $justification = 'O evento foi cancelado pela organização.';
+
+        $this->deleteJson(self::URL."/{$event->id}", [
+            'justification' => $justification,
+        ])
             ->assertOk()
             ->assertJsonPath('data', null);
 
         foreach ($registrants as $user) {
-            Notification::assertSentToTimes(
+            Notification::assertSentTo(
                 $user,
                 EventCancelledNotification::class,
-                1
+                function (EventCancelledNotification $notification) use ($user, $justification): bool {
+                    $this->assertContains(
+                        "Justificação: {$justification}",
+                        $notification->toMail($user)->introLines
+                    );
+
+                    return $notification->justification === $justification;
+                }
             );
         }
 
@@ -788,5 +800,116 @@ class AdminEventInstanceTest extends TestCase
                 ->assertUnprocessable()
                 ->assertJsonValidationErrors(['latitude', 'longitude']);
         }
+    }
+
+    #[Test]
+    public function updating_an_event_notifies_registrants_with_the_justification(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $registrant = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['justification'] = 'Alteração do horário do evento.';
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk();
+
+        Notification::assertSentTo(
+            $registrant,
+            EventUpdatedNotification::class,
+            function (EventUpdatedNotification $notification) use ($registrant): bool {
+                $this->assertContains(
+                    'Justificação: Alteração do horário do evento.',
+                    $notification->toMail($registrant)->introLines
+                );
+
+                return $notification->justification === 'Alteração do horário do evento.';
+            }
+        );
+    }
+
+    #[Test]
+    public function updating_an_event_without_justification_still_notifies_registrants(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $registrant = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        $payload = $this->validPayload();
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk();
+
+        Notification::assertSentTo(
+            $registrant,
+            EventUpdatedNotification::class,
+            function (EventUpdatedNotification $notification) use ($registrant): bool {
+                $this->assertNotContains(
+                    'Justificação: ',
+                    $notification->toMail($registrant)->introLines
+                );
+
+                return $notification->justification === null;
+            }
+        );
+    }
+
+    #[Test]
+    public function deleting_an_event_with_registrations_requires_justification(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $registrant = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        $this->deleteJson(self::URL."/{$event->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['justification']);
+
+        $this->assertDatabaseHas('event_instances', ['id' => $event->id]);
+        $this->assertDatabaseHas('event_registrations', [
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function deleting_an_event_without_registrations_does_not_require_justification(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+
+        $this->deleteJson(self::URL."/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data', null);
+
+        $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
+
+        Notification::assertNothingSent();
     }
 }

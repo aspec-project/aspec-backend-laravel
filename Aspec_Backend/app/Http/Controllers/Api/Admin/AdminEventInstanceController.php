@@ -10,6 +10,7 @@ use App\Http\Resources\EventInstanceResource;
 use App\Models\EventInstance;
 use App\Models\Location;
 use App\Notifications\EventCancelledNotification;
+use App\Notifications\EventUpdatedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -118,9 +119,15 @@ class AdminEventInstanceController extends Controller
         );
     }
 
-    public function update(EventInstanceRequest $request, EventInstance $eventInstance, Geocoder $geocoder): JsonResponse
-    {
+    public function update(
+        EventInstanceRequest $request,
+        EventInstance $eventInstance,
+        Geocoder $geocoder
+    ): JsonResponse {
         $validated = $request->validatedEventData();
+
+        $justification = $validated['justification'] ?? null;
+        unset($validated['justification']);
 
         $geocodingError = $this->geocodeMissingCoordinates($validated, $geocoder);
 
@@ -128,7 +135,11 @@ class AdminEventInstanceController extends Controller
             return $geocodingError;
         }
 
-        return DB::transaction(function () use ($validated, $eventInstance): JsonResponse {
+        return DB::transaction(function () use (
+            $validated,
+            $eventInstance,
+            $justification
+        ): JsonResponse {
             $event = EventInstance::query()
                 ->whereKey($eventInstance->getKey())
                 ->lockForUpdate()
@@ -142,6 +153,13 @@ class AdminEventInstanceController extends Controller
                 ]);
             }
 
+            $recipients = $event->registrations()
+                ->with('user')
+                ->get()
+                ->pluck('user')
+                ->filter()
+                ->values();
+
             if ($validated['is_online']) {
                 $validated['address'] = null;
                 $validated['latitude'] = null;
@@ -151,6 +169,14 @@ class AdminEventInstanceController extends Controller
             }
 
             $event->update($validated);
+
+            if ($recipients->isNotEmpty()) {
+                Notification::send(
+                    $recipients,
+                    new EventUpdatedNotification($event->name, $justification)
+                );
+            }
+
             $event->load(['category', 'location']);
 
             return $this->successResponse(
@@ -160,9 +186,9 @@ class AdminEventInstanceController extends Controller
         });
     }
 
-    public function destroy(EventInstance $eventInstance): JsonResponse
+    public function destroy(Request $request, EventInstance $eventInstance): JsonResponse
     {
-        DB::transaction(function () use ($eventInstance): void {
+        DB::transaction(function () use ($request, $eventInstance): void {
             $event = EventInstance::query()
                 ->whereKey($eventInstance->getKey())
                 ->lockForUpdate()
@@ -171,6 +197,14 @@ class AdminEventInstanceController extends Controller
             $registrations = $event->registrations()
                 ->with('user')
                 ->get();
+
+            $validated = $request->validate([
+                'justification' => $registrations->isNotEmpty()
+                    ? ['required', 'string', 'max:2000']
+                    : ['sometimes', 'nullable', 'string', 'max:2000'],
+            ]);
+
+            $justification = $validated['justification'] ?? null;
 
             $recipients = $registrations
                 ->pluck('user')
@@ -181,6 +215,7 @@ class AdminEventInstanceController extends Controller
                 $event->name,
                 $event->event_date->format('d/m/Y'),
                 substr((string) $event->event_start_time, 0, 5),
+                $justification,
             );
 
             $event->registrations()->delete();
