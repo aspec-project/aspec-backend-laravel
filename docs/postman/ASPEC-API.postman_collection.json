@@ -12751,12 +12751,12 @@
           ]
         },
         {
-          "name": "Inscrições de um evento (planeado)",
+          "name": "Inscritos de um evento (contactos pessoais)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/events/:id/registrations",
+              "raw": "{{base_url}}/api/admin/events/:id/attendees",
               "host": [
                 "{{base_url}}"
               ],
@@ -12765,7 +12765,7 @@
                 "admin",
                 "events",
                 ":id",
-                "registrations"
+                "attendees"
               ],
               "variable": [
                 {
@@ -12774,7 +12774,7 @@
                 }
               ]
             },
-            "description": "**(planeado) Ainda não implementado: a rota não existe** (hoje responde 404 \"Recurso não encontrado.\"). Contrato provisório. A lista de inscritos visível aos membros (nome e empresa) já existe: \"Inscritos de um evento (nomes das empresas)\", na pasta Eventos.\n\nLista de inscritos."
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). **Limite: 30 pedidos por minuto por administrador, partilhado com \"Exportar lista de presenças (CSV)\"** (depois 429).\n\nLista **todos** os inscritos de um evento (uma sessão), sem paginação, para o backoffice ver quem se inscreveu. Disponível a qualquer momento, também com as inscrições abertas. Só leitura.\n\nCada inscrito: `{id, user_id, name, business_name, email, phone, registered_at}`.\n- `id`: id da inscrição.\n- `user_id`: id da conta (para abrir o detalhe do membro); `null` se a conta foi apagada.\n- `name` / `business_name`: nome profissional e empresa do perfil; `null` numa conta sem perfil (ex.: administrador técnico).\n- `email` / `phone`: contactos **pessoais** da conta (telefone com indicativo, ex.: `+351…`), **nunca** os comerciais.\n- `registered_at`: data e hora da inscrição em ISO 8601, **em UTC** (o frontend converte para a hora de Lisboa).\n\nOrdem: **alfabética portuguesa** pelo nome (`Álvaro` antes de `andré` e de `Bruno`), desempate pela data de inscrição; inscritos sem nome no fim. São as mesmas linhas, pela mesma ordem, do CSV.\n\nContas apagadas (só em eventos que já começaram: ao apagar uma conta, as inscrições em eventos futuros são removidas): a linha mantém-se com o nome e a empresa anonimizados (`Utilizador Anónimo` / `Empresa Removida`) e `user_id`, `email` e `phone` a `null`. Contas bloqueadas ou sem pagamento continuam na lista, com os contactos.\n\n**RGPD:** dados pessoais usados só para a finalidade pedida pelo cliente (confirmar presenças e contactar os inscritos **deste** evento). Minimização: só estes campos, um evento de cada vez, só administradores; nunca contactos comerciais, faturação ou estado da conta. **Categoria especial (art. 9.º do RGPD):** como a ASPEC é uma associação cristã, estar inscrito num dos seus eventos pode revelar convicções religiosas. Esta lista é só para uso interno da ASPEC: não a partilhar fora da associação nem a enviar a terceiros (ao local do evento, por exemplo, indica-se só o número de inscritos). O ficheiro CSV exportado deve ser apagado depois de usado.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (evento inexistente ou id que não é UUID) · 429 mais de 30 pedidos por minuto."
           },
           "response": [
             {
@@ -12788,7 +12788,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -12797,7 +12797,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations"
+                    "attendees"
                   ]
                 }
               },
@@ -12811,7 +12811,115 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": [\n    {\n      \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n      \"created_at\": \"2026-10-01T10:00:00+01:00\",\n      \"member\": {\n        \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n        \"name\": \"João Silva\",\n        \"business_name\": \"Silva Consultoria Unipessoal\",\n        \"email\": \"joao.silva@silvaconsultoria.pt\",\n        \"phone\": \"+351912345678\"\n      }\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Inscritos do evento obtidos com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"c1a2b3c4-1111-4a11-8111-111111111111\",\n      \"user_id\": \"b7c8d9e0-0001-4b00-8b00-000000000001\",\n      \"name\": \"Álvaro Dias\",\n      \"business_name\": \"Dias & Filhos, Lda.\",\n      \"email\": \"alvaro.dias@example.pt\",\n      \"phone\": \"+351910000001\",\n      \"registered_at\": \"2026-10-01T09:15:00+00:00\"\n    },\n    {\n      \"id\": \"c1a2b3c4-2222-4a22-8222-222222222222\",\n      \"user_id\": \"b7c8d9e0-0002-4b00-8b00-000000000002\",\n      \"name\": \"Marta Sousa\",\n      \"business_name\": \"Sousa Arquitetura\",\n      \"email\": \"marta.sousa@example.pt\",\n      \"phone\": \"+447700900123\",\n      \"registered_at\": \"2026-10-02T17:30:00+00:00\"\n    },\n    {\n      \"id\": \"c1a2b3c4-3333-4a33-8333-333333333333\",\n      \"user_id\": null,\n      \"name\": \"Utilizador Anónimo\",\n      \"business_name\": \"Empresa Removida\",\n      \"email\": null,\n      \"phone\": null,\n      \"registered_at\": \"2026-10-03T08:00:00+00:00\"\n    },\n    {\n      \"id\": \"c1a2b3c4-4444-4a44-8444-444444444444\",\n      \"user_id\": \"b7c8d9e0-0004-4b00-8b00-000000000004\",\n      \"name\": null,\n      \"business_name\": null,\n      \"email\": \"admin.tecnico@example.pt\",\n      \"phone\": \"+351210000003\",\n      \"registered_at\": \"2026-10-05T12:45:00+00:00\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "200 Sem inscritos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Sem inscritos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Inscritos do evento obtidos com sucesso.\",\n  \"data\": []\n}"
+            },
+            {
+              "name": "404 Não encontrado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/00000000-0000-0000-0000-000000000000/attendees",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "00000000-0000-0000-0000-000000000000",
+                    "attendees"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -12824,7 +12932,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -12833,7 +12941,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations"
+                    "attendees"
                   ]
                 }
               },
@@ -12860,7 +12968,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -12869,7 +12977,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations"
+                    "attendees"
                   ]
                 }
               },
@@ -12884,16 +12992,52 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
         {
-          "name": "Exportar lista de presenças (CSV) (planeado)",
+          "name": "Exportar lista de presenças (CSV)",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/admin/events/:id/registrations/export",
+              "raw": "{{base_url}}/api/admin/events/:id/attendees.csv",
               "host": [
                 "{{base_url}}"
               ],
@@ -12902,8 +13046,7 @@
                 "admin",
                 "events",
                 ":id",
-                "registrations",
-                "export"
+                "attendees.csv"
               ],
               "variable": [
                 {
@@ -12912,7 +13055,7 @@
                 }
               ]
             },
-            "description": "**(planeado) Ainda não implementado: a rota não existe** (hoje responde 404 \"Recurso não encontrado.\"). Contrato provisório, a definir na ASPEC-222 (nome, empresa, email e telefone pessoais dos inscritos).\n\nLista oficial de presenças em CSV (separador `;`, UTF-8). Resposta é um ficheiro, não JSON."
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). **Limite: 30 pedidos por minuto por administrador, partilhado com \"Inscritos de um evento (contactos pessoais)\"** (depois 429).\n\nLista de presenças de um evento (uma sessão) num ficheiro CSV para abrir no **Excel em português**, com as mesmas linhas e a mesma ordem de \"Inscritos de um evento (contactos pessoais)\". A resposta **é um ficheiro, não JSON** (no Postman: *Send and Download*); os **erros vêm sempre em JSON**.\n\n**Só depois do prazo de inscrição:** enquanto as inscrições estiverem abertas (até às 23:59, hora de Lisboa, do dia de `registration_deadline`, inclusive) responde **409**; a partir do minuto seguinte, 200. É o inverso exato da regra de inscrição, por isso nunca há um momento em que seja possível inscrever e exportar. O botão de exportar do backoffice só fica ativo com as inscrições encerradas; o 409 é a garantia no servidor.\n\nFormato:\n- **UTF-8 com BOM** (bytes `EF BB BF` no início; não aparece no exemplo porque é invisível): sem ele o Excel mostra os acentos mal (\"JoÃ£o\").\n- Separador **`;`** (o Excel em português usa a vírgula nas casas decimais) e linhas terminadas em **CRLF**.\n- Colunas: `Nome;Empresa;Email;Telefone;Data de inscrição`. Email e telefone **pessoais**, nunca os comerciais.\n- `Data de inscrição` em **hora de Lisboa**, `dd/mm/aaaa HH:mm`.\n- Célula vazia quando não há valor: conta sem perfil (sem nome e empresa) e contas apagadas (`Utilizador Anónimo;Empresa Removida;;;`).\n- Aspas só quando a célula tem `;`, aspas ou mudança de linha (aspas internas duplicadas).\n- **Neutralização de fórmulas (CSV injection, OWASP):** uma célula que comece por `=`, `+`, `-`, `@`, TAB ou CR ganha um `'` à frente, para o Excel não a executar (ex.: um membro com o nome `=HYPERLINK(…)`). Por isso os telefones aparecem como `'+351…`: ficam texto e não fórmula nem `3,51E+11`.\n- Sem inscritos: só o BOM e a linha de cabeçalho.\n\nCabeçalhos da resposta: `Content-Type: text/csv; charset=UTF-8` · `Content-Disposition: attachment; filename=presencas_<AAAA-MM-DD>_<nome-do-evento>.csv` (data do evento e nome sem acentos nem espaços, até 50 caracteres; o CORS deixa o frontend ler este cabeçalho) · `Cache-Control: no-store, private` (dados pessoais: não fica cópia em cache) · `X-Content-Type-Options: nosniff`.\n\n**RGPD:** finalidade = confirmar presenças e contactar os inscritos **deste** evento (pedido do cliente). Minimização: 5 colunas, um evento de cada vez, só depois de as inscrições fecharem (não circulam listas incompletas), só administradores, com limite de pedidos. **Categoria especial (art. 9.º do RGPD):** como a ASPEC é uma associação cristã, estar inscrito num dos seus eventos pode revelar convicções religiosas. Este ficheiro é só para uso interno da ASPEC: não o partilhar fora da associação nem o enviar a terceiros (ao local do evento, por exemplo, indica-se só o número de inscritos). Apagar o ficheiro depois de usado.\n\nErros: 401 sem sessão/token · 403 não é administrador · 403 conta não ativa · 404 \"Recurso não encontrado.\" (evento inexistente ou id que não é UUID) · 409 inscrições ainda abertas · 429 mais de 30 pedidos por minuto."
           },
           "response": [
             {
@@ -12926,7 +13069,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations/export",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -12935,8 +13078,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations",
-                    "export"
+                    "attendees.csv"
                   ]
                 }
               },
@@ -12947,10 +13089,130 @@
                 {
                   "key": "Content-Type",
                   "value": "text/csv; charset=UTF-8"
+                },
+                {
+                  "key": "Content-Disposition",
+                  "value": "attachment; filename=presencas_2026-10-15_jantar-lisboa.csv"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
                 }
               ],
               "cookie": [],
-              "body": "nome;nome_comercial;email;telefone;data_inscricao\r\nJoão Silva;Silva Consultoria Unipessoal;joao.silva@silvaconsultoria.pt;+351912345678;2026-10-01 10:00\r\nMaria Santos;Santos & Filhos Arquitetura;maria@santosfilhos.pt;+351934567890;2026-10-02 18:30\r\n"
+              "body": "Nome;Empresa;Email;Telefone;Data de inscrição\r\nÁlvaro Dias;Dias & Filhos, Lda.;alvaro.dias@example.pt;'+351910000001;01/10/2026 10:15\r\nMarta Sousa;Sousa Arquitetura;marta.sousa@example.pt;'+447700900123;02/10/2026 18:30\r\nUtilizador Anónimo;Empresa Removida;;;03/10/2026 09:00\r\n;;admin.tecnico@example.pt;'+351210000003;05/10/2026 13:45\r\n"
+            },
+            {
+              "name": "404 Não encontrado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/00000000-0000-0000-0000-000000000000/attendees.csv",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "00000000-0000-0000-0000-000000000000",
+                    "attendees.csv"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            },
+            {
+              "name": "409 Inscrições abertas",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Inscrições abertas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees.csv"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"As inscrições ainda estão abertas. A lista de presenças só pode ser exportada depois do prazo de inscrição.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees.csv"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -12963,7 +13225,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations/export",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -12972,8 +13234,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations",
-                    "export"
+                    "attendees.csv"
                   ]
                 }
               },
@@ -13000,7 +13261,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/registrations/export",
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -13009,8 +13270,7 @@
                     "admin",
                     "events",
                     "e5a6b7c8-5555-4c55-8555-555555555555",
-                    "registrations",
-                    "export"
+                    "attendees.csv"
                   ]
                 }
               },
@@ -13025,6 +13285,42 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555/attendees.csv",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "attendees.csv"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
         },
