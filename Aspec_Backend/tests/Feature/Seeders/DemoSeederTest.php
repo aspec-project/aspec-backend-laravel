@@ -6,12 +6,14 @@ use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\User;
 use App\Rules\InternationalPhone;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
@@ -49,6 +51,21 @@ class DemoSeederTest extends TestCase
     private function activeProfiles()
     {
         return MemberProfile::listedInDirectory()->get();
+    }
+
+    /**
+     * Dia de hoje em Lisboa, como no seeder e na agenda pública (a aplicação corre em UTC).
+     */
+    private function lisbonToday(): Carbon
+    {
+        return now(config('app.event_timezone', 'Europe/Lisbon'))->startOfDay();
+    }
+
+    private function demoEvent(string $name, string $district): EventInstance
+    {
+        return EventInstance::where('name', $name)
+            ->whereHas('location', fn ($query) => $query->where('name', $district))
+            ->firstOrFail();
     }
 
     #[Test]
@@ -172,23 +189,35 @@ class DemoSeederTest extends TestCase
     }
 
     #[Test]
-    public function creates_about_ten_future_events_in_every_category(): void
+    public function creates_in_person_online_and_past_events_in_every_category(): void
     {
         $this->runDemoSeeder();
 
         $events = EventInstance::with('location')->get();
 
-        $this->assertGreaterThanOrEqual(9, $events->count());
-        $this->assertLessThanOrEqual(12, $events->count());
+        $today = $this->lisbonToday();
+        $inPersonFuture = $events->filter(fn (EventInstance $event) => ! $event->is_online && $event->event_date->gte($today));
+
+        $this->assertCount(16, $events);
+        $this->assertCount(11, $inPersonFuture);
         $this->assertSame(EventCategory::count(), $events->pluck('category_id')->unique()->count());
-        $this->assertGreaterThanOrEqual(6, $events->pluck('location_id')->unique()->count());
+        $this->assertGreaterThanOrEqual(6, $inPersonFuture->pluck('location_id')->unique()->count());
 
         foreach ($events as $event) {
-            $this->assertTrue($event->event_date->between(today()->addDays(5), today()->addDays(60)), $event->name);
+            $this->assertTrue($event->event_date->between($today->copy()->subDays(60), $today->copy()->addDays(60)), $event->name);
             $this->assertTrue($event->registration_deadline->lessThan($event->event_date), $event->name);
-            $this->assertGreaterThanOrEqual(20, $event->max_attendees);
-            $this->assertLessThanOrEqual(80, $event->max_attendees);
+            $this->assertSame('23:59', $event->registration_deadline->format('H:i'), $event->name);
+            $this->assertGreaterThanOrEqual(10, $event->max_attendees);
+            $this->assertLessThanOrEqual(100, $event->max_attendees);
         }
+
+        foreach ($inPersonFuture as $event) {
+            $this->assertNotEmpty($event->address, $event->name);
+            $this->assertNotNull($event->latitude, $event->name);
+            $this->assertNotNull($event->longitude, $event->name);
+        }
+
+        $this->assertGreaterThanOrEqual(2, $events->whereNotNull('venue_name')->count());
 
         $replicated = $events->groupBy('name')->filter(fn ($sameFormat) => $sameFormat->pluck('location_id')->unique()->count() > 1);
         $this->assertGreaterThanOrEqual(2, $replicated->count());
@@ -246,6 +275,8 @@ class DemoSeederTest extends TestCase
             'events' => EventInstance::count(),
             'portfolios' => Portfolio::count(),
             'files' => count(Storage::disk('public')->allFiles()),
+            'registrations' => EventRegistration::count(),
+            'registrations_per_event' => EventInstance::withCount('registrations')->orderBy('id')->pluck('registrations_count', 'id')->all(),
         ];
 
         $first = $counts();
@@ -253,6 +284,180 @@ class DemoSeederTest extends TestCase
         $this->runDemoSeeder();
 
         $this->assertSame($first, $counts());
+    }
+
+    /**
+     * Repetir a demonstração repõe as inscrições mexidas à mão (cancelamentos e inscrições novas)
+     * e não toca nos eventos nem nas inscrições que não são da demonstração.
+     */
+    #[Test]
+    public function running_again_resets_demo_registrations_without_touching_other_events(): void
+    {
+        $this->runDemoSeeder();
+
+        $otherEvent = EventInstance::factory()->create(['name' => 'Evento local de teste']);
+        $otherUser = User::factory()->create();
+        $otherEvent->registrations()->create(['user_id' => $otherUser->id]);
+
+        $lisbonBreakfast = $this->demoEvent('Pequeno-almoço de Negócios ASPEC', 'Lisboa');
+        $expected = $lisbonBreakfast->registrations()->count();
+        $lisbonBreakfast->registrations()->delete();
+
+        $this->runDemoSeeder();
+
+        $this->assertSame($expected, $lisbonBreakfast->registrations()->count());
+        $this->assertTrue($otherEvent->registrations()->where('user_id', $otherUser->id)->exists());
+        $this->assertSame(17, EventInstance::count());
+    }
+
+    #[Test]
+    public function only_active_members_are_registered_and_never_above_capacity(): void
+    {
+        $this->runDemoSeeder();
+
+        $registrations = EventRegistration::with(['user.accountStatus', 'user.role', 'eventInstance'])->get();
+        $this->assertNotEmpty($registrations);
+
+        foreach ($registrations as $registration) {
+            $this->assertSame('Active', $registration->user->accountStatus->name, $registration->user->email);
+            $this->assertSame('Member', $registration->user->role->name, $registration->user->email);
+        }
+
+        foreach (EventInstance::withCount('registrations')->get() as $event) {
+            $this->assertLessThanOrEqual($event->max_attendees, $event->registrations_count, $event->name);
+        }
+    }
+
+    /**
+     * Os três eventos online cobrem os casos do link, vistos pela API pública como o frontend:
+     * antes do prazo ninguém o vê; depois do prazo só os inscritos.
+     */
+    #[Test]
+    public function online_events_show_the_link_only_to_registered_members_after_the_deadline(): void
+    {
+        $this->runDemoSeeder();
+
+        $demoMember = $this->demoUser('demo.membro@aspec.test');
+        $notRegistered = $this->demoUser('demo.membro11@aspec.test');
+        $registeredInRgpd = $this->demoUser('demo.membro05@aspec.test');
+
+        $open = $this->demoEvent('Webinar: Faturação Eletrónica sem Complicações', 'Lisboa');
+        $withDemoMember = $this->demoEvent('Workshop Online: Vender Mais nas Redes Sociais', 'Lisboa');
+        $withoutDemoMember = $this->demoEvent('Formação Online: RGPD para Pequenas Empresas', 'Lisboa');
+
+        foreach ([$open, $withDemoMember, $withoutDemoMember] as $event) {
+            $this->assertTrue($event->is_online, $event->name);
+            $this->assertStringStartsWith('https://meet.example.test/aspec-', $event->online_url);
+            $this->assertNull($event->address, $event->name);
+            $this->assertNull($event->venue_name, $event->name);
+            $this->assertNull($event->latitude, $event->name);
+            $this->assertNull($event->longitude, $event->name);
+            $this->assertTrue($event->event_date->gt($this->lisbonToday()), $event->name);
+        }
+
+        $this->actingAs($demoMember, 'sanctum')->getJson("/api/events/{$open->id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_online', true)
+            ->assertJsonPath('data.registration_open', true)
+            ->assertJsonPath('data.is_registered', false)
+            ->assertJsonMissingPath('data.online_url');
+
+        $this->actingAs($demoMember, 'sanctum')->getJson("/api/events/{$withDemoMember->id}")
+            ->assertOk()
+            ->assertJsonPath('data.registration_open', false)
+            ->assertJsonPath('data.is_registered', true)
+            ->assertJsonPath('data.online_url', $withDemoMember->online_url);
+
+        $this->actingAs($notRegistered, 'sanctum')->getJson("/api/events/{$withDemoMember->id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_registered', false)
+            ->assertJsonMissingPath('data.online_url');
+
+        $this->actingAs($demoMember, 'sanctum')->getJson("/api/events/{$withoutDemoMember->id}")
+            ->assertOk()
+            ->assertJsonPath('data.registration_open', false)
+            ->assertJsonPath('data.is_registered', false)
+            ->assertJsonMissingPath('data.online_url');
+
+        $this->actingAs($registeredInRgpd, 'sanctum')->getJson("/api/events/{$withoutDemoMember->id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_registered', true)
+            ->assertJsonPath('data.online_url', $withoutDemoMember->online_url);
+    }
+
+    #[Test]
+    public function one_event_is_full_and_another_is_almost_full(): void
+    {
+        $this->runDemoSeeder();
+
+        $full = $this->demoEvent('Workshop: Apresente o seu Negócio em Dois Minutos', 'Porto');
+        $almostFull = $this->demoEvent('Pequeno-almoço de Negócios ASPEC', 'Braga');
+        $demoMember = $this->demoUser('demo.membro@aspec.test');
+
+        $this->getJson("/api/events/{$full->id}")
+            ->assertOk()
+            ->assertJsonPath('data.registrations_count', $full->max_attendees)
+            ->assertJsonPath('data.available_spots', 0)
+            ->assertJsonPath('data.registration_open', false);
+
+        $this->actingAs($demoMember, 'sanctum')
+            ->postJson("/api/events/{$full->id}/registrations")
+            ->assertConflict();
+
+        $response = $this->getJson("/api/events/{$almostFull->id}")
+            ->assertOk()
+            ->assertJsonPath('data.registration_open', true);
+
+        $this->assertGreaterThan(0.9, $response->json('data.registrations_count') / $almostFull->max_attendees);
+        $this->assertGreaterThanOrEqual(1, $response->json('data.available_spots'));
+    }
+
+    /**
+     * O demo.membro tem inscrições em 2 ou 3 eventos presenciais futuros, num online e em eventos
+     * passados, para a página "As minhas inscrições" mostrar todos os casos.
+     */
+    #[Test]
+    public function demo_member_has_upcoming_online_and_past_registrations(): void
+    {
+        $this->runDemoSeeder();
+
+        $today = $this->lisbonToday()->toDateString();
+
+        $events = collect(
+            $this->actingAs($this->demoUser('demo.membro@aspec.test'), 'sanctum')
+                ->getJson('/api/me/registrations')
+                ->assertOk()
+                ->json('data')
+        )->pluck('event');
+
+        $inPersonUpcoming = $events->filter(fn (array $event) => ! $event['is_online'] && $event['event_date'] >= $today);
+
+        $this->assertGreaterThanOrEqual(2, $inPersonUpcoming->count());
+        $this->assertLessThanOrEqual(3, $inPersonUpcoming->count());
+        $this->assertSame(1, $events->where('is_online', true)->count());
+        $this->assertGreaterThanOrEqual(1, $events->filter(fn (array $event) => $event['event_date'] < $today)->count());
+    }
+
+    #[Test]
+    public function past_events_have_registrations_but_stay_out_of_the_public_agenda(): void
+    {
+        $this->runDemoSeeder();
+
+        $past = EventInstance::withCount('registrations')
+            ->where('event_date', '<', $this->lisbonToday()->toDateString())
+            ->get();
+
+        $this->assertCount(2, $past);
+
+        foreach ($past as $event) {
+            $this->assertGreaterThan(0, $event->registrations_count, $event->name);
+        }
+
+        $agendaIds = collect($this->getJson('/api/events?per_page=100')->assertOk()->json('data.items'))->pluck('id');
+
+        foreach ($past as $event) {
+            $this->assertNotContains($event->id, $agendaIds, $event->name);
+        }
     }
 
     #[Test]
@@ -282,7 +487,7 @@ class DemoSeederTest extends TestCase
 
         $this->getJson('/api/events')
             ->assertOk()
-            ->assertJsonPath('data.pagination.total', EventInstance::count());
+            ->assertJsonPath('data.pagination.total', 14);
     }
 
     #[Test]
