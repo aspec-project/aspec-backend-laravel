@@ -54,6 +54,21 @@ Não há apagamento de conta pelo próprio membro: o membro pede à ASPEC por em
 - O membro recebe um email de confirmação no endereço original e pode voltar a candidatar-se com o mesmo email.
 - Uma conta já anonimizada responde 404 (para a API já não existe). O registo de prova consulta-se por SQL (`account_anonymizations`).
 
+## Enviar link de pagamento (backoffice)
+
+`POST /api/admin/users/{id}/payment-link` (sem corpo) envia ao membro o email de que a conta precisa para (voltar a) pagar. O estado da conta escolhe o email:
+
+| Estado da conta | Email | `type` |
+|---|---|---|
+| Approved | link de ativação | `activation` |
+| Inactive (falta de pagamento ou subscrição cancelada) | link de reativação | `reactivation` |
+| Active em período de carência | lembrete de pagamento (o mesmo email do pagamento falhado) | `payment_reminder` |
+
+- Os outros estados respondem 409 com o motivo: bloqueada ("Use a opção Desbloquear", que já envia o link certo), já ativa (inclui trial, cancelamento agendado, o administrador técnico e o próprio admin), candidatura pendente, ou conta que não pode ser reativada (rejeitada, eliminada, sem motivo). Conta inexistente ou anonimizada: 404.
+- Não altera a conta. Administradores que pagam também podem receber o link.
+- Não usa os limites do reenvio público (`/api/account-activations/resend`), que um atacante consegue esgotar: tem limites próprios, 30 por hora por administrador e 3 por hora por membro.
+- Cada envio fica no log (`user_id`, `admin_id`, `type`; sem o email).
+
 ## Dados de demonstração
 
 **Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.

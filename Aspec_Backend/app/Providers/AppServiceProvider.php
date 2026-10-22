@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Contracts\Geocoder;
 use App\Contracts\InvoiceService;
+use App\Models\User;
 use App\Services\Geocoding\NominatimGeocoder;
 use App\Services\Invoicing\InvoiceServiceFactory;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -189,5 +190,17 @@ class AppServiceProvider extends ServiceProvider
             'admin-anonymize',
             fn (Request $request) => Limit::perHour(5)->by($request->user()?->id ?: $request->ip())
         );
+
+        // Emails de pagamento pelo backoffice: 30/hora por admin (sessão roubada ou script) e 3/hora por membro alvo
+        // (duplo clique ou dois admins ao mesmo tempo). O throttle corre antes do route model binding, por isso o alvo
+        // pode ainda ser a string do UUID (em minúsculas, porque o MySQL encontra o mesmo id em qualquer caixa).
+        RateLimiter::for('admin-payment-link', function (Request $request) {
+            $target = $request->route('user');
+
+            return [
+                Limit::perHour(30)->by('admin:'.($request->user()?->id ?: $request->ip())),
+                Limit::perHour(3)->by('target:'.strtolower($target instanceof User ? $target->id : (string) $target)),
+            ];
+        });
     }
 }
