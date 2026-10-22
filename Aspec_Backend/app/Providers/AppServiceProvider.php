@@ -183,5 +183,11 @@ class AppServiceProvider extends ServiceProvider
             'event-attendees',
             fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())
         );
+
+        // Anonimizar contas: 5/hora por admin. Ação irreversível e rara; trava uma sessão de admin roubada ou um script repetido.
+        RateLimiter::for(
+            'admin-anonymize',
+            fn (Request $request) => Limit::perHour(5)->by($request->user()?->id ?: $request->ip())
+        );
     }
 }

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
+use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
@@ -82,6 +83,9 @@ Route::prefix('admin')
         Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{id}', [AdminUserController::class, 'show'])->whereUuid('id');
+        Route::post('/users/{user}/anonymize', [AdminUserAnonymizationController::class, 'store'])
+            ->whereUuid('user')
+            ->middleware('throttle:admin-anonymize');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
