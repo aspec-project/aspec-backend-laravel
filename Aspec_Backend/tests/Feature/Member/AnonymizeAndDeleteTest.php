@@ -3,7 +3,9 @@
 namespace Tests\Feature\Member;
 
 use App\Enums\InactiveReason;
+use App\Jobs\CancelStripeSubscriptionJob;
 use App\Jobs\DeleteStripeCustomerJob;
+use App\Models\AccountAnonymization;
 use App\Models\AccountStatus;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
@@ -15,12 +17,14 @@ use App\Models\User;
 use App\Models\WeekDay;
 use App\Services\Payments\StripeCustomerService;
 use Illuminate\Contracts\Queue\ShouldQueueAfterCommit;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -733,5 +737,237 @@ class AnonymizeAndDeleteTest extends TestCase
         $this->assertDatabaseHas('event_registrations', [
             'id' => $otherUsersRegistration->id,
         ]);
+    }
+
+    #[Test]
+    public function returns_true_and_records_the_admin_who_anonymized(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = $this->memberWithFullProfile();
+
+        $this->assertTrue($user->anonymizeAndDelete($admin));
+
+        $this->assertDatabaseCount('account_anonymizations', 1);
+        $this->assertDatabaseHas('account_anonymizations', [
+            'user_id' => $user->id,
+            'anonymized_by_user_id' => $admin->id,
+        ]);
+    }
+
+    #[Test]
+    public function without_an_admin_the_record_has_no_author(): void
+    {
+        $user = $this->memberWithFullProfile();
+
+        $this->assertTrue($user->anonymizeAndDelete());
+
+        $this->assertDatabaseHas('account_anonymizations', [
+            'user_id' => $user->id,
+            'anonymized_by_user_id' => null,
+        ]);
+    }
+
+    #[Test]
+    public function proof_record_keeps_only_ids_and_date(): void
+    {
+        $this->assertEqualsCanonicalizing(
+            ['id', 'user_id', 'anonymized_by_user_id', 'created_at'],
+            Schema::getColumnListing('account_anonymizations')
+        );
+    }
+
+    #[Test]
+    public function proof_record_date_is_the_anonymization_moment(): void
+    {
+        $this->travelTo(now()->startOfSecond());
+        $user = $this->memberWithFullProfile();
+
+        $user->anonymizeAndDelete();
+
+        $record = AccountAnonymization::where('user_id', $user->id)->firstOrFail();
+        $this->assertTrue($record->created_at->equalTo(now()));
+    }
+
+    #[Test]
+    public function proof_record_resolves_the_soft_deleted_account_and_admin(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = $this->memberWithFullProfile();
+        $user->anonymizeAndDelete($admin);
+        $admin->delete();
+
+        $record = AccountAnonymization::where('user_id', $user->id)->firstOrFail();
+
+        $this->assertSame($user->id, $record->user->id);
+        $this->assertSame($admin->id, $record->anonymizedBy->id);
+    }
+
+    #[Test]
+    public function already_anonymized_account_returns_false_without_a_second_record(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $staleCopy = User::find($user->id);
+        $user->anonymizeAndDelete();
+
+        $this->assertFalse($staleCopy->anonymizeAndDelete());
+
+        $this->assertDatabaseCount('account_anonymizations', 1);
+    }
+
+    #[Test]
+    public function already_deleted_account_keeps_its_folders(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $staleCopy = User::find($user->id);
+        $user->anonymizeAndDelete();
+        Storage::disk('public')->put("logos/{$user->id}/novo.png", 'conteudo');
+        Storage::disk('public')->put("portfolios/{$user->id}/novo.jpg", 'conteudo');
+
+        $this->assertFalse($staleCopy->anonymizeAndDelete());
+
+        Storage::disk('public')->assertExists("logos/{$user->id}/novo.png");
+        Storage::disk('public')->assertExists("portfolios/{$user->id}/novo.jpg");
+    }
+
+    #[Test]
+    public function soft_deleted_account_is_not_anonymized_again(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $staleCopy = User::find($user->id);
+        $user->delete();
+        $emailBefore = User::withTrashed()->find($user->id)->email;
+
+        $this->assertFalse($staleCopy->anonymizeAndDelete());
+
+        $this->assertDatabaseCount('account_anonymizations', 0);
+        $this->assertSame($emailBefore, User::withTrashed()->find($user->id)->email);
+    }
+
+    #[Test]
+    public function proof_record_is_rolled_back_with_an_outer_transaction(): void
+    {
+        $user = $this->memberWithFullProfile();
+
+        DB::beginTransaction();
+        $user->anonymizeAndDelete();
+        DB::rollBack();
+
+        $this->assertDatabaseCount('account_anonymizations', 0);
+        $this->assertNotSoftDeleted('users', ['id' => $user->id]);
+    }
+
+    #[Test]
+    public function only_one_proof_record_per_account(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $user->anonymizeAndDelete();
+
+        $this->expectException(QueryException::class);
+
+        AccountAnonymization::create(['user_id' => $user->id, 'anonymized_by_user_id' => null]);
+    }
+
+    #[Test]
+    public function anonymized_account_cannot_be_hard_deleted_while_the_proof_exists(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $user->anonymizeAndDelete();
+
+        $this->expectException(QueryException::class);
+
+        User::withTrashed()->find($user->id)->forceDelete();
+    }
+
+    #[Test]
+    public function changes_saved_after_loading_the_model_are_also_cleared(): void
+    {
+        Queue::fake();
+        $user = $this->memberWithFullProfile();
+        User::whereKey($user->id)->update([
+            'email' => 'novo.email@example.com',
+            'billing_name' => 'Silva Contabilidade Lda',
+            'nif' => '245678901',
+            'billing_address' => 'Rua da Faturação 10',
+            'billing_postal_code' => '1000-001',
+            'billing_city' => 'Lisboa',
+            'grace_ends_at' => now()->addDays(7),
+            'stripe_checkout_session_id' => 'cs_test_concurrent',
+        ]);
+        DB::table('password_reset_tokens')->insert([
+            'email' => 'novo.email@example.com',
+            'token' => Hash::make('token'),
+            'created_at' => now(),
+        ]);
+
+        $this->assertTrue($user->anonymizeAndDelete());
+
+        $fresh = User::withTrashed()->find($user->id);
+        $this->assertMatchesRegularExpression('/^deleted_.+@aspec\.local$/', $fresh->email);
+        $this->assertNull($fresh->billing_name);
+        $this->assertNull($fresh->nif);
+        $this->assertNull($fresh->billing_address);
+        $this->assertNull($fresh->billing_postal_code);
+        $this->assertNull($fresh->billing_city);
+        $this->assertNull($fresh->grace_ends_at);
+        $this->assertNull($fresh->stripe_checkout_session_id);
+        $this->assertDatabaseMissing('password_reset_tokens', ['email' => 'novo.email@example.com']);
+    }
+
+    #[Test]
+    public function checkout_session_saved_after_loading_the_model_is_expired_after_commit(): void
+    {
+        Queue::fake();
+        $user = $this->memberWithFullProfile();
+        User::whereKey($user->id)->update(['stripe_checkout_session_id' => 'cs_test_concurrent']);
+
+        $user->anonymizeAndDelete();
+
+        Queue::assertPushed(CancelStripeSubscriptionJob::class, fn (CancelStripeSubscriptionJob $job) => $job->userId === $user->id
+            && $job->checkoutSessionId === 'cs_test_concurrent'
+            && $job->subscriptionStripeIds === []
+            && $job->afterCommit === true);
+    }
+
+    #[Test]
+    public function without_a_checkout_session_nothing_is_expired(): void
+    {
+        Queue::fake();
+        $user = $this->memberWithFullProfile();
+
+        $user->anonymizeAndDelete();
+
+        Queue::assertNotPushed(CancelStripeSubscriptionJob::class);
+    }
+
+    #[Test]
+    public function stripe_customer_saved_after_loading_the_model_is_deleted_by_the_fallback_job(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('delete');
+        });
+        $user = $this->memberWithFullProfile();
+        User::whereKey($user->id)->update(['stripe_id' => 'cus_test_concurrent']);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertSame('cus_test_concurrent', User::withTrashed()->find($user->id)->stripe_id);
+        Queue::assertPushed(DeleteStripeCustomerJob::class, fn ($job) => $job->userId === $user->id);
+    }
+
+    #[Test]
+    public function stripe_customer_replaced_after_the_deletion_is_deleted_by_the_fallback_job(): void
+    {
+        Queue::fake();
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('delete')->once()->with('cus_test123');
+        });
+        $user = $this->memberWithStripeCustomer();
+        User::whereKey($user->id)->update(['stripe_id' => 'cus_test_new']);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertSame('cus_test_new', User::withTrashed()->find($user->id)->stripe_id);
+        Queue::assertPushed(DeleteStripeCustomerJob::class, fn ($job) => $job->userId === $user->id);
     }
 }
