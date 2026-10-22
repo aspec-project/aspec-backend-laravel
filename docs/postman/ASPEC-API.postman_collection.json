@@ -11785,40 +11785,48 @@
         {
           "name": "Listar eventos",
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{base_url}}/api/admin/events?page=1",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "events"
-              ],
-              "query": [
-                {
-                  "key": "page",
-                  "value": "1"
-                }
-              ]
-            },
-            "description": "Todos os eventos (passados e futuros). Filtros: `category_id`, `location_id`, `date_from`, `date_to`, `page`."
+          "method": "GET",
+          "header": [],
+          "url": {
+            "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
+            "host": [
+              "{{base_url}}"
+            ],
+            "path": [
+              "api",
+              "admin",
+              "events"
+            ],
+            "query": [
+              {
+                "key": "period",
+                "value": "upcoming"
+              },
+              {
+                "key": "per_page",
+                "value": "6"
+              },
+              {
+                "key": "page",
+                "value": "1"
+              }
+            ]
           },
+          "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Valores inválidos devolvem 422."
+        },
           "response": [
             {
-              "name": "200 Eventos",
+              "name": "200 Próximos",
               "originalRequest": {
                 "method": "GET",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "200 Eventos"
+                    "value": "200 Próximos"
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events?page=1",
+                  "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -11828,6 +11836,14 @@
                     "events"
                   ],
                   "query": [
+                    {
+                      "key": "period",
+                      "value": "upcoming"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "6"
+                    },
                     {
                       "key": "page",
                       "value": "1"
@@ -11845,7 +11861,163 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2026-10-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"available_spots\": 12,\n        \"registration_open\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2026-10-22\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"available_spots\": 0,\n        \"registration_open\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 15,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Passados",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Passados"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events?period=past&per_page=6&page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "past"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "6"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#C62828\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#B84A00\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Eventos filtrados",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Eventos filtrados"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events?period=upcoming&date_from=2030-11-15&date_to=2030-11-20&category_id=d1e2f3a4-3333-4b33-8333-333333333333&location_id=5f134912-321b-46e3-99ab-61d2f0981a8b&per_page=6&page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "upcoming"
+                    },
+                    {
+                      "key": "date_from",
+                      "value": "2030-11-15"
+                    },
+                    {
+                      "key": "date_to",
+                      "value": "2030-11-20"
+                    },
+                    {
+                      "key": "category_id",
+                      "value": "d1e2f3a4-3333-4b33-8333-333333333333"
+                    },
+                    {
+                      "key": "location_id",
+                      "value": "5f134912-321b-46e3-99ab-61d2f0981a8b"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "6"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
+            },
+            {
+              "name": "422 Filtros inválidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Filtros inválidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events?date_from=2030-11-20&date_to=2030-11-19",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ],
+                  "query": [
+                    {
+                      "key": "date_from",
+                      "value": "2030-11-20"
+                    },
+                    {
+                      "key": "date_to",
+                      "value": "2030-11-19"
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"date_to\": [\n      \"A data final tem de ser igual ou posterior à data inicial.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -11858,7 +12030,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events?page=1",
+                  "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -11868,6 +12040,14 @@
                     "events"
                   ],
                   "query": [
+                    {
+                      "key": "period",
+                      "value": "upcoming"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "6"
+                    },
                     {
                       "key": "page",
                       "value": "1"
@@ -11898,7 +12078,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{base_url}}/api/admin/events?page=1",
+                  "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
                   "host": [
                     "{{base_url}}"
                   ],
@@ -11908,6 +12088,14 @@
                     "events"
                   ],
                   "query": [
+                    {
+                      "key": "period",
+                      "value": "upcoming"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "6"
+                    },
                     {
                       "key": "page",
                       "value": "1"
@@ -12652,6 +12840,50 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+            },
+            {
+              "name": "409 Evento já decorreu",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Evento já decorreu"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-4444-4c44-8444-444444444444",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-4444-4c44-8444-444444444444"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n  \"name\": \"Workshop — Porto\",\n  \"description\": \"Workshop de partilha entre membros.\",\n  \"event_date\": \"2030-11-12\",\n  \"event_start_time\": \"20:00\",\n  \"event_end_time\": \"21:30\",\n  \"address\": \"Avenida dos Aliados, Porto\",\n  \"venue_name\": \"Centro de Congressos do Porto\",\n  \"latitude\": 41.1496,\n  \"longitude\": -8.6109,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-11-11\",\n  \"organizer_notes\": null,\n  \"justification\": \"Atualização solicitada para um evento que já decorreu.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
             }
           ]
         },
@@ -12852,6 +13084,50 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+            },
+            {
+              "name": "409 Evento já decorreu",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Evento já decorreu"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-4444-4c44-8444-444444444444",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-4444-4c44-8444-444444444444"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"justification\": \"O evento já decorreu e não pode ser eliminado.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
             }
           ]
         },

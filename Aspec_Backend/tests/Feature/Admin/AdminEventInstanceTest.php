@@ -66,21 +66,190 @@ class AdminEventInstanceTest extends TestCase
     public function admin_can_list_events_with_pagination(): void
     {
         $this->actingAsAdmin();
-        EventInstance::factory()->count(2)->create();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $today = now($timezone)->startOfDay();
+
+        EventInstance::factory()->create([
+            'event_date' => $today->copy()->subDay()->toDateString(),
+        ]);
+
+        $todayEvent = EventInstance::factory()->create([
+            'event_date' => $today->toDateString(),
+            'event_start_time' => '08:00:00',
+            'event_end_time' => '09:00:00',
+        ]);
+
+        $futureEvent = EventInstance::factory()->create([
+            'event_date' => $today->copy()->addDay()->toDateString(),
+        ]);
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $futureEvent->id,
+            'user_id' => User::factory()->create()->id,
+        ]);
 
         $this->getJson(self::URL)
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonCount(2, 'data.items')
-            ->assertJsonPath('data.pagination.per_page', 15)
+            ->assertJsonPath('data.items.0.id', $todayEvent->id)
+            ->assertJsonPath('data.items.1.id', $futureEvent->id)
+            ->assertJsonPath('data.items.1.registrations_count', 1)
+            ->assertJsonPath('data.pagination.per_page', 6)
+            ->assertJsonPath('data.pagination.total', 2)
+            ->assertJsonPath('data.counts.upcoming', 2)
+            ->assertJsonPath('data.counts.past', 1)
             ->assertJsonStructure([
                 'data' => [
                     'items' => [
                         '*' => ['id', 'name', 'category', 'location', 'event_date'],
                     ],
                     'pagination' => ['current_page', 'per_page', 'total', 'last_page'],
+                    'counts' => ['upcoming', 'past'],
                 ],
             ]);
+    }
+
+    #[Test]
+    public function admin_can_filter_past_events_and_count_periods_using_combined_filters(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $today = now($timezone)->startOfDay();
+
+        $category = EventCategory::factory()->create();
+        $otherCategory = EventCategory::factory()->create();
+        $location = Location::create(['name' => 'ASPEC-375 Lisboa']);
+        $otherLocation = Location::create(['name' => 'ASPEC-375 Porto']);
+
+        $createEvent = function (
+            string $date,
+            string $startTime,
+            string $endTime,
+            EventCategory $eventCategory,
+            Location $eventLocation
+        ): EventInstance {
+            return EventInstance::factory()->create([
+                'category_id' => $eventCategory->id,
+                'location_id' => $eventLocation->id,
+                'event_date' => $date,
+                'event_start_time' => $startTime,
+                'event_end_time' => $endTime,
+            ]);
+        };
+
+        $olderPast = $createEvent(
+            $today->copy()->subDays(2)->toDateString(),
+            '17:00:00',
+            '18:00:00',
+            $category,
+            $location
+        );
+
+        $recentPastMorning = $createEvent(
+            $today->copy()->subDay()->toDateString(),
+            '17:00:00',
+            '18:00:00',
+            $category,
+            $location
+        );
+
+        $recentPastEvening = $createEvent(
+            $today->copy()->subDay()->toDateString(),
+            '19:00:00',
+            '20:00:00',
+            $category,
+            $location
+        );
+
+        $createEvent(
+            $today->toDateString(),
+            '08:00:00',
+            '09:00:00',
+            $category,
+            $location
+        );
+
+        $createEvent(
+            $today->copy()->addDay()->toDateString(),
+            '09:00:00',
+            '11:00:00',
+            $category,
+            $location
+        );
+
+        $createEvent(
+            $today->copy()->subDay()->toDateString(),
+            '10:00:00',
+            '11:00:00',
+            $otherCategory,
+            $location
+        );
+
+        $createEvent(
+            $today->copy()->subDay()->toDateString(),
+            '12:00:00',
+            '13:00:00',
+            $category,
+            $otherLocation
+        );
+
+        $filters = [
+            'period' => 'past',
+            'date_from' => $today->copy()->subDays(3)->toDateString(),
+            'date_to' => $today->copy()->addDays(3)->toDateString(),
+            'category_id' => $category->id,
+            'location_id' => $location->id,
+            'per_page' => 6,
+        ];
+
+        $this->getJson(self::URL.'?'.http_build_query($filters))
+            ->assertOk()
+            ->assertJsonCount(3, 'data.items')
+            ->assertJsonPath('data.items.0.id', $recentPastEvening->id)
+            ->assertJsonPath('data.items.1.id', $recentPastMorning->id)
+            ->assertJsonPath('data.items.2.id', $olderPast->id)
+            ->assertJsonPath('data.pagination.total', 3)
+            ->assertJsonPath('data.counts.upcoming', 2)
+            ->assertJsonPath('data.counts.past', 3);
+
+        $filters['per_page'] = 1;
+
+        $this->getJson(self::URL.'?'.http_build_query($filters))
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $recentPastEvening->id)
+            ->assertJsonPath('data.pagination.per_page', 1)
+            ->assertJsonPath('data.pagination.total', 3);
+    }
+
+    #[Test]
+    public function admin_event_index_rejects_invalid_query_parameters(): void
+    {
+        $this->actingAsAdmin();
+
+        $invalidRequests = [
+            ['period=invalid', 'period'],
+            ['date_from=2026-13-01', 'date_from'],
+            ['date_to=not-a-date', 'date_to'],
+            ['date_from=2030-11-20&date_to=2030-11-19', 'date_to'],
+            ['category_id=not-a-uuid', 'category_id'],
+            ['category_id=00000000-0000-4000-8000-000000000000', 'category_id'],
+            ['location_id=not-a-uuid', 'location_id'],
+            ['location_id=00000000-0000-4000-8000-000000000000', 'location_id'],
+            ['per_page=0', 'per_page'],
+            ['per_page=51', 'per_page'],
+        ];
+
+        foreach ($invalidRequests as [$query, $errorField]) {
+            $this->getJson(self::URL.'?'.$query)
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => [$errorField],
+                ]);
+        }
     }
 
     #[Test]
@@ -147,6 +316,34 @@ class AdminEventInstanceTest extends TestCase
         $this->assertDatabaseHas('event_instances', [
             'id' => $event->id,
             'name' => 'Workshop atualizado',
+        ]);
+    }
+
+    #[Test]
+    public function admin_cannot_update_an_event_that_has_already_passed(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $originalName = 'Evento passado';
+        $event = EventInstance::factory()->create([
+            'name' => $originalName,
+            'event_date' => now($timezone)->subDay()->toDateString(),
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['name'] = 'Tentativa de alteração';
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'Não é possível alterar um evento que já decorreu.'
+            );
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'name' => $originalName,
         ]);
     }
 
@@ -303,6 +500,28 @@ class AdminEventInstanceTest extends TestCase
             ->assertJsonPath('data', null);
 
         $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
+    }
+
+    #[Test]
+    public function admin_cannot_delete_an_event_that_has_already_passed(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $event = EventInstance::factory()->create([
+            'event_date' => now($timezone)->subDay()->toDateString(),
+        ]);
+
+        $this->deleteJson(self::URL."/{$event->id}")
+            ->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'Não é possível alterar um evento que já decorreu.'
+            );
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+        ]);
     }
 
     #[Test]
