@@ -10469,6 +10469,467 @@
           ]
         },
         {
+          "name": "Enviar link de pagamento",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/:id/payment-link",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                ":id",
+                "payment-link"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e"
+                }
+              ]
+            },
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). **Limites: 30 pedidos por hora por administrador e 3 por hora para o mesmo membro** (depois 429).\n\nEnvia ao membro o email de que a conta precisa para (voltar a) pagar. Sem corpo. O estado da conta escolhe o email:\n- **Approved** → link de ativação (`type: activation`);\n- **Inactive** por falta de pagamento ou subscrição cancelada → link de reativação (`type: reactivation`);\n- **Active em período de carência** → lembrete de pagamento, o mesmo email do pagamento falhado (`type: payment_reminder`).\n\nNão altera a conta. Administradores que pagam também podem receber o link. Independente do reenvio público (`POST /api/account-activations/resend`): não usa nem gasta os limites dele.\n\nResposta: `id` da conta e `type`; nunca dados pessoais nem o link (o link só segue por email).\n\nErros: 401 sem sessão/token · 403 não é administrador ou conta não ativa · 404 conta inexistente ou anonimizada · 409 o estado não pede nenhum email de pagamento (bloqueada: usar Desbloquear; já ativa, incluindo trial, cancelamento agendado, o admin técnico e o próprio admin; candidatura pendente; conta rejeitada, eliminada ou sem motivo) · 429 limite excedido."
+          },
+          "response": [
+            {
+              "name": "200 Link de ativação",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Link de ativação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Foi enviado o email de ativação.\",\n  \"data\": {\n    \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n    \"type\": \"activation\"\n  }\n}"
+            },
+            {
+              "name": "200 Link de reativação",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Link de reativação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Foi enviado o email de reativação.\",\n  \"data\": {\n    \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n    \"type\": \"reactivation\"\n  }\n}"
+            },
+            {
+              "name": "200 Lembrete de pagamento",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Lembrete de pagamento"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Foi enviado o lembrete de pagamento.\",\n  \"data\": {\n    \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n    \"type\": \"payment_reminder\"\n  }\n}"
+            },
+            {
+              "name": "409 Conta bloqueada",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Conta bloqueada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta está bloqueada. Use a opção Desbloquear.\"\n}"
+            },
+            {
+              "name": "409 Conta já ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Conta já ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta já está ativa.\"\n}"
+            },
+            {
+              "name": "409 Candidatura pendente",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Candidatura pendente"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A candidatura ainda não foi aprovada.\"\n}"
+            },
+            {
+              "name": "409 Não pode ser reativada",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Não pode ser reativada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Esta conta não pode ser reativada.\"\n}"
+            },
+            {
+              "name": "404 Não encontrado ou anonimizado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado ou anonimizado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/payment-link",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "payment-link"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Listar categorias",
           "request": {
             "method": "GET",
