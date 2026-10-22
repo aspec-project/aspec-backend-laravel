@@ -18,14 +18,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * e eventos futuros. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * eventos (presenciais, online e passados) e inscrições. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
  * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
- * pelo nome e distrito, e repõe os dados originais (útil para repetir a demonstração).
+ * pelo nome e distrito, e repõe os dados originais, incluindo as inscrições desses eventos
+ * (útil para repetir a demonstração).
  * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
  */
 class DemoSeeder extends Seeder
@@ -233,34 +235,68 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Eventos futuros nas cinco categorias, com datas relativas ao dia em que o seeder corre.
-     * Procura pelo nome e distrito (e não pela data): correr noutro dia atualiza as datas em vez de
-     * duplicar os eventos. As inscrições fecham na véspera às 23:59.
+     * Eventos (futuros, online e passados) com datas relativas ao dia de hoje em Lisboa, e as
+     * respetivas inscrições. Procura pelo nome e distrito (e não pela data): correr noutro dia
+     * atualiza as datas em vez de duplicar os eventos. O prazo de inscrição fica às 23:59 (hora de
+     * Lisboa) do dia indicado, por omissão a véspera, como o backoffice o guarda.
      */
     private function seedEvents(): void
     {
-        foreach ($this->events() as $event) {
-            $date = today()->addDays($event['days_from_now']);
+        $today = now(config('app.event_timezone', 'Europe/Lisbon'))->startOfDay();
 
-            EventInstance::updateOrCreate(
+        foreach ($this->events() as $event) {
+            $deadlineDays = $event['deadline_days_from_now'] ?? $event['days_from_now'] - 1;
+
+            $instance = EventInstance::updateOrCreate(
                 [
                     'name' => $event['name'],
                     'location_id' => $this->lookupId(Location::class, $event['location']),
                 ],
                 [
                     'category_id' => $this->lookupId(EventCategory::class, $event['category']),
-                    'event_date' => $date->format('Y-m-d'),
+                    'event_date' => $today->copy()->addDays($event['days_from_now'])->format('Y-m-d'),
                     'event_start_time' => $event['start'].':00',
                     'event_end_time' => $event['end'].':00',
                     'description' => $event['description'],
-                    'address' => $event['address'],
-                    'latitude' => $event['latitude'],
-                    'longitude' => $event['longitude'],
+                    'is_online' => isset($event['online_url']),
+                    'online_url' => $event['online_url'] ?? null,
+                    'address' => $event['address'] ?? null,
+                    'venue_name' => $event['venue'] ?? null,
+                    'latitude' => $event['latitude'] ?? null,
+                    'longitude' => $event['longitude'] ?? null,
                     'max_attendees' => $event['max_attendees'],
-                    'registration_deadline' => $date->copy()->subDay()->setTime(23, 59)->format('Y-m-d H:i:s'),
+                    'registration_deadline' => $today->copy()->addDays($deadlineDays)->setTime(23, 59)->format('Y-m-d H:i:s'),
                     'organizer_notes' => $event['notes'] ?? null,
                 ]
             );
+
+            $this->syncRegistrations($instance, $event['registrants'] ?? []);
+        }
+    }
+
+    /**
+     * Repõe as inscrições do evento de demonstração: apaga as que existirem e volta a criar as
+     * da lista, para a lotação ficar sempre igual depois de uma demonstração (inscrições ou
+     * cancelamentos feitos à mão). Só aceita contas Active, como a inscrição pela API.
+     *
+     * @param  list<string>  $emails
+     *
+     * @throws RuntimeException Se algum email não for de uma conta Active ou exceder a lotação.
+     */
+    private function syncRegistrations(EventInstance $event, array $emails): void
+    {
+        $userIds = User::whereIn('email', $emails)
+            ->whereHas('accountStatus', fn ($query) => $query->where('name', 'Active'))
+            ->pluck('id');
+
+        if ($userIds->count() !== count($emails) || count($emails) > $event->max_attendees) {
+            throw new RuntimeException("Inscrições de demonstração inválidas no evento \"{$event->name}\".");
+        }
+
+        $event->registrations()->delete();
+
+        foreach ($userIds as $userId) {
+            $event->registrations()->create(['user_id' => $userId]);
         }
     }
 
@@ -748,8 +784,11 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Onze eventos futuros: o pequeno-almoço e o jantar repetem-se em várias cidades
-     * (o mesmo formato em localidades diferentes). Coordenadas no centro de cada cidade.
+     * Dezasseis eventos: onze presenciais futuros (o pequeno-almoço e o jantar repetem-se em várias
+     * cidades, um esgotado e outro quase), três online e dois já passados. Os online cobrem os três
+     * casos do link: inscrições abertas (link ainda escondido), prazo terminado com o demo.membro
+     * inscrito (vê o link) e prazo terminado sem ele (não vê). Coordenadas no centro de cada cidade.
+     * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
      *
      * @return list<array<string, mixed>>
      */
@@ -760,14 +799,17 @@ class DemoSeeder extends Seeder
         $dinner = 'Jantar de Networking ASPEC';
         $dinnerDescription = 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.';
         $dinnerNotes = 'Custo de participação: 25 € (pago no local).';
+        $demoMember = 'demo.membro@aspec.test';
 
         return [
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Lisboa',
                 'days_from_now' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 40,
                 'description' => $breakfastDescription,
-                'address' => 'Salão de eventos, Avenida da Liberdade 180, 1250-146 Lisboa',
-                'latitude' => 38.7197, 'longitude' => -9.1452,
+                'venue' => 'Hotel Tivoli Oriente',
+                'address' => 'Avenida D. João II 27, 1990-083 Lisboa',
+                'latitude' => 38.7676, 'longitude' => -9.0973,
+                'registrants' => [$demoMember, ...$this->demoMembers(1, 6)],
             ],
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Porto',
@@ -775,13 +817,15 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
                 'latitude' => 41.1486, 'longitude' => -8.6110,
+                'registrants' => $this->demoMembers(7, 9),
             ],
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Braga',
-                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
+                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 12,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
                 'latitude' => 41.5512, 'longitude' => -8.4229,
+                'registrants' => $this->demoMembers(1, 11),
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Lisboa',
@@ -790,6 +834,7 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
                 'latitude' => 38.7290, 'longitude' => -9.1560,
                 'notes' => $dinnerNotes,
+                'registrants' => [$demoMember, ...$this->demoMembers(2, 8)],
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Coimbra',
@@ -798,6 +843,7 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
                 'latitude' => 40.2115, 'longitude' => -8.4290,
                 'notes' => $dinnerNotes,
+                'registrants' => $this->demoMembers(4, 5),
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Faro',
@@ -813,13 +859,16 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
                 'latitude' => 40.6566, 'longitude' => -7.9125,
                 'notes' => 'Custo de participação: 18 € (pago no local).',
+                'registrants' => $this->demoMembers(10, 11),
             ],
             [
                 'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Aveiro',
                 'days_from_now' => 15, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 30,
                 'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
-                'address' => 'Auditório, Cais da Fonte Nova, 3810-200 Aveiro',
+                'venue' => 'Centro de Congressos de Aveiro',
+                'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
                 'latitude' => 40.6380, 'longitude' => -8.6440,
+                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
             ],
             [
                 'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'location' => 'Leiria',
@@ -833,16 +882,68 @@ class DemoSeeder extends Seeder
                 'name' => 'Formação: Liderança com Valores', 'category' => 'Formação', 'location' => 'Setúbal',
                 'days_from_now' => 44, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
                 'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
-                'address' => 'Auditório Municipal, Avenida Luísa Todi 65, 2900-461 Setúbal',
+                'venue' => 'Fórum Municipal Luísa Todi',
+                'address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal',
                 'latitude' => 38.5225, 'longitude' => -8.8920,
+                'registrants' => $this->demoMembers(6, 6),
             ],
             [
                 'name' => 'Workshop: Apresente o seu Negócio em Dois Minutos', 'category' => 'Workshop', 'location' => 'Porto',
-                'days_from_now' => 58, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 30,
-                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes.',
+                'days_from_now' => 26, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 10,
+                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno para todos treinarem.',
                 'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
                 'latitude' => 41.1580, 'longitude' => -8.6290,
+                'registrants' => $this->demoMembers(1, 10),
+            ],
+            [
+                'name' => 'Webinar: Faturação Eletrónica sem Complicações', 'category' => 'Formação', 'location' => 'Lisboa',
+                'days_from_now' => 10, 'start' => '18:00', 'end' => '19:30', 'max_attendees' => 100,
+                'description' => 'Sessão online sobre as regras da faturação eletrónica, o QR code e o ATCUD nas faturas, com tempo para perguntas no fim.',
+                'online_url' => 'https://meet.example.test/aspec-faturacao-eletronica',
+                'registrants' => $this->demoMembers(9, 10),
+            ],
+            [
+                'name' => 'Workshop Online: Vender Mais nas Redes Sociais', 'category' => 'Workshop', 'location' => 'Lisboa',
+                'days_from_now' => 3, 'deadline_days_from_now' => -1, 'start' => '18:30', 'end' => '20:00', 'max_attendees' => 50,
+                'description' => 'Workshop online com exemplos reais de publicações que trazem clientes e um calendário simples para o próximo mês.',
+                'online_url' => 'https://meet.example.test/aspec-redes-sociais',
+                'notes' => 'O link da sessão aparece na página do evento depois do fecho das inscrições.',
+                'registrants' => [$demoMember, ...$this->demoMembers(1, 4)],
+            ],
+            [
+                'name' => 'Formação Online: RGPD para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Lisboa',
+                'days_from_now' => 4, 'deadline_days_from_now' => -1, 'start' => '14:00', 'end' => '17:00', 'max_attendees' => 60,
+                'description' => 'O que uma pequena empresa tem de fazer para cumprir o RGPD: consentimentos, registos de tratamento e pedidos dos clientes.',
+                'online_url' => 'https://meet.example.test/aspec-rgpd',
+                'registrants' => $this->demoMembers(5, 8),
+            ],
+            [
+                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Leiria',
+                'days_from_now' => -14, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+                'description' => $breakfastDescription,
+                'address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria',
+                'latitude' => 39.7436, 'longitude' => -8.8071,
+                'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
+            ],
+            [
+                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Aveiro',
+                'days_from_now' => -30, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
+                'description' => $dinnerDescription,
+                'address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro',
+                'latitude' => 40.6412, 'longitude' => -8.6537,
+                'notes' => $dinnerNotes,
+                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
             ],
         ];
+    }
+
+    /**
+     * Emails dos membros Active numerados da demonstração (ex.: 1 a 3 → demo.membro01 a demo.membro03).
+     *
+     * @return list<string>
+     */
+    private function demoMembers(int $from, int $to): array
+    {
+        return array_map(fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number), range($from, $to));
     }
 }

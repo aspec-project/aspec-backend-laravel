@@ -4628,6 +4628,40 @@
               "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n    \"name\": \"Jantar online — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-20\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"description\": \"Encontro online para partilha de experiências entre membros.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-19T23:59:00Z\",\n    \"organizer_notes\": null,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": false,\n    \"is_registered\": true,\n    \"online_url\": \"https://meet.example.com/jantar-aspec\",\n    \"is_online\": true\n  }\n}"
             },
             {
+              "name": "200 Evento online — inscrito antes do prazo (sem link)",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Evento online — inscrito antes do prazo (sem link)"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-8888-4c88-8888-888888888888",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-8888-4c88-8888-888888888888"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-8888-4c88-8888-888888888888\",\n    \"name\": \"Webinar: Faturação Eletrónica sem Complicações\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-25\",\n    \"event_start_time\": \"18:00\",\n    \"event_end_time\": \"19:30\",\n    \"description\": \"Sessão online sobre as regras da faturação eletrónica, com tempo para perguntas no fim.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 100,\n    \"registration_deadline\": \"2030-11-24T23:59:00Z\",\n    \"organizer_notes\": \"O link da sessão aparece na página do evento depois do fecho das inscrições.\",\n    \"registrations_count\": 2,\n    \"available_spots\": 98,\n    \"registration_open\": true,\n    \"is_registered\": true,\n    \"is_online\": true\n  }\n}"
+            },
+            {
               "name": "404 Evento não encontrado",
               "originalRequest": {
                 "method": "GET",

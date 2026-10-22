@@ -64,7 +64,13 @@ Na pasta `Aspec_Backend/`:
 2. `php artisan db:seed --class=DemoSeeder`
 3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
 
-Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 10 eventos futuros nas quatro categorias, com datas a partir do dia em que corre. Pode correr outra vez: repõe as contas, os perfis e os eventos (as datas avançam) sem duplicar nada. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
+
+- 11 presenciais futuros, alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
+- 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
+
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados. Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
 
 Password de todas as contas: `Demo#2026`
 
