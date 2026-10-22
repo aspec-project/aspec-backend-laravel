@@ -282,6 +282,23 @@ class AdminUserIndexTest extends TestCase
     }
 
     #[Test]
+    public function admins_count_is_the_global_number_of_admins_regardless_of_filters(): void
+    {
+        User::factory()->admin()->create();
+        User::factory()->technicalAdmin()->create();
+        User::factory()->admin()->create()->delete();
+        $this->member([], ['business_name' => 'Padaria Doce Lar']);
+        $this->member([], ['business_name' => 'Oficina Rapida']);
+        $this->member(['account_status_id' => $this->statusId('Pending')], ['business_name' => 'Livraria Norte']);
+
+        foreach (['', '?search=padaria', '?status=Pending', '?include_admins=1'] as $query) {
+            $this->getJson("/api/admin/users{$query}")
+                ->assertOk()
+                ->assertJsonPath('data.admins_count', 3);
+        }
+    }
+
+    #[Test]
     public function soft_deleted_users_are_not_listed_nor_counted(): void
     {
         $kept = User::factory()->create();

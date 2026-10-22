@@ -372,10 +372,11 @@ class AdminUserController extends Controller
     /**
      * Lista os utilizadores do backoffice, paginada (12 por página) e por ordem alfabética do nome
      * profissional (email se não houver perfil), com desempate pelo id. Admins só com include_admins,
-     * e nesse caso primeiro. As contagens por separador seguem a pesquisa e o include_admins.
+     * e nesse caso primeiro. As contagens por separador seguem a pesquisa e o include_admins;
+     * admins_count é o total global de administradores (ignora filtros), usado no aviso de despromover.
      *
      * @param  IndexAdminUserRequest  $request  Filtros validados.
-     * @return JsonResponse 200 com items, pagination e counts.
+     * @return JsonResponse 200 com items, pagination, counts e admins_count.
      */
     public function index(IndexAdminUserRequest $request): JsonResponse
     {
@@ -411,6 +412,7 @@ class AdminUserController extends Controller
                 'last_page' => $users->lastPage(),
             ],
             'counts' => $this->countByTab($base),
+            'admins_count' => User::whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))->count(),
         ], 'Lista de utilizadores obtida com sucesso.');
     }
 
