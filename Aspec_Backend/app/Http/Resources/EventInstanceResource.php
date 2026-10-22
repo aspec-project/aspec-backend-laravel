@@ -20,15 +20,20 @@ class EventInstanceResource extends JsonResource
             : null;
 
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $deadline = Carbon::parse(
-            $this->getRawOriginal('registration_deadline'),
-            $timezone
-        );
+        $rawDeadline = $this->getRawOriginal('registration_deadline');
+
+        $deadline = $rawDeadline !== null
+            ? Carbon::parse($rawDeadline, $timezone)
+            : null;
+
         $now = now($timezone);
 
-        $deadlineHasPassed = $now->greaterThan($deadline);
+        $deadlineHasPassed = $deadline !== null
+            && $now->greaterThan($deadline);
+
         $registrationOpen = $hasRegistrationCount
             && $availableSpots > 0
+            && $deadline !== null
             && $now->lessThanOrEqualTo($deadline);
 
         $hasIsRegistered = array_key_exists('is_registered', $attributes);
@@ -41,7 +46,17 @@ class EventInstanceResource extends JsonResource
             && $viewer?->accountStatus?->name === 'Active'
             && $viewer?->role?->name === 'Admin';
 
-        $canSeeOnlineUrl = $isActiveAdmin || ($isRegistered && $deadlineHasPassed);
+        $isActiveMember = $viewer?->accountStatus?->name === 'Active'
+            && $viewer?->role?->name === 'Member';
+
+        $canSeeOnlineUrl = (bool) $this->is_online && (
+            $isActiveAdmin
+            || (
+                $isActiveMember
+                && $isRegistered
+                && $deadlineHasPassed
+            )
+        );
 
         return [
             'id' => $this->id,
@@ -64,7 +79,9 @@ class EventInstanceResource extends JsonResource
             'latitude' => $this->latitude === null ? null : (float) $this->latitude,
             'longitude' => $this->longitude === null ? null : (float) $this->longitude,
             'max_attendees' => $this->max_attendees,
-            'registration_deadline' => $this->registration_deadline?->toIso8601String(),
+            'registration_deadline' => $rawDeadline !== null
+                ? Carbon::parse($rawDeadline, $timezone)->toIso8601String()
+                : null,
             'organizer_notes' => $this->organizer_notes,
             'registrations_count' => $this->when($hasRegistrationCount, $registrationCount),
             'available_spots' => $this->when($hasRegistrationCount, $availableSpots),

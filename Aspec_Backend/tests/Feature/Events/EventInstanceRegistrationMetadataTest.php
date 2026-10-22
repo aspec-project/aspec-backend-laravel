@@ -183,4 +183,78 @@ class EventInstanceRegistrationMetadataTest extends TestCase
             ->assertJsonPath('data.is_registered', true)
             ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
     }
+
+
+    #[Test]
+    public function only_active_members_can_see_online_url_after_deadline_in_public_endpoints(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $event = $this->createOnlineEvent();
+
+        $event->update([
+            'registration_deadline' => now($timezone)
+                ->subMinute()
+                ->format('Y-m-d H:i:s'),
+        ]);
+
+        $viewers = [
+            User::factory()->pending()->create(),
+            User::factory()->inactive()->create(),
+            User::factory()->admin()->create(),
+        ];
+
+        foreach ($viewers as $viewer) {
+            $this->registerUser($event, $viewer);
+
+            Sanctum::actingAs($viewer);
+
+            $this->getJson('/api/events')
+                ->assertOk()
+                ->assertJsonMissingPath('data.items.0.online_url');
+
+            $this->getJson("/api/events/{$event->id}")
+                ->assertOk()
+                ->assertJsonMissingPath('data.online_url');
+        }
+
+        $activeMember = User::factory()->create();
+        $this->registerUser($event, $activeMember);
+
+        Sanctum::actingAs($activeMember);
+
+        $this->getJson('/api/events')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.online_url', 'https://meet.example.com/event');
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
+    }
+
+    #[Test]
+    public function in_person_event_never_exposes_online_url(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $event = EventInstance::factory()->create([
+            'is_online' => false,
+            'online_url' => 'https://meet.example.com/event',
+            'registration_deadline' => now($timezone)
+                ->subMinute()
+                ->format('Y-m-d H:i:s'),
+        ]);
+
+        $member = User::factory()->create();
+        $this->registerUser($event, $member);
+
+        Sanctum::actingAs($member);
+
+        $this->getJson('/api/events')
+            ->assertOk()
+            ->assertJsonMissingPath('data.items.0.online_url');
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.online_url');
+    }
 }
