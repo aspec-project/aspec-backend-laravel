@@ -52,6 +52,24 @@ class EventInstanceShowTest extends TestCase
     }
 
     #[Test]
+    public function registration_deadline_uses_lisbon_summer_offset(): void
+    {
+        $event = EventInstance::factory()->create([
+            'event_date' => '2027-07-15',
+            'event_start_time' => '10:00',
+            'event_end_time' => '12:00',
+            'registration_deadline' => '2027-07-14 23:59:00',
+        ]);
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath(
+                'data.registration_deadline',
+                '2027-07-14T23:59:00+01:00'
+            );
+    }
+
+    #[Test]
     public function missing_or_invalid_event_id_returns_404(): void
     {
         $this->getJson('/api/events/00000000-0000-4000-8000-000000000000')
