@@ -10143,6 +10143,287 @@
           ]
         },
         {
+          "name": "Anonimizar utilizador",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/:id/anonymize",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "users",
+                ":id",
+                "anonymize"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e"
+                }
+              ]
+            },
+            "description": "**Requer login, conta Active e perfil Admin** (`auth:sanctum` + `account.active` + `admin`). **Limite: 5 pedidos por hora por administrador** (depois 429): ação irreversível e rara.\n\nApagamento a pedido do membro (RGPD art. 17): o membro pede por email à ASPEC e o admin anonimiza no backoffice. Sem corpo. A confirmação (ex.: escrever \"ANONIMIZAR\") é feita no frontend.\n\nO que acontece: cancela a subscrição no Stripe e expira uma sessão de Checkout aberta; apaga os dados pessoais (perfil, horários, redes sociais, portfólio, logótipo, dados de faturação, sessões e tokens), troca o email por um endereço anónimo e passa a conta a **Inactive** (motivo: eliminada); a conta sai da lista de utilizadores, do detalhe e do diretório. Ficam: faturas (obrigação fiscal), inscrições em eventos já passados (como \"Empresa anonimizada\") e um registo mínimo de prova (conta, admin, data; sem dados pessoais). As inscrições futuras são apagadas (libertam a vaga).\n\nEnvia um email de confirmação para o endereço original. A pessoa pode voltar a candidatar-se com o mesmo email.\n\nAceita contas em qualquer estado (Pending, Approved, Active, Inactive). Nunca contas com perfil Admin (nem a própria, nem o admin técnico): para anonimizar um admin, despromover primeiro.\n\nResposta: `id` da conta e `anonymized_at` (ISO 8601); nunca dados pessoais.\n\nErros: 401 sem sessão/token · 403 não é administrador ou conta não ativa · 404 conta inexistente ou já anonimizada · 409 conta de administrador · 429 mais de 5 pedidos por hora."
+          },
+          "response": [
+            {
+              "name": "200 Anonimizado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Anonimizado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Membro anonimizado com sucesso.\",\n  \"data\": {\n    \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n    \"anonymized_at\": \"2026-10-22T10:15:00+00:00\"\n  }\n}"
+            },
+            {
+              "name": "409 Administrador",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Administrador"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível anonimizar um administrador.\"\n}"
+            },
+            {
+              "name": "404 Não encontrado ou já anonimizado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Não encontrado ou já anonimizado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users/9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e/anonymize",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users",
+                    "9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e",
+                    "anonymize"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Listar categorias",
           "request": {
             "method": "GET",
