@@ -21,17 +21,78 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminEventInstanceController extends Controller
 {
+    private const PAST_EVENT_MESSAGE = 'Não é possível alterar um evento que já decorreu.';
+
     public function index(Request $request): JsonResponse
     {
-        $request->validate([
+        $filters = $request->validate([
+            'period' => ['sometimes', 'in:upcoming,past'],
+            'date_from' => ['sometimes', 'date_format:Y-m-d'],
+            'date_to' => ['sometimes', 'date_format:Y-m-d'],
+            'category_id' => ['sometimes', 'uuid', 'exists:event_categories,id'],
+            'location_id' => ['sometimes', 'uuid', 'exists:locations,id'],
+            'per_page' => ['sometimes', 'integer', 'between:1,50'],
             'page' => ['nullable', 'integer', 'between:1,10000'],
         ]);
 
-        $events = EventInstance::query()
+        if (
+            isset($filters['date_from'], $filters['date_to'])
+            && $filters['date_to'] < $filters['date_from']
+        ) {
+            throw ValidationException::withMessages([
+                'date_to' => 'A data final tem de ser igual ou posterior à data inicial.',
+            ]);
+        }
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $today = now($timezone)->toDateString();
+
+        $filteredEvents = EventInstance::query()
+            ->when(
+                isset($filters['date_from']),
+                fn ($query) => $query->whereDate('event_date', '>=', $filters['date_from'])
+            )
+            ->when(
+                isset($filters['date_to']),
+                fn ($query) => $query->whereDate('event_date', '<=', $filters['date_to'])
+            )
+            ->when(
+                isset($filters['category_id']),
+                fn ($query) => $query->where('category_id', $filters['category_id'])
+            )
+            ->when(
+                isset($filters['location_id']),
+                fn ($query) => $query->where('location_id', $filters['location_id'])
+            );
+
+        $counts = [
+            'upcoming' => (clone $filteredEvents)
+                ->whereDate('event_date', '>=', $today)
+                ->count(),
+            'past' => (clone $filteredEvents)
+                ->whereDate('event_date', '<', $today)
+                ->count(),
+        ];
+
+        $period = $filters['period'] ?? 'upcoming';
+
+        $eventsQuery = (clone $filteredEvents)
             ->with(['category', 'location'])
-            ->orderBy('event_date')
-            ->orderBy('event_start_time')
-            ->paginate(15);
+            ->withCount('registrations');
+
+        if ($period === 'past') {
+            $eventsQuery
+                ->whereDate('event_date', '<', $today)
+                ->orderByDesc('event_date')
+                ->orderByDesc('event_start_time');
+        } else {
+            $eventsQuery
+                ->whereDate('event_date', '>=', $today)
+                ->orderBy('event_date')
+                ->orderBy('event_start_time');
+        }
+
+        $events = $eventsQuery->paginate((int) ($filters['per_page'] ?? 6));
 
         return $this->successResponse([
             'items' => EventInstanceResource::collection(
@@ -43,7 +104,16 @@ class AdminEventInstanceController extends Controller
                 'total' => $events->total(),
                 'last_page' => $events->lastPage(),
             ],
+            'counts' => $counts,
         ], 'Lista de eventos obtida com sucesso.');
+    }
+
+    private function eventHasPassed(EventInstance $event): bool
+    {
+        $today = now(config('app.event_timezone', 'Europe/Lisbon'))
+            ->toDateString();
+
+        return $event->event_date->toDateString() < $today;
     }
 
     /**
@@ -124,6 +194,12 @@ class AdminEventInstanceController extends Controller
         EventInstance $eventInstance,
         Geocoder $geocoder
     ): JsonResponse {
+        if ($this->eventHasPassed($eventInstance)) {
+            return $this->errorResponse(
+                self::PAST_EVENT_MESSAGE,
+                Response::HTTP_CONFLICT
+            );
+        }
         $validated = $request->validatedEventData();
 
         $justification = $validated['justification'] ?? null;
@@ -144,6 +220,13 @@ class AdminEventInstanceController extends Controller
                 ->whereKey($eventInstance->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($this->eventHasPassed($event)) {
+                return $this->errorResponse(
+                    self::PAST_EVENT_MESSAGE,
+                    Response::HTTP_CONFLICT
+                );
+            }
 
             $registrationCount = $event->registrations()->count();
 
@@ -188,11 +271,18 @@ class AdminEventInstanceController extends Controller
 
     public function destroy(Request $request, EventInstance $eventInstance): JsonResponse
     {
-        DB::transaction(function () use ($request, $eventInstance): void {
+        $result = DB::transaction(function () use ($request, $eventInstance): ?JsonResponse {
             $event = EventInstance::query()
                 ->whereKey($eventInstance->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+
+            if ($this->eventHasPassed($event)) {
+                return $this->errorResponse(
+                    self::PAST_EVENT_MESSAGE,
+                    Response::HTTP_CONFLICT
+                );
+            }
 
             $registrations = $event->registrations()
                 ->with('user')
@@ -222,7 +312,13 @@ class AdminEventInstanceController extends Controller
             $event->delete();
 
             Notification::send($recipients, $notification);
+
+            return null;
         });
+
+        if ($result !== null) {
+            return $result;
+        }
 
         return $this->successResponse(
             null,
