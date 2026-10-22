@@ -10,6 +10,7 @@ use App\Exceptions\SubscriptionStateConflictException;
 use App\Jobs\CancelStripeSubscriptionJob;
 use App\Models\User;
 use App\Notifications\ActivationLinkNotification;
+use App\Notifications\PaymentFailedNotification;
 use App\Notifications\ReactivationLinkNotification;
 use App\Notifications\SubscriptionCancelledNotification;
 use App\Notifications\SubscriptionResumedNotification;
@@ -68,6 +69,15 @@ class SubscriptionService
     public function sendReactivationLink(User $user): void
     {
         $user->notify(new ReactivationLinkNotification);
+    }
+
+    /**
+     * Envia (em fila, depois do commit) o lembrete de pagamento a uma conta Active em carência: o
+     * mesmo email do pagamento falhado, com o fim da carência já gravado na conta.
+     */
+    public function sendPaymentReminder(User $user): void
+    {
+        $user->notify(new PaymentFailedNotification($user->grace_ends_at));
     }
 
     /**
