@@ -11,11 +11,14 @@ use App\Http\Resources\UserResource;
 use App\Models\AccountStatus;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminUserController extends Controller
@@ -88,10 +91,10 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Reject a user by setting their account status to "Inactive".
+     * Rejeita uma candidatura: Pending passa a Inactive e é enviado o email de rejeição.
      *
      * @param  string  $id  The ID of the user to reject.
-     * @return JsonResponse A JSON response containing the rejected user's data and a success message.
+     * @return JsonResponse 200 com sucesso, 404 ou 409 (próprio, admin ou não pendente).
      */
     public function reject(Request $request, string $id): JsonResponse
     {
@@ -119,12 +122,35 @@ class AdminUserController extends Controller
             );
         }
 
-        $user->deactivate('rejected');
+        $validated = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
 
-        $user = $this->loadUserRelations($user->fresh());
+        $originalEmail = $user->email;
+
+        $user->deactivate(InactiveReason::Deleted->value);
+        app(SubscriptionService::class)->cancel($user);
+
+        if (! $user->anonymizeAndDelete($request->user())) {
+            return $this->errorResponse(
+                'Recurso não encontrado.',
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        rescue(
+            fn () => Notification::route('mail', $originalEmail)->notify(
+                new UserRejectedNotification($validated['reason'] ?? null)
+            ),
+            fn () => Log::warning(
+                'Falha ao enviar o email de rejeição da candidatura.',
+                ['user_id' => $user->id]
+            ),
+            report: false
+        );
 
         return $this->successResponse(
-            new UserResource($user),
+            null,
             'Utilizador rejeitado com sucesso.',
             Response::HTTP_OK
         );
