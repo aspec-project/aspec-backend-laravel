@@ -22,6 +22,7 @@ class AdminUserSummaryResource extends JsonResource
     public function toArray(Request $request): array
     {
         $profile = $this->memberProfile;
+        $subscriptionState = $this->resource->subscriptionState();
 
         return [
             'id' => $this->id,
@@ -34,6 +35,10 @@ class AdminUserSummaryResource extends JsonResource
             'account_status' => [
                 'id' => $this->accountStatus?->id,
                 'name' => $this->accountStatus?->name,
+            ],
+            'subscription_state' => [
+                'value' => $subscriptionState->value,
+                'label' => $subscriptionState->label(),
             ],
             'inactive_reason' => $this->inactive_reason?->value,
             'member_profile' => $profile ? [

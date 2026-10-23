@@ -104,7 +104,7 @@ class AdminUserIndexTest extends TestCase
 
         $item = $this->itemFor($this->getJson('/api/admin/users')->assertOk(), $user->id);
 
-        foreach (['id', 'email', 'created_at', 'role', 'account_status', 'inactive_reason', 'member_profile'] as $key) {
+        foreach (['id', 'email', 'created_at', 'role', 'account_status', 'inactive_reason', 'member_profile', 'subscription_state'] as $key) {
             $this->assertArrayHasKey($key, $item);
         }
         $this->assertSame($user->id, data_get($item, 'id'));
@@ -114,6 +114,8 @@ class AdminUserIndexTest extends TestCase
         $this->assertSame('Member', data_get($item, 'role.name'));
         $this->assertSame($user->account_status_id, data_get($item, 'account_status.id'));
         $this->assertSame('Active', data_get($item, 'account_status.name'));
+        $this->assertSame('active', data_get($item, 'subscription_state.value'));
+        $this->assertSame('Ativo', data_get($item, 'subscription_state.label'));
         $this->assertNull($item['inactive_reason']);
         $this->assertSame('Ana Costa', data_get($item, 'member_profile.name'));
         $this->assertSame('TechBless Solutions', data_get($item, 'member_profile.business_name'));
@@ -156,6 +158,56 @@ class AdminUserIndexTest extends TestCase
         $this->assertArrayHasKey('inactive_reason', $activeItem);
         $this->assertSame('blocked', $blockedItem['inactive_reason']);
         $this->assertNull($activeItem['inactive_reason']);
+    }
+
+    #[Test]
+    public function subscription_state_filter_lists_matching_users_and_counts_all_states(): void
+    {
+        $blocked = User::factory()
+            ->inactive(InactiveReason::Blocked)
+            ->create();
+
+        User::factory()->inactive(InactiveReason::Rejected)->create();
+        User::factory()->inactive(InactiveReason::Unpaid)->create();
+        User::factory()->create();
+
+        $response = $this->getJson('/api/admin/users?subscription_state=blocked')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.subscription_state.value', 'blocked')
+            ->assertJsonPath('data.subscription_state_counts.blocked', 1)
+            ->assertJsonPath('data.subscription_state_counts.inactive', 1)
+            ->assertJsonPath('data.subscription_state_counts.lapsed', 1)
+            ->assertJsonPath('data.subscription_state_counts.active', 1);
+
+        $this->assertSame([$blocked->id], $this->listedIds($response));
+    }
+
+    #[Test]
+    public function subscription_state_filter_must_be_valid(): void
+    {
+        $this->getJson('/api/admin/users?subscription_state=not-a-state')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['subscription_state']);
+    }
+
+    #[Test]
+    public function list_returns_subscription_state_counts_including_admins_when_requested(): void
+    {
+        $this->createTabScenario();
+        User::factory()->technicalAdmin()->create();
+
+        $this->getJson('/api/admin/users?include_admins=1')
+            ->assertOk()
+            ->assertJsonPath('data.subscription_state_counts.pending', 2)
+            ->assertJsonPath('data.subscription_state_counts.awaiting_activation', 1)
+            ->assertJsonPath('data.subscription_state_counts.blocked', 1)
+            ->assertJsonPath('data.subscription_state_counts.lapsed', 0)
+            ->assertJsonPath('data.subscription_state_counts.inactive', 2)
+            ->assertJsonPath('data.subscription_state_counts.exempt', 1)
+            ->assertJsonPath('data.subscription_state_counts.grace', 0)
+            ->assertJsonPath('data.subscription_state_counts.trial', 0)
+            ->assertJsonPath('data.subscription_state_counts.active', 4);
     }
 
     #[Test]
