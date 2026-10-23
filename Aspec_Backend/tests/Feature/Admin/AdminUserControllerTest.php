@@ -9,6 +9,7 @@ use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\ActivationLinkNotification;
 use App\Notifications\ReactivationLinkNotification;
+use App\Notifications\UserBlockedNotification;
 use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
@@ -584,6 +585,8 @@ class AdminUserControllerTest extends TestCase
         $user = User::factory()
             ->create();
 
+        $originalEmail = $user->email;
+        $reason = 'O membro violou as regras da plataforma.';
         $userToken = $user->createToken('user-token')->plainTextToken;
 
         DB::table('sessions')->insert([
@@ -598,24 +601,16 @@ class AdminUserControllerTest extends TestCase
         Sanctum::actingAs($admin);
 
         $response = $this->patchJson(
-            "/api/admin/users/{$user->id}/block"
+            "/api/admin/users/{$user->id}/block",
+            ['reason' => $reason]
         );
 
         $response
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath(
-                'message',
-                'Utilizador bloqueado com sucesso.'
-            )
-            ->assertJsonPath(
-                'data.id',
-                $user->id
-            )
-            ->assertJsonPath(
-                'data.account_status.name',
-                'Inactive'
-            );
+            ->assertJsonPath('message', 'Utilizador bloqueado com sucesso.')
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('data.account_status.name', 'Inactive');
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
@@ -634,12 +629,44 @@ class AdminUserControllerTest extends TestCase
             'id' => 'session-to-delete',
         ]);
 
+        Notification::assertSentTo(
+            $user,
+            UserBlockedNotification::class,
+            function ($notification, array $channels, User $notifiable) use ($originalEmail, $reason): bool {
+                $message = $notification->toMail($notifiable)->render();
+
+                return $channels === ['mail']
+                    && $notifiable->email === $originalEmail
+                    && str_contains($message, $reason);
+            }
+        );
+
         Auth::forgetGuards();
 
         $this
             ->withHeader('Authorization', 'Bearer '.$userToken)
             ->getJson('/api/auth/me')
             ->assertUnauthorized();
+    }
+
+    #[Test]
+    public function admin_can_block_active_user_without_reason_and_still_send_email(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk()
+            ->assertJsonPath('message', 'Utilizador bloqueado com sucesso.')
+            ->assertJsonPath('data.account_status.name', 'Inactive');
+
+        Notification::assertSentToTimes(
+            $user,
+            UserBlockedNotification::class,
+            1
+        );
     }
 
     #[Test]
