@@ -8678,7 +8678,7 @@
             }
           ]
         },
-        {
+       {
           "name": "Listar utilizadores",
           "request": {
             "method": "GET",
@@ -8719,12 +8719,18 @@
                   "disabled": true
                 },
                 {
+                  "key": "subscription_state",
+                  "value": "blocked",
+                  "description": "Filtra pelo estado da subscrição: pending, awaiting_activation, blocked, lapsed, inactive, exempt, grace, trial ou active.",
+                  "disabled": true
+                },
+                {
                   "key": "page",
                   "value": "1"
                 }
               ]
             },
-            "description": "**Admin.** Lista de utilizadores da página Gestão de Utilizadores do backoffice, paginada (**12 por página**, fixo; `per_page` é ignorado).\n\nSeparadores e parâmetros de cada um:\n- Todos: sem `status`;\n- Ativos: `status=Active`;\n- Pendentes: `status=Pending`;\n- Aprovados: `status=Approved`;\n- Bloqueados: `status=Inactive&blocked=1`;\n- Inativos: `status=Inactive&blocked=0` (inativos não bloqueados, incluindo os sem motivo).\n\n`status=Inactive` sem `blocked` devolve todas as contas inativas. `blocked` só é aceite com `status=Inactive` (422 caso contrário). `search` procura no email, no nome profissional e no nome do negócio.\n\nOs administradores ficam **escondidos** salvo `include_admins=1`; nesse caso aparecem **primeiro**.\n\nOrdem: **alfabética pelo nome profissional** sem distinguir maiúsculas (o email quando não há perfil), com desempate pelo id.\n\n`data.counts` traz uma contagem por separador (`all`, `active`, `pending`, `approved`, `blocked`, `inactive`, em que `inactive` = inativos não bloqueados); respeitam `search` e `include_admins` e ignoram `status`, `blocked` e `page`.\n\n`data.admins_count` é o **total global de administradores** (inclui o administrador técnico, exclui contas apagadas) e ignora todos os filtros (`status`, `blocked`, `search`, `include_admins`). Usado no aviso do diálogo de despromover.\n\nCampos de cada item: `id`, `email`, `created_at` (ISO 8601), `role`, `account_status`, `inactive_reason` (blocked, rejected, unpaid, cancelled, deleted ou null) e `member_profile` (`name`, `business_name`, `sector`, `location`; `null` sem perfil). Não inclui o telefone.\n\nErros: 401 não autenticado · 403 sem permissão ou conta não ativa · 422 filtros inválidos."
+            "description": "**Admin.** Lista de utilizadores da página Gestão de Utilizadores do backoffice, paginada (**12 por página**, fixo; `per_page` é ignorado).\n\nSeparadores e parâmetros de cada um:\n- Todos: sem `status`;\n- Ativos: `status=Active`;\n- Pendentes: `status=Pending`;\n- Aprovados: `status=Approved`;\n- Bloqueados: `status=Inactive&blocked=1`;\n- Inativos: `status=Inactive&blocked=0` (inativos não bloqueados, incluindo os sem motivo).\n\n`status=Inactive` sem `blocked` devolve todas as contas inativas. `blocked` só é aceite com `status=Inactive` (422 caso contrário). `search` procura no email, no nome profissional e no nome do negócio.\n\n`subscription_state` filtra pelo estado da subscrição. Valores aceites: `pending`, `awaiting_activation`, `blocked`, `lapsed`, `inactive`, `exempt`, `grace`, `trial` e `active`.\n\nOs administradores ficam **escondidos** salvo `include_admins=1`; nesse caso aparecem **primeiro**.\n\nOrdem: **alfabética pelo nome profissional** sem distinguir maiúsculas (o email quando não há perfil), com desempate pelo id.\n\n`data.counts` traz uma contagem por separador (`all`, `active`, `pending`, `approved`, `blocked`, `inactive`, em que `inactive` = inativos não bloqueados); respeitam `search` e `include_admins` e ignoram `status`, `blocked` e `page`.\n\n`data.subscription_state_counts` traz as contagens dos estados da subscrição; respeita `search` e `include_admins` e ignora `status`, `blocked`, `subscription_state` e `page`.\n\n`data.admins_count` é o **total global de administradores** (inclui o administrador técnico, exclui contas apagadas) e ignora todos os filtros (`status`, `blocked`, `search`, `include_admins`). Usado no aviso do diálogo de despromover.\n\nCampos de cada item: `id`, `email`, `created_at` (ISO 8601), `role`, `account_status`, `subscription_state` (`value` e `label`), `inactive_reason` (blocked, rejected, unpaid, cancelled, deleted ou null) e `member_profile` (`name`, `business_name`, `sector`, `location`; `null` sem perfil). Não inclui o telefone.\n\nErros: 401 não autenticado · 403 sem permissão ou conta não ativa · 422 filtros inválidos."
           },
           "event": [
             {
@@ -8737,8 +8743,31 @@
                   "});",
                   "",
                   "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    const validSubscriptionStates = [",
+                  "        \"pending\",",
+                  "        \"awaiting_activation\",",
+                  "        \"blocked\",",
+                  "        \"lapsed\",",
+                  "        \"inactive\",",
+                  "        \"exempt\",",
+                  "        \"grace\",",
+                  "        \"trial\",",
+                  "        \"active\"",
+                  "    ];",
+                  "    const subscriptionStateLabels = {",
+                  "        pending: \"Pendente\",",
+                  "        awaiting_activation: \"Por ativar\",",
+                  "        blocked: \"Bloqueado\",",
+                  "        lapsed: \"Subscrição caída\",",
+                  "        inactive: \"Inativo\",",
+                  "        exempt: \"Isento\",",
+                  "        grace: \"Em carência\",",
+                  "        trial: \"Em trial\",",
+                  "        active: \"Ativo\"",
+                  "    };",
+                  "",
                   "    pm.test(\"Resposta contém lista paginada\", function () {",
-                  "        const body = pm.response.json();",
                   "        pm.expect(body.success).to.eql(true);",
                   "        pm.expect(body.message).to.eql(\"Lista de utilizadores obtida com sucesso.\");",
                   "        pm.expect(body.data).to.have.property(\"items\");",
@@ -8746,23 +8775,39 @@
                   "        pm.expect(body.data.pagination.per_page).to.eql(12);",
                   "    });",
                   "",
-                  "    pm.test(\"Itens incluem role e estado da conta\", function () {",
-                  "        const items = pm.response.json().data.items;",
-                  "        if (items.length > 0) {",
-                  "            pm.expect(items[0]).to.have.property(\"role\");",
-                  "            pm.expect(items[0]).to.have.property(\"account_status\");",
-                  "        }",
-                  "    });",
-                  "",
                   "    pm.test(\"Resposta contém as contagens por separador\", function () {",
-                  "        const counts = pm.response.json().data.counts;",
+                  "        const counts = body.data.counts;",
                   "        [\"all\", \"active\", \"pending\", \"approved\", \"blocked\", \"inactive\"].forEach(function (key) {",
                   "            pm.expect(counts).to.have.property(key);",
                   "        });",
                   "    });",
                   "",
+                  "    pm.test(\"Resposta contém contagens para os estados da subscrição\", function () {",
+                  "        const counts = body.data.subscription_state_counts;",
+                  "        validSubscriptionStates.forEach(function (state) {",
+                  "            pm.expect(counts).to.have.property(state);",
+                  "            pm.expect(counts[state]).to.be.a(\"number\");",
+                  "        });",
+                  "    });",
+                  "",
+                  "    pm.test(\"Resposta contém a contagem global de administradores\", function () {",
+                  "        pm.expect(body.data.admins_count).to.be.a(\"number\");",
+                  "    });",
+                  "",
+                  "    pm.test(\"Itens incluem role, estado da conta e estado da subscrição\", function () {",
+                  "        const items = body.data.items;",
+                  "        if (items.length > 0) {",
+                  "            const item = items[0];",
+                  "            pm.expect(item).to.have.property(\"role\");",
+                  "            pm.expect(item).to.have.property(\"account_status\");",
+                  "            pm.expect(item.subscription_state).to.be.an(\"object\");",
+                  "            pm.expect(validSubscriptionStates).to.include(item.subscription_state.value);",
+                  "            pm.expect(item.subscription_state.label).to.eql(subscriptionStateLabels[item.subscription_state.value]);",
+                  "        }",
+                  "    });",
+                  "",
                   "    pm.test(\"Itens trazem os campos do backoffice e não o telefone\", function () {",
-                  "        const items = pm.response.json().data.items;",
+                  "        const items = body.data.items;",
                   "        if (items.length > 0) {",
                   "            pm.expect(items[0]).to.have.property(\"created_at\");",
                   "            pm.expect(items[0]).to.have.property(\"inactive_reason\");",
@@ -8820,7 +8865,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n        \"email\": \"ana@techbless.pt\",\n        \"created_at\": \"2024-03-04T09:30:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Active\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Ana Costa\",\n          \"business_name\": \"TechBless Solutions\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000001\",\n            \"name\": \"Tecnologia\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"7b1e2d3c-4f5a-4b6c-8d7e-9f0a1b2c3d4e\",\n        \"email\": \"jose@docelar.pt\",\n        \"created_at\": \"2023-11-02T14:00:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d\",\n          \"name\": \"Inactive\"\n        },\n        \"inactive_reason\": \"blocked\",\n        \"member_profile\": {\n          \"name\": \"José Oliveira\",\n          \"business_name\": \"Padaria Doce Lar\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000003\",\n            \"name\": \"Alimentação\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000004\",\n            \"name\": \"Setúbal\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 12,\n      \"total\": 9,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"all\": 9,\n      \"active\": 3,\n      \"pending\": 2,\n      \"approved\": 1,\n      \"blocked\": 1,\n      \"inactive\": 2\n    },\n    \"admins_count\": 2\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"9d2f1c3a-5b7e-4a1c-9f2d-3e4b5a6c7d8e\",\n        \"email\": \"ana@techbless.pt\",\n        \"created_at\": \"2024-03-04T09:30:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Active\"\n        },\n        \"subscription_state\": {\n          \"value\": \"active\",\n          \"label\": \"Ativo\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Ana Costa\",\n          \"business_name\": \"TechBless Solutions\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000001\",\n            \"name\": \"Tecnologia\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"7b1e2d3c-4f5a-4b6c-8d7e-9f0a1b2c3d4e\",\n        \"email\": \"jose@docelar.pt\",\n        \"created_at\": \"2023-11-02T14:00:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d\",\n          \"name\": \"Inactive\"\n        },\n        \"subscription_state\": {\n          \"value\": \"blocked\",\n          \"label\": \"Bloqueado\"\n        },\n        \"inactive_reason\": \"blocked\",\n        \"member_profile\": {\n          \"name\": \"José Oliveira\",\n          \"business_name\": \"Padaria Doce Lar\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000003\",\n            \"name\": \"Alimentação\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000004\",\n            \"name\": \"Setúbal\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 12,\n      \"total\": 9,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"all\": 9,\n      \"active\": 3,\n      \"pending\": 2,\n      \"approved\": 1,\n      \"blocked\": 1,\n      \"inactive\": 2\n    },\n    \"subscription_state_counts\": {\n      \"pending\": 2,\n      \"awaiting_activation\": 1,\n      \"blocked\": 1,\n      \"lapsed\": 1,\n      \"inactive\": 1,\n      \"exempt\": 0,\n      \"grace\": 0,\n      \"trial\": 0,\n      \"active\": 3\n    },\n    \"admins_count\": 2\n  }\n}"
             },
             {
               "name": "200 Bloqueados",
@@ -8864,7 +8909,47 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"7b1e2d3c-4f5a-4b6c-8d7e-9f0a1b2c3d4e\",\n        \"email\": \"jose@docelar.pt\",\n        \"created_at\": \"2023-11-02T14:00:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d\",\n          \"name\": \"Inactive\"\n        },\n        \"inactive_reason\": \"blocked\",\n        \"member_profile\": {\n          \"name\": \"José Oliveira\",\n          \"business_name\": \"Padaria Doce Lar\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000003\",\n            \"name\": \"Alimentação\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000004\",\n            \"name\": \"Setúbal\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 12,\n      \"total\": 1,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"all\": 9,\n      \"active\": 3,\n      \"pending\": 2,\n      \"approved\": 1,\n      \"blocked\": 1,\n      \"inactive\": 2\n    },\n    \"admins_count\": 2\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"7b1e2d3c-4f5a-4b6c-8d7e-9f0a1b2c3d4e\",\n        \"email\": \"jose@docelar.pt\",\n        \"created_at\": \"2023-11-02T14:00:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d\",\n          \"name\": \"Inactive\"\n        },\n        \"subscription_state\": {\n          \"value\": \"blocked\",\n          \"label\": \"Bloqueado\"\n        },\n        \"inactive_reason\": \"blocked\",\n        \"member_profile\": {\n          \"name\": \"José Oliveira\",\n          \"business_name\": \"Padaria Doce Lar\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000003\",\n            \"name\": \"Alimentação\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000004\",\n            \"name\": \"Setúbal\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 12,\n      \"total\": 1,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"all\": 9,\n      \"active\": 3,\n      \"pending\": 2,\n      \"approved\": 1,\n      \"blocked\": 1,\n      \"inactive\": 2\n    },\n    \"subscription_state_counts\": {\n      \"pending\": 2,\n      \"awaiting_activation\": 1,\n      \"blocked\": 1,\n      \"lapsed\": 1,\n      \"inactive\": 1,\n      \"exempt\": 0,\n      \"grace\": 0,\n      \"trial\": 0,\n      \"active\": 3\n    },\n    \"admins_count\": 2\n  }\n}"
+            },
+            {
+              "name": "200 Subscrição bloqueada",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Subscrição bloqueada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/users?subscription_state=blocked",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "users"
+                  ],
+                  "query": [
+                    {
+                      "key": "subscription_state",
+                      "value": "blocked"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de utilizadores obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"7b1e2d3c-4f5a-4b6c-8d7e-9f0a1b2c3d4e\",\n        \"email\": \"jose@docelar.pt\",\n        \"created_at\": \"2023-11-02T14:00:00+00:00\",\n        \"role\": {\n          \"id\": \"3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"8a9b0c1d-2e3f-4a5b-8c6d-7e8f9a0b1c2d\",\n          \"name\": \"Inactive\"\n        },\n        \"subscription_state\": {\n          \"value\": \"blocked\",\n          \"label\": \"Bloqueado\"\n        },\n        \"inactive_reason\": \"blocked\",\n        \"member_profile\": {\n          \"name\": \"José Oliveira\",\n          \"business_name\": \"Padaria Doce Lar\",\n          \"sector\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000003\",\n            \"name\": \"Alimentação\"\n          },\n          \"location\": {\n            \"id\": \"1a2b3c4d-0000-4000-8000-000000000004\",\n            \"name\": \"Setúbal\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 12,\n      \"total\": 1,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"all\": 9,\n      \"active\": 3,\n      \"pending\": 2,\n      \"approved\": 1,\n      \"blocked\": 1,\n      \"inactive\": 2\n    },\n    \"subscription_state_counts\": {\n      \"pending\": 2,\n      \"awaiting_activation\": 1,\n      \"blocked\": 1,\n      \"lapsed\": 1,\n      \"inactive\": 1,\n      \"exempt\": 0,\n      \"grace\": 0,\n      \"trial\": 0,\n      \"active\": 3\n    },\n    \"admins_count\": 2\n  }\n}"
             },
             {
               "name": "422 Bloqueados sem estado Inactive",
