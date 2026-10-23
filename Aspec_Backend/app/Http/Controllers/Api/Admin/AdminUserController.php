@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\InactiveReason;
+use App\Enums\SubscriptionState;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexAdminUserRequest;
 use App\Http\Resources\AdminUserDetailResource;
@@ -440,6 +441,10 @@ class AdminUserController extends Controller
             $request->input('status'),
             $request->filled('blocked') ? $request->boolean('blocked') : null
         )
+            ->when($request->filled('subscription_state'),
+                fn (Builder $query) => $query->inSubscriptionState(
+                    SubscriptionState::from($request->input('subscription_state'))
+                ))
             ->when($includeAdmins, fn (Builder $query) => $query->orderByRaw(
                 'CASE WHEN users.role_id = ? THEN 0 ELSE 1 END',
                 [Role::where('name', 'Admin')->value('id')]
@@ -457,6 +462,7 @@ class AdminUserController extends Controller
                 'last_page' => $users->lastPage(),
             ],
             'counts' => $this->countByTab($base),
+            'subscription_state_counts' => User::subscriptionStateCounts($base),
             'admins_count' => User::whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))->count(),
         ], 'Lista de utilizadores obtida com sucesso.');
     }
