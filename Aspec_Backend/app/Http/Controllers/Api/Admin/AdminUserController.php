@@ -11,6 +11,7 @@ use App\Http\Resources\UserResource;
 use App\Models\AccountStatus;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\UserBlockedNotification;
 use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Database\Eloquent\Builder;
@@ -158,7 +159,9 @@ class AdminUserController extends Controller
 
     /**
      * Block a user by deactivating their account.
+     * Deactivates the user's account and sends a notification email about the block.
      *
+     * @param  Request  $request  The incoming HTTP request.
      * @param  string  $id  The ID of the user to block.
      * @return JsonResponse A JSON response containing the blocked user's data and a success message.
      */
@@ -193,11 +196,27 @@ class AdminUserController extends Controller
             );
         }
 
+        $validated = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
+
         $user->deactivate(InactiveReason::Blocked->value);
 
         app(SubscriptionService::class)->cancel($user);
 
         $user = $this->loadUserRelations($user->fresh());
+
+        rescue(
+            fn () => Notification::send(
+                $user,
+                new UserBlockedNotification($validated['reason'] ?? null)
+            ),
+            fn () => Log::warning(
+                'Falha ao enviar o email de bloqueio do utilizador.',
+                ['user_id' => $user->id]
+            ),
+            report: false
+        );
 
         return $this->successResponse(
             new UserResource($user),
