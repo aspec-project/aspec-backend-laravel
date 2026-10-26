@@ -31,6 +31,7 @@ class EventInstance extends Model
         'organizer_notes',
         'is_online',
         'online_url',
+        'series_id',
     ];
 
     protected function casts(): array
@@ -56,5 +57,10 @@ class EventInstance extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(EventRegistration::class);
+    }
+
+    public function series(): BelongsTo
+    {
+        return $this->belongsTo(EventSeries::class, 'series_id');
     }
 }
