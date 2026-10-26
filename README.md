@@ -112,7 +112,9 @@ Para enviar emails a sério (demonstração), a plataforma usa a conta Gmail do 
 3. Testar: `php artisan tinker --execute="Mail::raw('Teste ASPEC', fn (\$m) => \$m->to('o-teu-email')->subject('Teste ASPEC'));"`
 4. A maior parte dos emails da aplicação (ativação, carência, faturas) passa pela fila: é preciso ter `php artisan queue:work` a correr.
 
-Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada ou verificação em dois passos desligada; `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
+Para receber emails de várias contas de teste num só endereço, usar aliases do Gmail: `o-teu-email+teste1@gmail.com`, `o-teu-email+teste2@gmail.com`… chegam todos à caixa de `o-teu-email@gmail.com`.
+
+Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada (são sempre 16 letras minúsculas; confirmar que nenhuma ficou de fora), criada noutra conta Google, ou verificação em dois passos desligada; mudar a palavra-passe da conta Google revoga as palavras-passe de aplicação. `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
 
