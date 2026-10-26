@@ -184,7 +184,6 @@ class EventInstanceRegistrationMetadataTest extends TestCase
             ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
     }
 
-
     #[Test]
     public function only_active_members_can_see_online_url_after_deadline_in_public_endpoints(): void
     {
