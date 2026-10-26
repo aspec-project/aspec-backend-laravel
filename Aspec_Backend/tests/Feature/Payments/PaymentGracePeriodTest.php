@@ -4,6 +4,7 @@ namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
 use App\Models\Invoice;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use Carbon\CarbonInterface;
@@ -223,16 +224,58 @@ class PaymentGracePeriodTest extends TestCase
     }
 
     #[Test]
-    public function failed_payment_of_an_admin_changes_nothing(): void
+    public function failed_payment_of_the_subscription_exempt_admin_changes_nothing(): void
     {
         Notification::fake();
-        $admin = $this->customer(User::factory()->admin()->create());
+        $admin = $this->customer(User::factory()->technicalAdmin()->create());
         $this->subscribe($admin);
 
         $this->postStripeWebhook($this->paymentFailed())->assertOk();
 
         $this->assertNull($admin->fresh()->grace_ends_at);
         Notification::assertNothingSent();
+    }
+
+    private function payingAdmin(string $subscriptionStatus = 'active'): User
+    {
+        $admin = $this->customer(User::factory()->admin()->withBilling()->create());
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+        $this->subscribe($admin, $subscriptionStatus);
+
+        return $admin;
+    }
+
+    #[Test]
+    public function first_failed_payment_of_an_admin_with_a_profile_starts_the_grace_period(): void
+    {
+        $this->freezeSecond();
+        Notification::fake();
+        $admin = $this->payingAdmin();
+
+        $this->postStripeWebhook($this->paymentFailed())->assertOk();
+
+        $this->assertGraceEndsAt(now()->addDays(7), $admin);
+        $this->assertSame('Active', $admin->fresh()->accountStatus->name);
+        Notification::assertSentToTimes($admin, PaymentFailedNotification::class, 1);
+    }
+
+    #[Test]
+    public function subscription_back_to_active_ends_the_grace_period_of_an_admin_with_a_profile(): void
+    {
+        Notification::fake();
+        $admin = $this->payingAdmin('past_due');
+        $admin->forceFill(['grace_ends_at' => now()->addDays(5)])->save();
+
+        $this->postStripeWebhook($this->stripeEvent(
+            'customer.subscription.updated',
+            $this->stripeSubscription(self::CUSTOMER, 'active'),
+            previousAttributes: ['status' => 'past_due'],
+        ))->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertNull($fresh->grace_ends_at);
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertDatabaseHas('subscriptions', ['stripe_id' => 'sub_test_1', 'stripe_status' => 'active']);
     }
 
     #[Test]
@@ -449,6 +492,26 @@ class PaymentGracePeriodTest extends TestCase
         $this->assertStringContainsString('60,00', $text);
         $this->assertSame('Atualizar cartão', $mail->actionText);
         $this->assertSame(self::FRONTEND_URL.'/conta/subscricao', $mail->actionUrl);
+    }
+
+    /**
+     * Mudar o cartão não paga a quota em atraso: sem esta linha o membro julga que resolveu e só
+     * paga na tentativa seguinte do Stripe.
+     */
+    #[Test]
+    public function payment_failed_email_explains_how_to_pay_the_overdue_amount_right_after_the_deadline(): void
+    {
+        $user = User::factory()->create();
+        $graceEndsAt = now()->addDays(7);
+
+        $mail = (new PaymentFailedNotification($graceEndsAt))->toMail($user);
+
+        $line = "Depois de atualizar o cartão, carregue em 'Pagar valor em falta' para regularizar já.";
+        $position = array_search($line, $mail->introLines, true);
+        $this->assertIsInt($position, 'A linha tem de vir antes do botão, com o texto exato.');
+        $this->assertStringStartsWith('A sua conta continua ativa até '.$graceEndsAt->format('d/m/Y'), $mail->introLines[$position - 1] ?? '');
+        $this->assertSame($line, end($mail->introLines));
+        $this->assertNotContains($line, $mail->outroLines);
     }
 
     public static function updatesWithoutPayment(): array

@@ -19,18 +19,22 @@ class EventInstanceResource extends JsonResource
             ? max(0, (int) $this->max_attendees - $registrationCount)
             : null;
 
-        $registrationOpen = false;
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $rawDeadline = $this->getRawOriginal('registration_deadline');
 
-        if ($hasRegistrationCount) {
-            $timezone = config('app.event_timezone', 'Europe/Lisbon');
-            $deadline = Carbon::parse(
-                $this->getRawOriginal('registration_deadline'),
-                $timezone
-            );
+        $deadline = $rawDeadline !== null
+            ? Carbon::parse($rawDeadline, $timezone)
+            : null;
 
-            $registrationOpen = $availableSpots > 0
-                && now($timezone)->lessThanOrEqualTo($deadline);
-        }
+        $now = now($timezone);
+
+        $deadlineHasPassed = $deadline !== null
+            && $now->greaterThan($deadline);
+
+        $registrationOpen = $hasRegistrationCount
+            && $availableSpots > 0
+            && $deadline !== null
+            && $now->lessThanOrEqualTo($deadline);
 
         $hasIsRegistered = array_key_exists('is_registered', $attributes);
         $isRegistered = $hasIsRegistered && (bool) $attributes['is_registered'];
@@ -41,6 +45,18 @@ class EventInstanceResource extends JsonResource
         $isActiveAdmin = $isAdminRoute
             && $viewer?->accountStatus?->name === 'Active'
             && $viewer?->role?->name === 'Admin';
+
+        $isActiveMember = $viewer?->accountStatus?->name === 'Active'
+            && $viewer?->role?->name === 'Member';
+
+        $canSeeOnlineUrl = (bool) $this->is_online && (
+            $isActiveAdmin
+            || (
+                $isActiveMember
+                && $isRegistered
+                && $deadlineHasPassed
+            )
+        );
 
         return [
             'id' => $this->id,
@@ -59,16 +75,20 @@ class EventInstanceResource extends JsonResource
             'event_end_time' => substr((string) $this->event_end_time, 0, 5),
             'description' => $this->description,
             'address' => $this->address,
+            'venue_name' => $this->venue_name,
             'latitude' => $this->latitude === null ? null : (float) $this->latitude,
             'longitude' => $this->longitude === null ? null : (float) $this->longitude,
             'max_attendees' => $this->max_attendees,
-            'registration_deadline' => $this->registration_deadline?->toIso8601String(),
+            'registration_deadline' => $rawDeadline !== null
+                ? Carbon::parse($rawDeadline, $timezone)->toIso8601String()
+                : null,
             'organizer_notes' => $this->organizer_notes,
             'registrations_count' => $this->when($hasRegistrationCount, $registrationCount),
             'available_spots' => $this->when($hasRegistrationCount, $availableSpots),
             'registration_open' => $this->when($hasRegistrationCount, $registrationOpen),
             'is_registered' => $this->when($hasIsRegistered, $isRegistered),
-            'online_url' => $this->when($isRegistered || $isActiveAdmin, $this->online_url),
+            'online_url' => $this->when($canSeeOnlineUrl, $this->online_url),
+            'is_online' => $this->is_online,
         ];
     }
 }

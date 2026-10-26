@@ -3,6 +3,7 @@
 namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
+use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\ReactivationLinkNotification;
 use App\Notifications\SubscriptionActivatedNotification;
@@ -208,5 +209,38 @@ class SubscriptionEndedWebhookTest extends TestCase
         $this->assertNull($fresh->inactive_reason);
         $this->assertNull($fresh->trial_ends_at);
         Notification::assertSentToTimes($fresh, SubscriptionActivatedNotification::class, 1);
+    }
+
+    /**
+     * Um administrador que paga e cancela a subscrição perde o acesso como qualquer membro.
+     */
+    #[Test]
+    public function end_of_a_subscription_cancelled_by_an_admin_with_a_profile_deactivates_with_reason_cancelled(): void
+    {
+        $admin = $this->customer(User::factory()->admin()->withBilling()->create());
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+        $this->subscribe($admin);
+
+        $this->postStripeWebhook($this->deleted($this->cancellationReason('cancellation_requested')))->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Inactive', $fresh->accountStatus->name);
+        $this->assertSame(InactiveReason::Cancelled, $fresh->inactive_reason);
+        $this->assertSame('Admin', $fresh->role->name);
+        Notification::assertSentToTimes($fresh, ReactivationLinkNotification::class, 1);
+    }
+
+    #[Test]
+    public function end_of_a_subscription_of_the_exempt_admin_changes_nothing(): void
+    {
+        $admin = $this->customer(User::factory()->technicalAdmin()->create());
+        $this->subscribe($admin);
+
+        $this->postStripeWebhook($this->deleted($this->cancellationReason('cancellation_requested')))->assertOk();
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertNull($fresh->inactive_reason);
+        Notification::assertNothingSent();
     }
 }

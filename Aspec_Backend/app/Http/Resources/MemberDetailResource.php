@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Storage;
 class MemberDetailResource extends JsonResource
 {
     /**
-     * @param  mixed  $resource  Perfil com sector, location, weekDays, socialPlatforms, portfolios e user (id, phone) carregados.
+     * @param  mixed  $resource  Perfil com sector, location, weekDays, socialPlatforms e portfolios carregados.
      * @param  bool  $showContacts  Decidido pelo controller: true só para quem consulta com conta Active.
      */
     public function __construct($resource, private readonly bool $showContacts = false)
@@ -18,9 +18,10 @@ class MemberDetailResource extends JsonResource
     }
 
     /**
-     * Perfil público do diretório. A montra (morada, website, horário, redes, portfólio) é pública;
-     * telefone e contactos comerciais só em members_only, que é null para quem não tem conta Active.
-     * O email da conta e a congregação nunca são devolvidos, para ninguém.
+     * Perfil público do diretório. A montra (descrição, setor, distrito, logótipo, horário, portfólio) é pública;
+     * website, morada, redes sociais e contactos comerciais só em members_only, que é null para quem não
+     * tem conta Active e traz sempre as 5 chaves para quem tem. O email e o telefone da conta e a
+     * congregação nunca são devolvidos, para ninguém.
      *
      * @return array<string, mixed>
      */
@@ -40,16 +41,16 @@ class MemberDetailResource extends JsonResource
                 'name' => $this->location->name,
             ],
             'logo_url' => $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null,
-            'website_url' => $this->website_url,
-            'address' => $this->address,
             'business_hours' => BusinessHourResource::collection($this->weekDays),
-            'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             'portfolio' => PortfolioResource::collection($this->portfolios),
             'average_rating' => isset($this->average_rating) ? round((float) $this->average_rating, 1) : null,
             'reviews_count' => (int) ($this->reviews_count ?? 0),
             'members_only' => $this->showContacts ? [
-                'phone' => $this->user->phone,
-                'commercial_contacts' => $this->commercial_contacts,
+                'commercial_phone' => $this->commercial_phone,
+                'commercial_email' => $this->commercial_email,
+                'website_url' => $this->website_url,
+                'address' => $this->address,
+                'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             ] : null,
         ];
     }

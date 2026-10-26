@@ -1,9 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
+use App\Http\Controllers\Api\Admin\AdminGeocodeController;
+use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
+use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
@@ -80,6 +84,12 @@ Route::prefix('admin')
         Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{id}', [AdminUserController::class, 'show'])->whereUuid('id');
+        Route::post('/users/{user}/anonymize', [AdminUserAnonymizationController::class, 'store'])
+            ->whereUuid('user')
+            ->middleware('throttle:admin-anonymize');
+        Route::post('/users/{user}/payment-link', [AdminUserPaymentLinkController::class, 'store'])
+            ->whereUuid('user')
+            ->middleware('throttle:admin-payment-link');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
@@ -95,6 +105,13 @@ Route::prefix('admin')
             ->whereUuid('eventInstance');
         Route::delete('/events/{eventInstance}', [AdminEventInstanceController::class, 'destroy'])
             ->whereUuid('eventInstance');
+        Route::get('/events/{eventInstance}/attendees', [AdminEventAttendeeController::class, 'index'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:event-attendees');
+        Route::get('/events/{eventInstance}/attendees.csv', [AdminEventAttendeeController::class, 'export'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:event-attendees');
+        Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -121,6 +138,6 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::delete('/events/{eventInstance}/registrations', [EventRegistrationController::class, 'destroy'])
         ->whereUuid('eventInstance');
     Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
-    ->whereUuid('eventInstance');
+        ->whereUuid('eventInstance');
     Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
 });

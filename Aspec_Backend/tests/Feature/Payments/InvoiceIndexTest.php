@@ -223,19 +223,6 @@ class InvoiceIndexTest extends TestCase
             ]);
     }
 
-    #[Test]
-    public function per_page_cannot_be_changed_by_the_client(): void
-    {
-        $member = $this->member();
-        Invoice::factory()->count(12)->for($member)->create();
-        Sanctum::actingAs($member);
-
-        $this->getJson(self::URL.'?per_page=100')
-            ->assertOk()
-            ->assertJsonCount(10, 'data.items')
-            ->assertJsonPath('data.pagination.per_page', 10);
-    }
-
     // --- I5 ---
 
     #[Test]
@@ -347,5 +334,136 @@ class InvoiceIndexTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.items', [])
             ->assertJsonPath('data.pagination.total', 0);
+    }
+
+    // --- I11 a I16: per_page e page ---
+
+    #[Test]
+    public function per_page_sets_the_page_size(): void
+    {
+        $member = $this->member();
+        for ($i = 0; $i < 7; $i++) {
+            Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => now()->subMonths($i)]);
+        }
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL.'?per_page=5')
+            ->assertOk()
+            ->assertJsonCount(5, 'data.items')
+            ->assertJsonPath('data.pagination', [
+                'current_page' => 1,
+                'per_page' => 5,
+                'total' => 7,
+                'last_page' => 2,
+            ]);
+
+        $this->getJson(self::URL.'?page=2&per_page=5')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.pagination.current_page', 2)
+            ->assertJsonPath('data.pagination.per_page', 5);
+    }
+
+    /**
+     * Um per_page vazio chega como null (ConvertEmptyStringsToNull) e tem de cair no valor por omissão.
+     */
+    #[Test]
+    public function missing_or_empty_per_page_uses_ten(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->count(12)->for($member)->create();
+        Sanctum::actingAs($member);
+
+        foreach ([self::URL, self::URL.'?per_page=', self::URL.'?page=1&per_page='] as $url) {
+            $this->getJson($url)
+                ->assertOk()
+                ->assertJsonCount(10, 'data.items')
+                ->assertJsonPath('data.pagination.per_page', 10);
+        }
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidPerPages(): array
+    {
+        return [
+            'zero' => ['0'],
+            'acima de 50' => ['51'],
+            'negativo' => ['-1'],
+            'texto' => ['abc'],
+            'decimal' => ['5.5'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidPerPages')]
+    public function per_page_outside_one_to_fifty_is_rejected(string $value): void
+    {
+        Sanctum::actingAs($this->member());
+
+        $this->getJson(self::URL.'?per_page='.$value)
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['per_page'])
+            ->assertJsonMissingPath('data.items');
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidPages(): array
+    {
+        return [
+            'zero' => ['0'],
+            'acima de 10000' => ['10001'],
+            'texto' => ['abc'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidPages')]
+    public function page_outside_one_to_ten_thousand_is_rejected_with_a_portuguese_attribute(string $value): void
+    {
+        Sanctum::actingAs($this->member());
+
+        $response = $this->getJson(self::URL.'?page='.$value)
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['page']);
+
+        $this->assertStringContainsString('página', $response->json('errors.page.0'));
+    }
+
+    #[Test]
+    public function fifty_per_page_is_accepted(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->count(3)->for($member)->create();
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL.'?per_page=50')
+            ->assertOk()
+            ->assertJsonCount(3, 'data.items')
+            ->assertJsonPath('data.pagination.per_page', 50);
+    }
+
+    #[Test]
+    public function large_page_size_still_lists_only_own_invoices(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->count(2)->for($member)->create();
+        Invoice::factory()->count(4)->for($this->member())->create();
+        Sanctum::actingAs($member);
+
+        $response = $this->getJson(self::URL.'?per_page=50')
+            ->assertOk()
+            ->assertJsonCount(2, 'data.items')
+            ->assertJsonPath('data.pagination.total', 2);
+
+        $this->assertEqualsCanonicalizing(
+            $member->issuedInvoices()->pluck('id')->all(),
+            $response->json('data.items.*.id'),
+        );
     }
 }

@@ -69,6 +69,9 @@ class AuthControllerTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
         ]);
 
         $response
@@ -79,7 +82,7 @@ class AuthControllerTest extends TestCase
                 'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.'
             )
             ->assertJsonPath('data.email', 'novo.membro@example.com')
-            ->assertJsonPath('data.phone', '912345678')
+            ->assertJsonPath('data.phone', '+351912345678')
             ->assertJsonPath('data.role.name', 'Member')
             ->assertJsonPath('data.account_status.name', 'Pending')
             ->assertJsonPath(
@@ -90,6 +93,14 @@ class AuthControllerTest extends TestCase
                 'data.member_profile.congregation',
                 'Congregação de Teste'
             )
+            ->assertJsonPath(
+                'data.member_profile.commercial_email',
+                'geral@empresa-teste.pt'
+            )
+            ->assertJsonPath(
+                'data.member_profile.commercial_phone',
+                '+351213456789'
+            )
             ->assertJsonMissingPath('data.password')
             ->assertJsonMissingPath('data.remember_token')
             ->assertJsonMissingPath('data.user')
@@ -97,6 +108,7 @@ class AuthControllerTest extends TestCase
 
         $this->assertDatabaseHas('users', [
             'email' => 'novo.membro@example.com',
+            'phone' => '+351912345678',
             'role_id' => $role->id,
             'account_status_id' => AccountStatus::where(
                 'name',
@@ -104,10 +116,96 @@ class AuthControllerTest extends TestCase
             )->value('id'),
         ]);
 
+        $this->assertNotNull(
+            User::where('email', 'novo.membro@example.com')
+                ->value('terms_accepted_at')
+        );
+
         $this->assertDatabaseHas('member_profiles', [
             'business_name' => 'Empresa de Teste',
             'congregation' => 'Congregação de Teste',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '+351213456789',
         ]);
+    }
+
+    #[Test]
+    public function registration_requires_commercial_email(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_email']);
+    }
+
+    #[Test]
+    public function registration_requires_commercial_phone(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@example.com',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_phone']);
+    }
+
+    #[Test]
+    public function registration_rejects_invalid_commercial_email(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'email-invalido',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_email']);
     }
 
     #[Test]
@@ -731,6 +829,203 @@ class AuthControllerTest extends TestCase
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'name' => 'postman',
+        ]);
+    }
+
+    #[Test]
+    public function registration_rejects_invalid_commercial_phone(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => 'telefone-invalido',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['commercial_phone']);
+    }
+
+    #[Test]
+    public function registration_rejects_website_with_javascript_scheme(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'website_url' => 'javascript:alert(1)',
+            'address' => 'Rua de Teste, 1',
+            'terms_accepted' => true,
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
+    }
+
+    #[Test]
+    public function registration_rejects_website_with_ftp_scheme(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'website_url' => 'ftp://example.com',
+            'address' => 'Rua de Teste, 1',
+            'terms_accepted' => true,
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
+    }
+
+    #[Test]
+    public function registration_allows_omitting_description_and_website(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $response = $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'terms_accepted' => true,
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.member_profile.description', null)
+            ->assertJsonPath('data.member_profile.website_url', null);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'business_name' => 'Empresa de Teste',
+            'description' => null,
+            'website_url' => null,
+        ]);
+    }
+
+    #[Test]
+    public function registration_requires_terms_acceptance(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['terms_accepted'])
+            ->assertJsonPath(
+                'errors.terms_accepted.0',
+                'O campo aceitação dos termos é obrigatório.'
+            );
+    }
+
+    #[Test]
+    public function registration_rejects_unaccepted_terms(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => false,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.terms_accepted.0',
+                'O campo aceitação dos termos tem de ser aceite.'
+            );
+    }
+
+    #[Test]
+    public function registration_normalizes_a_formatted_portuguese_phone(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'telefone.formatado@example.com',
+            'password' => 'Password123!',
+            'phone' => '213 456 789',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'address' => 'Rua de Teste, 1',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.phone', '+351213456789');
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'telefone.formatado@example.com',
+            'phone' => '+351213456789',
         ]);
     }
 }

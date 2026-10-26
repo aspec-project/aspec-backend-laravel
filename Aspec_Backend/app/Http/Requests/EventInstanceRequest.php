@@ -34,22 +34,25 @@ class EventInstanceRequest extends FormRequest
             'address' => $isOnline
                 ? ['prohibited']
                 : ['required', 'string', 'max:255'],
+            'venue_name' => ['nullable', 'string', 'max:255'],
             'latitude' => $isOnline
                 ? ['prohibited']
-                : ['required', 'numeric', 'between:-90,90'],
+                : ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
             'longitude' => $isOnline
                 ? ['prohibited']
-                : ['required', 'numeric', 'between:-180,180'],
+                : ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
-            'registration_deadline' => ['required', 'date_format:Y-m-d H:i'],
+            'registration_deadline' => ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'justification' => $this->isMethod('put')
+                ? ['sometimes', 'nullable', 'string', 'max:2000']
+                : ['prohibited'],
         ];
 
         if ($this->isMethod('post')) {
             $now = now(config('app.event_timezone', 'Europe/Lisbon'));
 
             $rules['event_date'][] = 'after_or_equal:'.$now->toDateString();
-            $rules['registration_deadline'][] = 'after:'.$now->format('Y-m-d H:i');
         }
 
         return $rules;
@@ -58,19 +61,47 @@ class EventInstanceRequest extends FormRequest
     public function withValidator(ValidatorContract $validator): void
     {
         $validator->after(function (ValidatorContract $validator): void {
-            foreach (['event_date', 'event_start_time', 'registration_deadline'] as $field) {
-                if ($validator->errors()->has($field)) {
-                    return;
+            if (! $this->boolean('is_online')) {
+                $hasLatitude = $this->filled('latitude');
+                $hasLongitude = $this->filled('longitude');
+
+                if ($hasLatitude !== $hasLongitude) {
+                    $message = 'Envie latitude e longitude em conjunto, ou deixe ambas em branco para localizar a morada.';
+
+                    $validator->errors()->add('latitude', $message);
+                    $validator->errors()->add('longitude', $message);
                 }
+            }
+            if ($validator->errors()->has('registration_deadline')) {
+                return;
             }
 
             $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+            $deadline = Carbon::createFromFormat(
+                '!Y-m-d',
+                $this->input('registration_deadline'),
+                $timezone
+            )->setTime(23, 59);
+
+            if ($this->isMethod('post') && $deadline->lessThanOrEqualTo(now($timezone))) {
+                $validator->errors()->add(
+                    'registration_deadline',
+                    'O prazo de inscrição tem de ser posterior à data e hora atuais.'
+                );
+            }
+
+            if (
+                $validator->errors()->has('event_date')
+                || $validator->errors()->has('event_start_time')
+            ) {
+                return;
+            }
 
             $eventStartsAt = Carbon::parse(
                 $this->input('event_date').' '.$this->input('event_start_time'),
                 $timezone
             );
-            $deadline = Carbon::parse($this->input('registration_deadline'), $timezone);
 
             if ($deadline->greaterThan($eventStartsAt)) {
                 $validator->errors()->add(
@@ -99,6 +130,7 @@ class EventInstanceRequest extends FormRequest
             'is_online' => 'evento online',
             'online_url' => 'link do evento online',
             'organizer_notes' => 'notas do organizador',
+            'justification' => 'justificação',
         ];
     }
 
@@ -117,6 +149,26 @@ class EventInstanceRequest extends FormRequest
             'address.prohibited' => 'Eventos online não devem ter morada.',
             'latitude.prohibited' => 'Eventos online não devem ter coordenadas.',
             'longitude.prohibited' => 'Eventos online não devem ter coordenadas.',
+            'venue_name' => ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function validatedEventData(): array
+    {
+        $data = $this->validated();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $data['registration_deadline'] = Carbon::createFromFormat(
+            '!Y-m-d',
+            $data['registration_deadline'],
+            $timezone
+        )
+            ->setTime(23, 59)
+            ->format('Y-m-d H:i:s');
+
+        return $data;
     }
 }

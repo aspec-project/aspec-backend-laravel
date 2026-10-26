@@ -9,10 +9,13 @@ use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\ActivationLinkNotification;
 use App\Notifications\ReactivationLinkNotification;
+use App\Notifications\UserBlockedNotification;
+use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\Data\CheckoutSessionData;
 use App\Services\Payments\StripeSubscriptionService;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
@@ -230,6 +233,8 @@ class AdminUserControllerTest extends TestCase
             ->pending()
             ->create();
 
+        $originalEmail = $pendingUser->email;
+
         $pendingUserToken = $pendingUser
             ->createToken('pending-user-token')
             ->plainTextToken;
@@ -247,14 +252,7 @@ class AdminUserControllerTest extends TestCase
                 'message',
                 'Utilizador rejeitado com sucesso.'
             )
-            ->assertJsonPath(
-                'data.id',
-                $pendingUser->id
-            )
-            ->assertJsonPath(
-                'data.account_status.name',
-                'Inactive'
-            );
+            ->assertJsonPath('data', null);
 
         $this->assertDatabaseHas('users', [
             'id' => $pendingUser->id,
@@ -262,6 +260,14 @@ class AdminUserControllerTest extends TestCase
                 'name',
                 'Inactive'
             )->value('id'),
+        ]);
+
+        $this->assertSoftDeleted('users', [
+            'id' => $pendingUser->id,
+        ]);
+
+        $this->assertDatabaseMissing('users', [
+            'email' => $originalEmail,
         ]);
 
         $this->assertDatabaseMissing('personal_access_tokens', [
@@ -579,6 +585,8 @@ class AdminUserControllerTest extends TestCase
         $user = User::factory()
             ->create();
 
+        $originalEmail = $user->email;
+        $reason = 'O membro violou as regras da plataforma.';
         $userToken = $user->createToken('user-token')->plainTextToken;
 
         DB::table('sessions')->insert([
@@ -593,24 +601,16 @@ class AdminUserControllerTest extends TestCase
         Sanctum::actingAs($admin);
 
         $response = $this->patchJson(
-            "/api/admin/users/{$user->id}/block"
+            "/api/admin/users/{$user->id}/block",
+            ['reason' => $reason]
         );
 
         $response
             ->assertOk()
             ->assertJsonPath('success', true)
-            ->assertJsonPath(
-                'message',
-                'Utilizador bloqueado com sucesso.'
-            )
-            ->assertJsonPath(
-                'data.id',
-                $user->id
-            )
-            ->assertJsonPath(
-                'data.account_status.name',
-                'Inactive'
-            );
+            ->assertJsonPath('message', 'Utilizador bloqueado com sucesso.')
+            ->assertJsonPath('data.id', $user->id)
+            ->assertJsonPath('data.account_status.name', 'Inactive');
 
         $this->assertDatabaseHas('users', [
             'id' => $user->id,
@@ -629,12 +629,44 @@ class AdminUserControllerTest extends TestCase
             'id' => 'session-to-delete',
         ]);
 
+        Notification::assertSentTo(
+            $user,
+            UserBlockedNotification::class,
+            function ($notification, array $channels, User $notifiable) use ($originalEmail, $reason): bool {
+                $message = $notification->toMail($notifiable)->render();
+
+                return $channels === ['mail']
+                    && $notifiable->email === $originalEmail
+                    && str_contains($message, $reason);
+            }
+        );
+
         Auth::forgetGuards();
 
         $this
             ->withHeader('Authorization', 'Bearer '.$userToken)
             ->getJson('/api/auth/me')
             ->assertUnauthorized();
+    }
+
+    #[Test]
+    public function admin_can_block_active_user_without_reason_and_still_send_email(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $user = User::factory()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$user->id}/block")
+            ->assertOk()
+            ->assertJsonPath('message', 'Utilizador bloqueado com sucesso.')
+            ->assertJsonPath('data.account_status.name', 'Inactive');
+
+        Notification::assertSentToTimes(
+            $user,
+            UserBlockedNotification::class,
+            1
+        );
     }
 
     #[Test]
@@ -1424,5 +1456,98 @@ class AdminUserControllerTest extends TestCase
 
         $this->patchJson("/api/admin/users/{$unknownId}/promote")->assertNotFound();
         $this->patchJson("/api/admin/users/{$unknownId}/demote")->assertNotFound();
+    }
+
+    #[Test]
+    public function admin_cannot_demote_a_technical_admin(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $technicalAdmin = User::factory()->technicalAdmin()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$technicalAdmin->id}/demote")
+            ->assertStatus(409)
+            ->assertJsonPath(
+                'message',
+                'O administrador técnico não pode ser despromovido.'
+            );
+
+        $this->assertSame('Admin', $technicalAdmin->fresh()->role->name);
+        $this->assertTrue($technicalAdmin->fresh()->subscription_exempt);
+    }
+
+    #[Test]
+    public function admin_can_reject_pending_user_with_reason_and_allow_reapplication(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $email = 'candidate@example.com';
+        $reason = 'A candidatura não cumpre os critérios de adesão.';
+
+        $pendingUser = User::factory()
+            ->pending()
+            ->create(['email' => $email]);
+
+        $pendingUserToken = $pendingUser
+            ->createToken('pending-user-token')
+            ->plainTextToken;
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson(
+            "/api/admin/users/{$pendingUser->id}/reject",
+            ['reason' => $reason]
+        )
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Utilizador rejeitado com sucesso.')
+            ->assertJsonPath('data', null);
+
+        $this->assertSoftDeleted('users', ['id' => $pendingUser->id]);
+        $this->assertDatabaseMissing('users', ['email' => $email]);
+
+        Notification::assertSentOnDemand(
+            UserRejectedNotification::class,
+            function ($notification, array $channels, AnonymousNotifiable $notifiable) use ($email, $reason): bool {
+                $message = $notification->toMail($notifiable)->render();
+
+                return $notifiable->routeNotificationFor('mail') === $email
+                    && $channels === ['mail']
+                    && str_contains($message, $reason);
+            }
+        );
+
+        Auth::forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$pendingUserToken)
+            ->getJson('/api/auth/me')
+            ->assertUnauthorized();
+
+        User::factory()
+            ->pending()
+            ->create(['email' => $email]);
+
+        $this->assertDatabaseHas('users', ['email' => $email]);
+    }
+
+    #[Test]
+    public function admin_can_reject_pending_user_without_reason(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $pendingUser = User::factory()->pending()->create();
+
+        Sanctum::actingAs($admin);
+
+        $this->patchJson("/api/admin/users/{$pendingUser->id}/reject")
+            ->assertOk()
+            ->assertJsonPath('message', 'Utilizador rejeitado com sucesso.')
+            ->assertJsonPath('data', null);
+
+        $this->assertSoftDeleted('users', ['id' => $pendingUser->id]);
+
+        Notification::assertSentOnDemandTimes(
+            UserRejectedNotification::class,
+            1
+        );
     }
 }

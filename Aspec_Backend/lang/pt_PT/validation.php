@@ -131,7 +131,6 @@ return [
         'uncompromised' => 'O valor de :attribute apareceu numa fuga de dados. Escolha outro valor para :attribute.',
     ],
     'portuguese_nif' => 'O campo :attribute tem de ser um NIF português válido.',
-    'portuguese_phone' => 'O campo :attribute tem de ser um número de telefone português válido.',
     'present' => 'O campo :attribute tem de estar presente.',
     'present_if' => 'O campo :attribute tem de estar presente quando :other é :value.',
     'present_unless' => 'O campo :attribute tem de estar presente, exceto quando :other é :value.',
@@ -205,7 +204,8 @@ return [
         'role_in_congregation' => 'função na congregação',
         'description' => 'descrição',
         'website_url' => 'website',
-        'commercial_contacts' => 'contactos comerciais',
+        'commercial_email' => 'email comercial',
+        'commercial_phone' => 'telefone comercial',
         'address' => 'morada',
         'business_hours' => 'horário de funcionamento',
         'business_hours.*.week_day_id' => 'dia da semana',
@@ -224,6 +224,7 @@ return [
         'search' => 'pesquisa',
         'min_rating' => 'avaliação mínima',
         'per_page' => 'resultados por página',
+        'terms_accepted' => 'aceitação dos termos',
     ],
 
 ];

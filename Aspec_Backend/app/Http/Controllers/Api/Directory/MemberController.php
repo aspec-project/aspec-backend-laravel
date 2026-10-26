@@ -39,7 +39,7 @@ class MemberController extends Controller
             ->orderBy('business_name')
             ->orderBy('name')
             ->orderBy('id')
-            ->paginate($request->integer('per_page', 12));
+            ->paginate($request->validated('per_page') ?? 12);
 
         return $this->successResponse([
             'items' => MemberSummaryResource::collection($members->getCollection())->resolve($request),
@@ -54,8 +54,9 @@ class MemberController extends Controller
 
     /**
      * Perfil público de um membro do diretório. Rota pública com utilizador opcional:
-     * só quem consulta com conta Active (qualquer papel) recebe telefone e contactos comerciais.
+     * só quem consulta com conta Active (qualquer papel) recebe contactos comerciais, website, morada e redes sociais.
      * Perfil inexistente ou fora do diretório dá o mesmo 404, para não confirmar que o id existe.
+     * A resposta depende de quem consulta, por isso nunca fica em cache partilhada (private, no-store).
      */
     public function show(Request $request, string $member): JsonResponse
     {
@@ -66,7 +67,6 @@ class MemberController extends Controller
                 'weekDays',
                 'socialPlatforms',
                 'portfolios' => fn ($query) => $query->orderBy('created_at')->orderBy('id'),
-                'user:id,phone',
             ])
             ->find($member);
 
@@ -82,6 +82,7 @@ class MemberController extends Controller
             new MemberDetailResource($profile, $showContacts),
             'Perfil do membro obtido com sucesso.',
             Response::HTTP_OK
-        );
+        )->header('Cache-Control', 'private, no-store')
+            ->header('Vary', 'Cookie, Authorization');
     }
 }

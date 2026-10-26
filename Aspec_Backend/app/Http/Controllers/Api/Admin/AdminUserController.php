@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Enums\InactiveReason;
+use App\Enums\SubscriptionState;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexAdminUserRequest;
 use App\Http\Resources\AdminUserDetailResource;
@@ -11,11 +12,15 @@ use App\Http\Resources\UserResource;
 use App\Models\AccountStatus;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\UserBlockedNotification;
+use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminUserController extends Controller
@@ -88,10 +93,10 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Reject a user by setting their account status to "Inactive".
+     * Rejeita uma candidatura: Pending passa a Inactive e é enviado o email de rejeição.
      *
      * @param  string  $id  The ID of the user to reject.
-     * @return JsonResponse A JSON response containing the rejected user's data and a success message.
+     * @return JsonResponse 200 com sucesso, 404 ou 409 (próprio, admin ou não pendente).
      */
     public function reject(Request $request, string $id): JsonResponse
     {
@@ -119,12 +124,35 @@ class AdminUserController extends Controller
             );
         }
 
-        $user->deactivate('rejected');
+        $validated = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
 
-        $user = $this->loadUserRelations($user->fresh());
+        $originalEmail = $user->email;
+
+        $user->deactivate(InactiveReason::Deleted->value);
+        app(SubscriptionService::class)->cancel($user);
+
+        if (! $user->anonymizeAndDelete($request->user())) {
+            return $this->errorResponse(
+                'Recurso não encontrado.',
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        rescue(
+            fn () => Notification::route('mail', $originalEmail)->notify(
+                new UserRejectedNotification($validated['reason'] ?? null)
+            ),
+            fn () => Log::warning(
+                'Falha ao enviar o email de rejeição da candidatura.',
+                ['user_id' => $user->id]
+            ),
+            report: false
+        );
 
         return $this->successResponse(
-            new UserResource($user),
+            null,
             'Utilizador rejeitado com sucesso.',
             Response::HTTP_OK
         );
@@ -132,7 +160,9 @@ class AdminUserController extends Controller
 
     /**
      * Block a user by deactivating their account.
+     * Deactivates the user's account and sends a notification email about the block.
      *
+     * @param  Request  $request  The incoming HTTP request.
      * @param  string  $id  The ID of the user to block.
      * @return JsonResponse A JSON response containing the blocked user's data and a success message.
      */
@@ -167,11 +197,27 @@ class AdminUserController extends Controller
             );
         }
 
+        $validated = $request->validate([
+            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
+
         $user->deactivate(InactiveReason::Blocked->value);
 
         app(SubscriptionService::class)->cancel($user);
 
         $user = $this->loadUserRelations($user->fresh());
+
+        rescue(
+            fn () => Notification::send(
+                $user,
+                new UserBlockedNotification($validated['reason'] ?? null)
+            ),
+            fn () => Log::warning(
+                'Falha ao enviar o email de bloqueio do utilizador.',
+                ['user_id' => $user->id]
+            ),
+            report: false
+        );
 
         return $this->successResponse(
             new UserResource($user),
@@ -325,12 +371,16 @@ class AdminUserController extends Controller
                 ->lockForUpdate()
                 ->findOrFail($id);
 
-            if ($user->id === $request->user()->id) {
-                return 'self';
-            }
-
             if ($user->role_id !== $adminRoleId) {
                 return 'not_admin';
+            }
+
+            if ($user->subscription_exempt) {
+                return 'technical_admin';
+            }
+
+            if ($user->id === $request->user()->id) {
+                return 'self';
             }
 
             if ($admins->count() <= 1) {
@@ -349,6 +399,7 @@ class AdminUserController extends Controller
                 'self' => 'Não pode alterar o seu próprio papel.',
                 'not_admin' => 'O utilizador não é administrador.',
                 'last_admin' => 'Tem de existir pelo menos um administrador.',
+                'technical_admin' => 'O administrador técnico não pode ser despromovido.',
             };
 
             return $this->errorResponse($message, Response::HTTP_CONFLICT);
@@ -367,10 +418,11 @@ class AdminUserController extends Controller
     /**
      * Lista os utilizadores do backoffice, paginada (12 por página) e por ordem alfabética do nome
      * profissional (email se não houver perfil), com desempate pelo id. Admins só com include_admins,
-     * e nesse caso primeiro. As contagens por separador seguem a pesquisa e o include_admins.
+     * e nesse caso primeiro. As contagens por separador seguem a pesquisa e o include_admins;
+     * admins_count é o total global de administradores (ignora filtros), usado no aviso de despromover.
      *
      * @param  IndexAdminUserRequest  $request  Filtros validados.
-     * @return JsonResponse 200 com items, pagination e counts.
+     * @return JsonResponse 200 com items, pagination, counts e admins_count.
      */
     public function index(IndexAdminUserRequest $request): JsonResponse
     {
@@ -389,6 +441,10 @@ class AdminUserController extends Controller
             $request->input('status'),
             $request->filled('blocked') ? $request->boolean('blocked') : null
         )
+            ->when($request->filled('subscription_state'),
+                fn (Builder $query) => $query->inSubscriptionState(
+                    SubscriptionState::from($request->input('subscription_state'))
+                ))
             ->when($includeAdmins, fn (Builder $query) => $query->orderByRaw(
                 'CASE WHEN users.role_id = ? THEN 0 ELSE 1 END',
                 [Role::where('name', 'Admin')->value('id')]
@@ -406,6 +462,8 @@ class AdminUserController extends Controller
                 'last_page' => $users->lastPage(),
             ],
             'counts' => $this->countByTab($base),
+            'subscription_state_counts' => User::subscriptionStateCounts($base),
+            'admins_count' => User::whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))->count(),
         ], 'Lista de utilizadores obtida com sucesso.');
     }
 

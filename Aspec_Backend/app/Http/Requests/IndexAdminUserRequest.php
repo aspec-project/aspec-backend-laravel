@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\SubscriptionState;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 /**
  * Valida os filtros da lista de utilizadores do backoffice (GET /api/admin/users).
@@ -30,6 +32,14 @@ class IndexAdminUserRequest extends FormRequest
     {
         return [
             'status' => ['sometimes', 'nullable', 'string', 'exists:account_statuses,name'],
+            'subscription_state' => [
+                'sometimes',
+                'nullable',
+                Rule::in(array_map(
+                    static fn (SubscriptionState $state): string => $state->value,
+                    SubscriptionState::cases()
+                )),
+            ],
             'blocked' => ['sometimes', 'boolean', 'prohibited_unless:status,Inactive'],
             'search' => ['sometimes', 'nullable', 'string', 'max:255'],
             'include_admins' => ['sometimes', 'boolean'],

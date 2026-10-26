@@ -90,7 +90,7 @@ class StripeWebhookController extends WebhookController
      * Subscrição criada (normalmente pelo Checkout): ativa a conta. Só o webhook ativa, porque é
      * assinado pelo Stripe e o regresso do browser pode ser forjado.
      * Depois do handler do Cashier (grava a subscrição local), por esta ordem:
-     * 1. cliente desconhecido ou admin → nada;
+     * 1. cliente desconhecido ou isento (admin técnico) → nada;
      * 2. estado que não é trialing/active (ex.: incomplete) → só fica sincronizada;
      * 3. já existe outra subscrição em curso → cancela esta (duplicada);
      * 4. conta que não pode pagar (bloqueada, recusada, apagada, pendente) → cancela esta;
@@ -121,7 +121,7 @@ class StripeWebhookController extends WebhookController
 
         $user = $this->relockUser($locked);
 
-        if (! $user || $user->role?->name === 'Admin') {
+        if (! $user || $user->isSubscriptionExempt()) {
             return $response;
         }
 
@@ -198,7 +198,7 @@ class StripeWebhookController extends WebhookController
 
         $user = $this->relockUser($locked);
 
-        if (! $user || $user->role?->name === 'Admin') {
+        if (! $user || $user->isSubscriptionExempt()) {
             return $response;
         }
 
@@ -225,7 +225,7 @@ class StripeWebhookController extends WebhookController
      * carência (o nosso estado, fiável) ou se o Stripe cancelou por falta de pagamento (cobre um
      * payment_failed perdido); senão cancelled, sem acusar o membro de não pagar.
      * Nada muda para contas que não estão Active (bloqueadas, já desativadas pelo comando,
-     * apagadas), admins, nem quando há outra subscrição em curso (era um duplicado cancelado pelo
+     * apagadas), isentos (admin técnico), nem quando há outra subscrição em curso (era um duplicado cancelado pelo
      * webhook created; sem esta guarda o membro perdia o acesso).
      * O utilizador é bloqueado antes do Cashier e relido depois, como no created.
      *
@@ -242,7 +242,7 @@ class StripeWebhookController extends WebhookController
         $user = $this->relockUser($locked);
 
         if (! $user
-            || $user->role?->name === 'Admin'
+            || $user->isSubscriptionExempt()
             || $user->accountStatus?->name !== 'Active'
             || $user->hasOngoingSubscription()) {
             return $response;
@@ -262,7 +262,7 @@ class StripeWebhookController extends WebhookController
      * Cobrança da quota falhada: a 1.ª falha abre o período de carência (dias configuráveis) e
      * avisa o membro por email, depois do commit. O Cashier não trata este evento.
      * Não faz nada se: a fatura já está paga; não é de uma subscrição (fatura avulsa); o cliente
-     * não é nosso, é admin ou a conta não está Active; a subscrição não é uma subscrição local
+     * não é nosso, é isento (admin técnico) ou a conta não está Active; a subscrição não é uma subscrição local
      * deste utilizador ainda não terminada (ex.: falha atrasada da subscrição antiga depois de uma
      * reativação, ou id de outro membro); a carência já está a contar (os retries do Stripe não a
      * prolongam, senão nunca terminava); o pagamento desta fatura já foi registado (evento
@@ -299,7 +299,7 @@ class StripeWebhookController extends WebhookController
         $user = $this->lockUserByCustomer($invoice['customer'] ?? null);
 
         if (! $user
-            || $user->role?->name === 'Admin'
+            || $user->isSubscriptionExempt()
             || $user->accountStatus?->name !== 'Active'
             || $user->grace_ends_at !== null
             || ! $this->ownsOngoingSubscription($user, $subscriptionId)
@@ -404,13 +404,13 @@ class StripeWebhookController extends WebhookController
 
     /**
      * Lê com lockForUpdate o utilizador do cliente Stripe (também contas apagadas), com o estado
-     * e o papel. Nos handlers de subscrição corre antes do handler do Cashier, para serializar com
+     * da conta. Nos handlers de subscrição corre antes do handler do Cashier, para serializar com
      * um bloqueio feito pelo admin sem risco de deadlock (ver handleCustomerSubscriptionCreated).
      */
     private function lockUserByCustomer(?string $customer): ?User
     {
         return filled($customer)
-            ? User::withTrashed()->with(['accountStatus', 'role'])->where('stripe_id', $customer)->lockForUpdate()->first()
+            ? User::withTrashed()->with('accountStatus')->where('stripe_id', $customer)->lockForUpdate()->first()
             : null;
     }
 
@@ -421,7 +421,7 @@ class StripeWebhookController extends WebhookController
     private function relockUser(?User $locked): ?User
     {
         return $locked
-            ? User::withTrashed()->with(['accountStatus', 'role'])->whereKey($locked->id)->lockForUpdate()->first()
+            ? User::withTrashed()->with('accountStatus')->whereKey($locked->id)->lockForUpdate()->first()
             : null;
     }
 

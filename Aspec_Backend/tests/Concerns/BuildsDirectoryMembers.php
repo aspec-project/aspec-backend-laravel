@@ -34,9 +34,8 @@ trait BuildsDirectoryMembers
         'sector',
     ];
 
-    /** Chaves do perfil público. */
+    /** Chaves de topo do perfil público; website, morada, redes e contactos ficam em members_only. */
     protected const DETAIL_KEYS = [
-        'address',
         'average_rating',
         'business_hours',
         'business_name',
@@ -49,6 +48,13 @@ trait BuildsDirectoryMembers
         'portfolio',
         'reviews_count',
         'sector',
+    ];
+
+    /** Chaves de members_only, iguais para qualquer conta Active (o próprio e admins incluídos). */
+    protected const MEMBERS_ONLY_KEYS = [
+        'address',
+        'commercial_email',
+        'commercial_phone',
         'social_links',
         'website_url',
     ];

@@ -36,7 +36,38 @@ Na instalação inicial, a partir de `Aspec_Backend`:
 
 Se a configuração estiver em cache, gere-a novamente depois de definir as variáveis e antes de executar o comando. Depois de remover a password, gere o cache outra vez para não a manter no ficheiro de configuração em cache.
 
-O comando cria uma conta **Admin Active**, sem perfil de membro. Pode ser executado novamente sem criar outro administrador com o mesmo email. Se o email já pertencer a uma conta que não seja um administrador ativo, o comando recusa a criação e não altera essa conta.
+O comando cria o **administrador técnico**: uma conta **Admin Active**, sem perfil de membro e **isenta de subscrição** (`users.subscription_exempt`). É o único isento: os outros administradores (promovidos no backoffice) pagam a subscrição como qualquer membro e, se deixarem de pagar, ficam Inactive e perdem o acesso ao backoffice até pagarem.
+
+- Corre-se depois do `migrate` (a coluna da marca vem de uma migração). As BDs que já tinham um administrador criado pelo comando (Admin sem perfil) ficam com ele marcado como isento pela própria migração.
+- Pode ser executado novamente com o mesmo email sem criar outro administrador.
+- Só existe um administrador técnico: com outro email, recusa ("Já existe um administrador técnico.").
+- Nunca isenta uma conta que já existe: se o email for de um administrador que paga, ou de uma conta que não seja um administrador ativo, recusa e não altera essa conta.
+- A marca não se põe nem se tira pela API (fica fora do `$fillable`); só este comando a escreve.
+
+## Anonimizar membro (RGPD)
+
+Não há apagamento de conta pelo próprio membro: o membro pede à ASPEC por email e um administrador anonimiza a conta no backoffice (`POST /api/admin/users/{id}/anonymize`, limite de 5 por hora por administrador). É irreversível.
+
+- **Apaga:** perfil (nome, empresa, descrição, contactos, morada), horários, redes sociais, portfólio e logótipo (ficheiros incluídos), dados de faturação, inscrições em eventos futuros (libertam a vaga), sessões e tokens. O email passa a um endereço anónimo, a conta fica Inactive (motivo: eliminada) e é apagada com soft delete. A subscrição é cancelada no Stripe (e um Checkout aberto expira) e o cliente Stripe é apagado.
+- **Fica:** faturas e PDFs (obrigação fiscal de 10 anos), inscrições em eventos passados (mostradas como "Empresa anonimizada") e um registo de prova em `account_anonymizations` (conta, administrador e data, sem dados pessoais).
+- Contas de administrador são recusadas (409), incluindo a própria e o administrador técnico: para anonimizar um administrador, despromova-o primeiro.
+- O membro recebe um email de confirmação no endereço original e pode voltar a candidatar-se com o mesmo email.
+- Uma conta já anonimizada responde 404 (para a API já não existe). O registo de prova consulta-se por SQL (`account_anonymizations`).
+
+## Enviar link de pagamento (backoffice)
+
+`POST /api/admin/users/{id}/payment-link` (sem corpo) envia ao membro o email de que a conta precisa para (voltar a) pagar. O estado da conta escolhe o email:
+
+| Estado da conta | Email | `type` |
+|---|---|---|
+| Approved | link de ativação | `activation` |
+| Inactive (falta de pagamento ou subscrição cancelada) | link de reativação | `reactivation` |
+| Active em período de carência | lembrete de pagamento (o mesmo email do pagamento falhado) | `payment_reminder` |
+
+- Os outros estados respondem 409 com o motivo: bloqueada ("Use a opção Desbloquear", que já envia o link certo), já ativa (inclui trial, cancelamento agendado, o administrador técnico e o próprio admin), candidatura pendente, ou conta que não pode ser reativada (rejeitada, eliminada, sem motivo). Conta inexistente ou anonimizada: 404.
+- Não altera a conta. Administradores que pagam também podem receber o link.
+- Não usa os limites do reenvio público (`/api/account-activations/resend`), que um atacante consegue esgotar: tem limites próprios, 30 por hora por administrador e 3 por hora por membro.
+- Cada envio fica no log (`user_id`, `admin_id`, `type`; sem o email).
 
 ## Dados de demonstração
 
@@ -48,13 +79,21 @@ Na pasta `Aspec_Backend/`:
 2. `php artisan db:seed --class=DemoSeeder`
 3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
 
-Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 10 eventos futuros nas quatro categorias, com datas a partir do dia em que corre. Pode correr outra vez: repõe as contas, os perfis e os eventos (as datas avançam) sem duplicar nada. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
+
+- 11 presenciais futuros, alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
+- 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
+
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados. Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
 
 Password de todas as contas: `Demo#2026`
 
+O seeder não cria o administrador técnico: para mostrar o estado "Isento" no backoffice, correr também `php artisan aspec:create-admin`.
+
 | Email | Papel | Estado |
 |---|---|---|
-| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório) |
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento, aparece "Ativo") |
 | `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
 | `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
 | `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
@@ -73,7 +112,9 @@ Para enviar emails a sério (demonstração), a plataforma usa a conta Gmail do 
 3. Testar: `php artisan tinker --execute="Mail::raw('Teste ASPEC', fn (\$m) => \$m->to('o-teu-email')->subject('Teste ASPEC'));"`
 4. A maior parte dos emails da aplicação (ativação, carência, faturas) passa pela fila: é preciso ter `php artisan queue:work` a correr.
 
-Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada ou verificação em dois passos desligada; `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
+Para receber emails de várias contas de teste num só endereço, usar aliases do Gmail: `o-teu-email+teste1@gmail.com`, `o-teu-email+teste2@gmail.com`… chegam todos à caixa de `o-teu-email@gmail.com`.
+
+Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada (são sempre 16 letras minúsculas; confirmar que nenhuma ficou de fora), criada noutra conta Google, ou verificação em dois passos desligada; mudar a palavra-passe da conta Google revoga as palavras-passe de aplicação. `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
 
@@ -162,12 +203,14 @@ Calculado a partir das colunas da conta, sem coluna própria: `$user->subscripti
 | `blocked` | Bloqueado | Inactive, motivo `blocked` |
 | `lapsed` | Subscrição caída | Inactive, motivo `unpaid` ou `cancelled` |
 | `inactive` | Inativo | Inactive, motivo `rejected`, `deleted` ou vazio |
-| `exempt` | Isento | Active, Admin sem perfil de membro (admin técnico) |
+| `exempt` | Isento | Active, `users.subscription_exempt` (só o admin técnico do `aspec:create-admin`) |
 | `grace` | Em carência | Active, `grace_ends_at` preenchido |
 | `trial` | Em trial | Active, `trial_ends_at` no futuro |
 | `active` | Ativo | restantes contas Active |
 
 Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
+
+"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: contas da demo ou admins promovidos antes de os admins pagarem, que não têm subscrição). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
 
 ### Faturas do membro
 
@@ -184,4 +227,11 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
   - `GET /api/members` — lista paginada, ordenada por empresa, nome e id. Filtros opcionais e combináveis: `search` (nome, empresa ou descrição; até 100 caracteres), `sector_id`, `location_id` (distrito), `min_rating` (1 a 5; devolve uma lista vazia enquanto não existirem avaliações), `page` e `per_page` (12 por omissão, máximo 50). Cada item traz `id`, `name`, `business_name`, `description` (texto completo ou `null`; o corte para o cartão é feito no frontend), `sector`, `location`, `logo_url`, `average_rating` e `reviews_count`.
   - `GET /api/members/{id}` — perfil público (`id` = id do perfil, o mesmo da lista).
 - **Quem aparece:** contas **Active** com perfil de membro, seja qual for o papel (um admin com perfil aparece; um admin sem perfil nunca). Contas Pending, Approved, Inactive ou apagadas não aparecem e o perfil devolve 404 "Membro não encontrado.", igual a um id que não existe. Contas em trial ou em período de carência continuam a aparecer.
-- **Contactos:** o telefone e os contactos comerciais só vêm em `members_only` para quem consulta com uma conta Active (sessão do frontend ou token Bearer); para os outros `members_only` é `null`. Morada, website, horário, redes sociais e portfólio são públicos. O email da conta e a congregação nunca aparecem no diretório.
+- **Contactos:** website, morada, redes sociais e contactos comerciais (`commercial_email`, `commercial_phone`) só vêm em `members_only` para quem consulta com uma conta Active (sessão do frontend ou token Bearer), sempre com as 5 chaves (valores `null`/`[]` em perfis antigos); para os outros `members_only` é `null`. Descrição, setor, distrito, logótipo, horário e portfólio são públicos. O email e o telefone da conta e a congregação nunca aparecem no diretório.
+- **Contactos comerciais vs pessoais:** `users.email` (login) e `users.phone` são **pessoais**: só os vê o próprio (`GET /api/member-profile`, `GET /api/auth/me`) e o admin (`GET /api/admin/users/{id}`); a exportação de presenças usa estes. `commercial_email` e `commercial_phone` (em `member_profiles`) são os contactos do negócio, mostrados a membros Active. Em `PUT /api/member-profile` são obrigatórios quando enviados (vazio ou `null` → 422; ausentes ficam inalterados), o telefone aceita qualquer país e guarda-se em E.164 (ex. `213 456 789` → `+351213456789`), podem repetir os contactos pessoais e mudá-los não pede a password atual. Perfis antigos ficam com os dois a `null` até o membro guardar o formulário.
+
+## Telefones
+
+- **Formato:** o registo e `PUT /api/member-profile` aceitam números de qualquer país (telefone pessoal e comercial), validados com a libphonenumber. Sem indicativo, o número é tratado como português (`912345678`); estrangeiros precisam do indicativo (`+44 7911 123456` ou `0044…`). Espaços, `-`, `.` e parênteses são ignorados.
+- **Guardado e devolvido em E.164** (`+351912345678`, `+447911123456`) em todas as respostas (`phone`, `commercial_phone`). A formatação para mostrar é feita no frontend.
+- **Bases de dados existentes:** `php artisan migrate` converte os telefones antigos de 9 dígitos para `+351…`. O `down()` só repõe os números portugueses; os estrangeiros ficam em E.164.

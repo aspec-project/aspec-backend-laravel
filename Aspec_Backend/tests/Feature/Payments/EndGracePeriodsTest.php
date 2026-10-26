@@ -4,6 +4,8 @@ namespace Tests\Feature\Payments;
 
 use App\Enums\InactiveReason;
 use App\Jobs\CancelStripeSubscriptionJob;
+use App\Models\MemberProfile;
+use App\Models\Role;
 use App\Models\User;
 use App\Notifications\ReactivationLinkNotification;
 use App\Services\Payments\StripeSubscriptionService;
@@ -413,5 +415,62 @@ class EndGracePeriodsTest extends TestCase
         $this->artisan(self::COMMAND)->assertExitCode(Command::SUCCESS);
 
         $this->assertDeactivatedForNonPayment($user);
+    }
+
+    /**
+     * Os administradores (exceto o técnico) pagam: sem pagamento no fim da carência ficam
+     * Inactive e perdem o backoffice até pagarem.
+     */
+    #[Test]
+    public function expired_grace_of_an_admin_with_a_profile_deactivates_the_account_and_cancels_the_subscription(): void
+    {
+        $admin = $this->memberInGrace();
+        $admin->forceFill(['role_id' => Role::where('name', 'Admin')->value('id')])->save();
+        MemberProfile::factory()->create(['user_id' => $admin->id]);
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('retrieveStatus')->once()->andReturn('past_due');
+            $mock->shouldReceive('cancelNow')
+                ->once()
+                ->withArgs(fn (Subscription $subscription) => $subscription->stripe_id === 'sub_test_1');
+        });
+        $this->travel(8)->days();
+
+        $this->artisan(self::COMMAND)->assertExitCode(Command::SUCCESS);
+
+        $this->assertDeactivatedForNonPayment($admin);
+        $this->assertSame('Admin', $admin->fresh()->role->name);
+    }
+
+    /**
+     * Um isento nunca deve ter carência; se tiver (dados antigos ou erro), desativá-lo trancava
+     * a plataforma, por isso nem é selecionado.
+     */
+    #[Test]
+    public function exempt_admin_with_an_expired_grace_is_not_selected(): void
+    {
+        $admin = User::factory()->technicalAdmin()->create(['stripe_id' => 'cus_test_isento']);
+        $admin->forceFill(['grace_ends_at' => now()->addDays(7)])->save();
+        $admin->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_test_isento',
+            'stripe_status' => 'past_due',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('retrieveStatus');
+            $mock->shouldNotReceive('cancelNow');
+            $mock->shouldNotReceive('expireCheckout');
+        });
+        Queue::fake();
+        $this->travel(8)->days();
+
+        $this->artisan(self::COMMAND)->assertExitCode(Command::SUCCESS);
+
+        $fresh = $admin->fresh();
+        $this->assertSame('Active', $fresh->accountStatus->name);
+        $this->assertNull($fresh->inactive_reason);
+        Notification::assertNothingSent();
+        Queue::assertNotPushed(CancelStripeSubscriptionJob::class);
     }
 }

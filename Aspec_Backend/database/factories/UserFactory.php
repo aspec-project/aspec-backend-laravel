@@ -31,8 +31,12 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
-            // Telemóvel português válido para a regra PortuguesePhone (91, 92, 93 ou 96 + 7 dígitos).
-            'phone' => fake()->randomElement(['91', '92', '93', '96']).fake()->numerify('#######'),
+            // Telemóvel português válido para a regra InternationalPhone (91, 92, 93 ou 96 + 7 dígitos).
+            'phone' => sprintf(
+                '+351%s%s',
+                fake()->randomElement(['91', '92', '93', '96']),
+                fake()->numerify('#######')
+            ),
             'role_id' => fn () => Role::firstOrCreate(['name' => 'Member'])->id,
             'account_status_id' => fn () => AccountStatus::firstOrCreate(['name' => 'Active'])->id,
             'trial_ends_at' => null,
@@ -47,6 +51,17 @@ class UserFactory extends Factory
     {
         return $this->state(fn () => [
             'role_id' => Role::firstOrCreate(['name' => 'Admin'])->id,
+        ]);
+    }
+
+    /**
+     * Administrador técnico (o que o aspec:create-admin cria): Admin isento de subscrição.
+     * O admin() normal paga como qualquer membro.
+     */
+    public function technicalAdmin(): static
+    {
+        return $this->admin()->state(fn () => [
+            'subscription_exempt' => true,
         ]);
     }
 

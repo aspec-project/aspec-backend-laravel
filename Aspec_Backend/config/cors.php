@@ -28,10 +28,10 @@ return [
 
     'allowed_headers' => ['*'],
 
-    'exposed_headers' => [],
+    'exposed_headers' => ['Content-Disposition'],
 
-// Reutiliza a validação CORS durante duas horas para evitar preflights repetidos.
-'max_age' => 7200,
+    // Reutiliza a validação CORS durante duas horas para evitar preflights repetidos.
+    'max_age' => 7200,
 
     'supports_credentials' => true,
 

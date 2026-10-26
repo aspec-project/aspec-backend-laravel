@@ -24,6 +24,7 @@ class EventInstanceShowTest extends TestCase
             'event_start_time' => '10:00',
             'event_end_time' => '12:00',
             'address' => 'Rua de teste, 10',
+            'venue_name' => 'Centro de Congressos de Lisboa',
             'latitude' => '38.7223000',
             'longitude' => '-9.1393000',
             'max_attendees' => 40,
@@ -35,9 +36,11 @@ class EventInstanceShowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.id', $event->id)
             ->assertJsonPath('data.name', 'Workshop público')
+            ->assertJsonPath('data.is_online', false)
             ->assertJsonPath('data.category.id', $event->category_id)
             ->assertJsonPath('data.location.id', $event->location_id)
             ->assertJsonPath('data.address', 'Rua de teste, 10')
+            ->assertJsonPath('data.venue_name', 'Centro de Congressos de Lisboa')
             ->assertJsonPath('data.latitude', 38.7223)
             ->assertJsonPath('data.longitude', -9.1393)
             ->assertJsonPath('data.max_attendees', 40)
@@ -46,6 +49,24 @@ class EventInstanceShowTest extends TestCase
                 $event->fresh()->registration_deadline->toIso8601String()
             )
             ->assertJsonPath('data.organizer_notes', 'Entrada pela porta lateral.');
+    }
+
+    #[Test]
+    public function registration_deadline_uses_lisbon_summer_offset(): void
+    {
+        $event = EventInstance::factory()->create([
+            'event_date' => '2027-07-15',
+            'event_start_time' => '10:00',
+            'event_end_time' => '12:00',
+            'registration_deadline' => '2027-07-14 23:59:00',
+        ]);
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath(
+                'data.registration_deadline',
+                '2027-07-14T23:59:00+01:00'
+            );
     }
 
     #[Test]

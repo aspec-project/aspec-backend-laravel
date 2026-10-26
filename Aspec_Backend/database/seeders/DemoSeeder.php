@@ -18,14 +18,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * e eventos futuros. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * eventos (presenciais, online e passados) e inscrições. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
  * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
- * pelo nome e distrito, e repõe os dados originais (útil para repetir a demonstração).
+ * pelo nome e distrito, e repõe os dados originais, incluindo as inscrições desses eventos
+ * (útil para repetir a demonstração).
  * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
  */
 class DemoSeeder extends Seeder
@@ -141,7 +143,8 @@ class DemoSeeder extends Seeder
             'role_in_congregation' => $profile['role_in_congregation'],
             'description' => $profile['description'],
             'website_url' => $profile['website_url'] ?? null,
-            'commercial_contacts' => $profile['commercial_contacts'] ?? null,
+            'commercial_email' => $profile['commercial_email'] ?? null,
+            'commercial_phone' => $profile['commercial_phone'] ?? null,
             'address' => $profile['address'],
         ]);
     }
@@ -232,34 +235,68 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Eventos futuros nas cinco categorias, com datas relativas ao dia em que o seeder corre.
-     * Procura pelo nome e distrito (e não pela data): correr noutro dia atualiza as datas em vez de
-     * duplicar os eventos. As inscrições fecham na véspera às 23:59.
+     * Eventos (futuros, online e passados) com datas relativas ao dia de hoje em Lisboa, e as
+     * respetivas inscrições. Procura pelo nome e distrito (e não pela data): correr noutro dia
+     * atualiza as datas em vez de duplicar os eventos. O prazo de inscrição fica às 23:59 (hora de
+     * Lisboa) do dia indicado, por omissão a véspera, como o backoffice o guarda.
      */
     private function seedEvents(): void
     {
-        foreach ($this->events() as $event) {
-            $date = today()->addDays($event['days_from_now']);
+        $today = now(config('app.event_timezone', 'Europe/Lisbon'))->startOfDay();
 
-            EventInstance::updateOrCreate(
+        foreach ($this->events() as $event) {
+            $deadlineDays = $event['deadline_days_from_now'] ?? $event['days_from_now'] - 1;
+
+            $instance = EventInstance::updateOrCreate(
                 [
                     'name' => $event['name'],
                     'location_id' => $this->lookupId(Location::class, $event['location']),
                 ],
                 [
                     'category_id' => $this->lookupId(EventCategory::class, $event['category']),
-                    'event_date' => $date->format('Y-m-d'),
+                    'event_date' => $today->copy()->addDays($event['days_from_now'])->format('Y-m-d'),
                     'event_start_time' => $event['start'].':00',
                     'event_end_time' => $event['end'].':00',
                     'description' => $event['description'],
-                    'address' => $event['address'],
-                    'latitude' => $event['latitude'],
-                    'longitude' => $event['longitude'],
+                    'is_online' => isset($event['online_url']),
+                    'online_url' => $event['online_url'] ?? null,
+                    'address' => $event['address'] ?? null,
+                    'venue_name' => $event['venue'] ?? null,
+                    'latitude' => $event['latitude'] ?? null,
+                    'longitude' => $event['longitude'] ?? null,
                     'max_attendees' => $event['max_attendees'],
-                    'registration_deadline' => $date->copy()->subDay()->setTime(23, 59)->format('Y-m-d H:i:s'),
+                    'registration_deadline' => $today->copy()->addDays($deadlineDays)->setTime(23, 59)->format('Y-m-d H:i:s'),
                     'organizer_notes' => $event['notes'] ?? null,
                 ]
             );
+
+            $this->syncRegistrations($instance, $event['registrants'] ?? []);
+        }
+    }
+
+    /**
+     * Repõe as inscrições do evento de demonstração: apaga as que existirem e volta a criar as
+     * da lista, para a lotação ficar sempre igual depois de uma demonstração (inscrições ou
+     * cancelamentos feitos à mão). Só aceita contas Active, como a inscrição pela API.
+     *
+     * @param  list<string>  $emails
+     *
+     * @throws RuntimeException Se algum email não for de uma conta Active ou exceder a lotação.
+     */
+    private function syncRegistrations(EventInstance $event, array $emails): void
+    {
+        $userIds = User::whereIn('email', $emails)
+            ->whereHas('accountStatus', fn ($query) => $query->where('name', 'Active'))
+            ->pluck('id');
+
+        if ($userIds->count() !== count($emails) || count($emails) > $event->max_attendees) {
+            throw new RuntimeException("Inscrições de demonstração inválidas no evento \"{$event->name}\".");
+        }
+
+        $event->registrations()->delete();
+
+        foreach ($userIds as $userId) {
+            $event->registrations()->create(['user_id' => $userId]);
         }
     }
 
@@ -364,7 +401,7 @@ class DemoSeeder extends Seeder
             [
                 'email' => 'demo.admin@aspec.test',
                 'role' => 'Admin',
-                'phone' => '912000001',
+                'phone' => '+351912000001',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/mendes-consultoria-gestao'],
                 'portfolio' => 0,
@@ -375,7 +412,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Lisboa',
                     'description' => 'Apoiamos pequenas e médias empresas a organizar processos, definir objetivos e crescer de forma sustentável. Fazemos diagnósticos de gestão, planos de negócio e acompanhamento mensal.',
                     'website_url' => 'https://www.mendesconsultoria.pt',
-                    'commercial_contacts' => "geral@mendesconsultoria.pt\n213 000 101",
+                    'commercial_email' => 'geral@mendesconsultoria.pt',
+                    'commercial_phone' => '+351213000101',
                     'address' => 'Avenida da República 50, 3.º Esq., 1050-196 Lisboa',
                     'congregation' => 'Comunidade Cristã do Areeiro',
                     'role_in_congregation' => 'Presbítero',
@@ -383,7 +421,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro@aspec.test',
-                'phone' => '912000002',
+                'phone' => '+351912000002',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ferreira-arquitetura-interiores',
@@ -398,7 +436,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Porto',
                     'description' => 'Projetos de arquitetura residencial e comercial, da ideia ao licenciamento. Remodelações de interiores com acompanhamento de obra e escolha de materiais.',
                     'website_url' => 'https://www.ferreiraarquitetura.pt',
-                    'commercial_contacts' => "projetos@ferreiraarquitetura.pt\n220 000 202",
+                    'commercial_email' => 'projetos@ferreiraarquitetura.pt',
+                    'commercial_phone' => '+351220000202',
                     'address' => 'Rua de Cedofeita 300, 4050-174 Porto',
                     'congregation' => 'Igreja Evangélica da Boavista',
                     'role_in_congregation' => 'Líder do ministério de jovens',
@@ -406,7 +445,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro01@aspec.test',
-                'phone' => '913000003',
+                'phone' => '+351913000003',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Facebook' => 'https://www.facebook.com/carvalhoefilhosconstrucoes',
@@ -420,7 +459,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Braga',
                     'description' => 'Empresa familiar de construção civil com mais de 20 anos de experiência. Construção de moradias, reabilitação de edifícios e pequenas obras públicas.',
                     'website_url' => 'https://www.carvalhoefilhos.pt',
-                    'commercial_contacts' => "orcamentos@carvalhoefilhos.pt\n253 000 303",
+                    'commercial_email' => 'orcamentos@carvalhoefilhos.pt',
+                    'commercial_phone' => '+351253000303',
                     'address' => 'Rua Nova de Santa Cruz 85, 4710-409 Braga',
                     'congregation' => 'Igreja Batista de Braga Norte',
                     'role_in_congregation' => 'Diácono',
@@ -428,7 +468,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro02@aspec.test',
-                'phone' => '916000004',
+                'phone' => '+351916000004',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/contas-certas-contabilidade'],
                 'portfolio' => 0,
@@ -439,7 +479,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Coimbra',
                     'description' => 'Contabilidade organizada para empresas e empresários em nome individual. Processamento salarial, declarações fiscais e apoio na candidatura a incentivos.',
                     'website_url' => 'https://www.contascertas-coimbra.pt',
-                    'commercial_contacts' => "geral@contascertas-coimbra.pt\n239 000 404",
+                    'commercial_email' => 'geral@contascertas-coimbra.pt',
+                    'commercial_phone' => '+351239000404',
                     'address' => 'Avenida Fernão de Magalhães 410, 3000-177 Coimbra',
                     'congregation' => 'Comunidade Evangélica de Celas',
                     'role_in_congregation' => 'Tesoureira',
@@ -447,7 +488,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro03@aspec.test',
-                'phone' => '919000005',
+                'phone' => '+351919000005',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/saboresdoalgarve.faro',
@@ -461,7 +502,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Faro',
                     'description' => 'Cozinha tradicional algarvia com peixe fresco da lota de Faro. Servimos almoços de grupo, jantares de empresa e serviço de catering para eventos.',
                     'website_url' => 'https://www.saboresdoalgarve-faro.pt',
-                    'commercial_contacts' => "reservas@saboresdoalgarve-faro.pt\n289 000 505",
+                    'commercial_email' => 'reservas@saboresdoalgarve-faro.pt',
+                    'commercial_phone' => '+351289000505',
                     'address' => 'Rua Conselheiro Bivar 20, 8000-255 Faro',
                     'congregation' => 'Igreja Cristã da Sé de Faro',
                     'role_in_congregation' => 'Membro',
@@ -469,7 +511,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro04@aspec.test',
-                'phone' => '921000006',
+                'phone' => '+447911123456',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ribeiro-digital',
@@ -483,7 +525,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Aveiro',
                     'description' => 'Desenvolvimento de sites e aplicações à medida, manutenção de redes e apoio informático a escritórios. Contratos de assistência mensal com tempo de resposta garantido.',
                     'website_url' => 'https://www.ribeirodigital.pt',
-                    'commercial_contacts' => "suporte@ribeirodigital.pt\n234 000 606",
+                    'commercial_email' => 'suporte@ribeirodigital.pt',
+                    'commercial_phone' => '+351234000606',
                     'address' => 'Rua de Viana do Castelo 15, 3800-275 Aveiro',
                     'congregation' => 'Igreja Evangélica da Glória',
                     'role_in_congregation' => 'Responsável pela equipa de som',
@@ -491,7 +534,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro05@aspec.test',
-                'phone' => '924000007',
+                'phone' => '+351924000007',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/martins-advogados-associados'],
                 'portfolio' => 0,
@@ -502,7 +545,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Leiria',
                     'description' => 'Sociedade de advogados dedicada ao direito empresarial, laboral e imobiliário. Constituição de sociedades, contratos comerciais e cobranças.',
                     'website_url' => 'https://www.martinsadvogados.pt',
-                    'commercial_contacts' => "escritorio@martinsadvogados.pt\n244 000 707",
+                    'commercial_email' => 'escritorio@martinsadvogados.pt',
+                    'commercial_phone' => '+351244000707',
                     'address' => 'Largo Cândido dos Reis 7, 2400-112 Leiria',
                     'congregation' => 'Comunidade Cristã de Leiria',
                     'role_in_congregation' => 'Conselheiro',
@@ -510,7 +554,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro06@aspec.test',
-                'phone' => '927000008',
+                'phone' => '+351927000008',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Facebook' => 'https://www.facebook.com/clinicabemcuidar',
@@ -524,7 +568,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Setúbal',
                     'description' => 'Clínica de medicina geral e familiar, fisioterapia e nutrição. Acordos com empresas para medicina do trabalho.',
                     'website_url' => 'https://www.clinicabemcuidar.pt',
-                    'commercial_contacts' => "marcacoes@clinicabemcuidar.pt\n265 000 808",
+                    'commercial_email' => 'marcacoes@clinicabemcuidar.pt',
+                    'commercial_phone' => '+351265000808',
                     'address' => 'Avenida Luísa Todi 250, 2900-452 Setúbal',
                     'congregation' => 'Igreja Evangélica de Setúbal',
                     'role_in_congregation' => 'Diaconisa',
@@ -532,7 +577,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro07@aspec.test',
-                'phone' => '931000009',
+                'phone' => '+5511912345678',
                 'hours' => null,
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/rota-segura-transportes'],
                 'portfolio' => 0,
@@ -543,7 +588,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Santarém',
                     'description' => 'Transporte rodoviário de mercadorias em todo o país e armazenagem. Frota própria com rastreamento e entregas no dia seguinte.',
                     'website_url' => 'https://www.rotasegura.pt',
-                    'commercial_contacts' => "logistica@rotasegura.pt\n243 000 909",
+                    'commercial_email' => 'logistica@rotasegura.pt',
+                    'commercial_phone' => '+351243000909',
                     'address' => 'Zona Industrial de Santarém, Lote 12, 2005-002 Santarém',
                     'congregation' => 'Igreja Batista de Santarém',
                     'role_in_congregation' => 'Membro',
@@ -551,7 +597,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro08@aspec.test',
-                'phone' => '934000010',
+                'phone' => '+351934000010',
                 'hours' => 'weekdays_saturday',
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/casalusa.imobiliaria',
@@ -565,7 +611,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Viseu',
                     'description' => 'Compra, venda e arrendamento de imóveis na região de Viseu. Avaliação gratuita e acompanhamento até à escritura.',
                     'website_url' => 'https://www.casalusa-imobiliaria.pt',
-                    'commercial_contacts' => "imoveis@casalusa-imobiliaria.pt\n232 000 110",
+                    'commercial_email' => 'imoveis@casalusa-imobiliaria.pt',
+                    'commercial_phone' => '+351232000110',
                     'address' => 'Rua Formosa 60, 3500-135 Viseu',
                     'congregation' => 'Comunidade Evangélica de Viseu',
                     'role_in_congregation' => 'Coordenadora da escola dominical',
@@ -573,7 +620,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro09@aspec.test',
-                'phone' => '937000011',
+                'phone' => '+351937000011',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/ideia-viva-comunicacao',
@@ -588,7 +635,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Lisboa',
                     'description' => 'Agência de comunicação para negócios locais: identidade visual, gestão de redes sociais e campanhas digitais. Fotografia e vídeo para empresas.',
                     'website_url' => 'https://www.ideiaviva.pt',
-                    'commercial_contacts' => "ola@ideiaviva.pt\n218 000 111",
+                    'commercial_email' => 'ola@ideiaviva.pt',
+                    'commercial_phone' => '+351218000111',
                     'address' => 'Rua Morais Soares 90, 1900-345 Lisboa',
                     'congregation' => 'Igreja Cristã de Arroios',
                     'role_in_congregation' => 'Responsável pela comunicação',
@@ -596,7 +644,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro10@aspec.test',
-                'phone' => '961000012',
+                'phone' => '+351961000012',
                 'hours' => 'weekdays',
                 'social' => [
                     'LinkedIn' => 'https://www.linkedin.com/company/saber-mais-formacao',
@@ -610,7 +658,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Porto',
                     'description' => 'Centro de formação profissional certificado. Cursos de gestão, línguas e informática, em sala e à distância, com planos de formação à medida para empresas.',
                     'website_url' => 'https://www.sabermais-formacao.pt',
-                    'commercial_contacts' => "inscricoes@sabermais-formacao.pt\n225 000 112",
+                    'commercial_email' => 'inscricoes@sabermais-formacao.pt',
+                    'commercial_phone' => '+351225000112',
                     'address' => 'Rua de Santa Catarina 500, 4000-446 Porto',
                     'congregation' => 'Igreja Evangélica do Bonfim',
                     'role_in_congregation' => 'Professora da escola bíblica',
@@ -618,7 +667,7 @@ class DemoSeeder extends Seeder
             ],
             [
                 'email' => 'demo.membro11@aspec.test',
-                'phone' => '964000013',
+                'phone' => '+351964000013',
                 'hours' => null,
                 'social' => [
                     'Instagram' => 'https://www.instagram.com/quintavaleverde.evora',
@@ -632,7 +681,8 @@ class DemoSeeder extends Seeder
                     'location' => 'Évora',
                     'description' => 'Produção de azeite, vinho e hortícolas em modo biológico. Venda direta na quinta, cabazes semanais e visitas para grupos.',
                     'website_url' => 'https://www.quintavaleverde-evora.pt',
-                    'commercial_contacts' => "encomendas@quintavaleverde-evora.pt\n266 000 113",
+                    'commercial_email' => 'encomendas@quintavaleverde-evora.pt',
+                    'commercial_phone' => '+351266000113',
                     'address' => 'Estrada de Arraiolos, km 4, 7000-171 Évora',
                     'congregation' => 'Igreja Evangélica de Évora',
                     'role_in_congregation' => 'Membro',
@@ -658,62 +708,74 @@ class DemoSeeder extends Seeder
         ];
 
         return [
-            $applicant('demo.pendente01@aspec.test', '912000101', 'Pending', null, [
+            $applicant('demo.pendente01@aspec.test', '+351912000101', 'Pending', null, [
                 'name' => 'Luís Teixeira',
                 'business_name' => 'Teixeira Eletricidade',
                 'sector' => 'Engenharia e Indústria',
                 'location' => 'Vila Real',
                 'description' => 'Instalações elétricas, certificação energética e manutenção industrial.',
+                'commercial_email' => 'geral@teixeira-eletricidade.pt',
+                'commercial_phone' => '+351259000101',
                 'address' => 'Avenida Carvalho Araújo 30, 5000-657 Vila Real',
                 'congregation' => 'Igreja Evangélica de Vila Real',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.pendente02@aspec.test', '913000102', 'Pending', null, [
+            $applicant('demo.pendente02@aspec.test', '+351913000102', 'Pending', null, [
                 'name' => 'Joana Moreira',
                 'business_name' => 'Essência Natural Estética',
                 'sector' => 'Estética e Bem-Estar',
                 'location' => 'Viana do Castelo',
                 'description' => 'Tratamentos de estética, massagens e cuidados de pele.',
+                'commercial_email' => 'marcacoes@essencianatural.pt',
+                'commercial_phone' => '+351258000102',
                 'address' => 'Rua da Bandeira 120, 4900-560 Viana do Castelo',
                 'congregation' => 'Comunidade Cristã de Viana',
                 'role_in_congregation' => 'Membro do coro',
             ]),
-            $applicant('demo.pendente03@aspec.test', '916000103', 'Pending', null, [
+            $applicant('demo.pendente03@aspec.test', '+351916000103', 'Pending', null, [
                 'name' => 'André Pinto',
                 'business_name' => 'Caminhos do Douro Turismo',
                 'sector' => 'Turismo e Lazer',
                 'location' => 'Bragança',
                 'description' => 'Passeios guiados e alojamento local no Nordeste Transmontano.',
+                'commercial_email' => 'reservas@caminhosdodouro.pt',
+                'commercial_phone' => '+351273000103',
                 'address' => 'Rua Almirante Reis 45, 5300-033 Bragança',
                 'congregation' => 'Igreja Batista de Bragança',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.aprovado@aspec.test', '919000104', 'Approved', null, [
+            $applicant('demo.aprovado@aspec.test', '+351919000104', 'Approved', null, [
                 'name' => 'Helena Marques',
                 'business_name' => 'Marques Comércio de Papelaria',
                 'sector' => 'Comércio Retalhista',
                 'location' => 'Castelo Branco',
                 'description' => 'Papelaria, material de escritório e consumíveis para empresas.',
+                'commercial_email' => 'encomendas@marquespapelaria.pt',
+                'commercial_phone' => '+351272000104',
                 'address' => 'Avenida 1.º de Maio 18, 6000-086 Castelo Branco',
                 'congregation' => 'Igreja Evangélica de Castelo Branco',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.inativo.pagamento@aspec.test', '921000105', 'Inactive', InactiveReason::Unpaid, [
+            $applicant('demo.inativo.pagamento@aspec.test', '+351921000105', 'Inactive', InactiveReason::Unpaid, [
                 'name' => 'Paulo Correia',
                 'business_name' => 'Correia Mediação de Seguros',
                 'sector' => 'Contabilidade e Finanças',
                 'location' => 'Guarda',
                 'description' => 'Seguros para particulares e empresas.',
+                'commercial_email' => 'seguros@correiamediacao.pt',
+                'commercial_phone' => '+351271000105',
                 'address' => 'Rua do Comércio 22, 6300-680 Guarda',
                 'congregation' => 'Comunidade Cristã da Guarda',
                 'role_in_congregation' => 'Membro',
             ]),
-            $applicant('demo.bloqueado@aspec.test', '924000106', 'Inactive', InactiveReason::Blocked, [
+            $applicant('demo.bloqueado@aspec.test', '+351924000106', 'Inactive', InactiveReason::Blocked, [
                 'name' => 'Vítor Santos',
                 'business_name' => 'Santos Reparações Auto',
                 'sector' => 'Transportes e Logística',
                 'location' => 'Portalegre',
                 'description' => 'Oficina de mecânica geral e pneus.',
+                'commercial_email' => 'oficina@santosreparacoes.pt',
+                'commercial_phone' => '+351245000106',
                 'address' => 'Rua 19 de Junho 8, 7300-155 Portalegre',
                 'congregation' => 'Igreja Evangélica de Portalegre',
                 'role_in_congregation' => 'Membro',
@@ -722,8 +784,11 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Onze eventos futuros: o pequeno-almoço e o jantar repetem-se em várias cidades
-     * (o mesmo formato em localidades diferentes). Coordenadas no centro de cada cidade.
+     * Dezasseis eventos: onze presenciais futuros (o pequeno-almoço e o jantar repetem-se em várias
+     * cidades, um esgotado e outro quase), três online e dois já passados. Os online cobrem os três
+     * casos do link: inscrições abertas (link ainda escondido), prazo terminado com o demo.membro
+     * inscrito (vê o link) e prazo terminado sem ele (não vê). Coordenadas no centro de cada cidade.
+     * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
      *
      * @return list<array<string, mixed>>
      */
@@ -734,14 +799,17 @@ class DemoSeeder extends Seeder
         $dinner = 'Jantar de Networking ASPEC';
         $dinnerDescription = 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.';
         $dinnerNotes = 'Custo de participação: 25 € (pago no local).';
+        $demoMember = 'demo.membro@aspec.test';
 
         return [
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Lisboa',
                 'days_from_now' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 40,
                 'description' => $breakfastDescription,
-                'address' => 'Salão de eventos, Avenida da Liberdade 180, 1250-146 Lisboa',
-                'latitude' => 38.7197, 'longitude' => -9.1452,
+                'venue' => 'Hotel Tivoli Oriente',
+                'address' => 'Avenida D. João II 27, 1990-083 Lisboa',
+                'latitude' => 38.7676, 'longitude' => -9.0973,
+                'registrants' => [$demoMember, ...$this->demoMembers(1, 6)],
             ],
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Porto',
@@ -749,13 +817,15 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
                 'latitude' => 41.1486, 'longitude' => -8.6110,
+                'registrants' => $this->demoMembers(7, 9),
             ],
             [
                 'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Braga',
-                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
+                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 12,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
                 'latitude' => 41.5512, 'longitude' => -8.4229,
+                'registrants' => $this->demoMembers(1, 11),
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Lisboa',
@@ -764,6 +834,7 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
                 'latitude' => 38.7290, 'longitude' => -9.1560,
                 'notes' => $dinnerNotes,
+                'registrants' => [$demoMember, ...$this->demoMembers(2, 8)],
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Coimbra',
@@ -772,6 +843,7 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
                 'latitude' => 40.2115, 'longitude' => -8.4290,
                 'notes' => $dinnerNotes,
+                'registrants' => $this->demoMembers(4, 5),
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Faro',
@@ -787,13 +859,16 @@ class DemoSeeder extends Seeder
                 'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
                 'latitude' => 40.6566, 'longitude' => -7.9125,
                 'notes' => 'Custo de participação: 18 € (pago no local).',
+                'registrants' => $this->demoMembers(10, 11),
             ],
             [
                 'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Aveiro',
                 'days_from_now' => 15, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 30,
                 'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
-                'address' => 'Auditório, Cais da Fonte Nova, 3810-200 Aveiro',
+                'venue' => 'Centro de Congressos de Aveiro',
+                'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
                 'latitude' => 40.6380, 'longitude' => -8.6440,
+                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
             ],
             [
                 'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'location' => 'Leiria',
@@ -807,16 +882,68 @@ class DemoSeeder extends Seeder
                 'name' => 'Formação: Liderança com Valores', 'category' => 'Formação', 'location' => 'Setúbal',
                 'days_from_now' => 44, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
                 'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
-                'address' => 'Auditório Municipal, Avenida Luísa Todi 65, 2900-461 Setúbal',
+                'venue' => 'Fórum Municipal Luísa Todi',
+                'address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal',
                 'latitude' => 38.5225, 'longitude' => -8.8920,
+                'registrants' => $this->demoMembers(6, 6),
             ],
             [
                 'name' => 'Workshop: Apresente o seu Negócio em Dois Minutos', 'category' => 'Workshop', 'location' => 'Porto',
-                'days_from_now' => 58, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 30,
-                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes.',
+                'days_from_now' => 26, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 10,
+                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno para todos treinarem.',
                 'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
                 'latitude' => 41.1580, 'longitude' => -8.6290,
+                'registrants' => $this->demoMembers(1, 10),
+            ],
+            [
+                'name' => 'Webinar: Faturação Eletrónica sem Complicações', 'category' => 'Formação', 'location' => 'Lisboa',
+                'days_from_now' => 10, 'start' => '18:00', 'end' => '19:30', 'max_attendees' => 100,
+                'description' => 'Sessão online sobre as regras da faturação eletrónica, o QR code e o ATCUD nas faturas, com tempo para perguntas no fim.',
+                'online_url' => 'https://meet.example.test/aspec-faturacao-eletronica',
+                'registrants' => $this->demoMembers(9, 10),
+            ],
+            [
+                'name' => 'Workshop Online: Vender Mais nas Redes Sociais', 'category' => 'Workshop', 'location' => 'Lisboa',
+                'days_from_now' => 3, 'deadline_days_from_now' => -1, 'start' => '18:30', 'end' => '20:00', 'max_attendees' => 50,
+                'description' => 'Workshop online com exemplos reais de publicações que trazem clientes e um calendário simples para o próximo mês.',
+                'online_url' => 'https://meet.example.test/aspec-redes-sociais',
+                'notes' => 'O link da sessão aparece na página do evento depois do fecho das inscrições.',
+                'registrants' => [$demoMember, ...$this->demoMembers(1, 4)],
+            ],
+            [
+                'name' => 'Formação Online: RGPD para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Lisboa',
+                'days_from_now' => 4, 'deadline_days_from_now' => -1, 'start' => '14:00', 'end' => '17:00', 'max_attendees' => 60,
+                'description' => 'O que uma pequena empresa tem de fazer para cumprir o RGPD: consentimentos, registos de tratamento e pedidos dos clientes.',
+                'online_url' => 'https://meet.example.test/aspec-rgpd',
+                'registrants' => $this->demoMembers(5, 8),
+            ],
+            [
+                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Leiria',
+                'days_from_now' => -14, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+                'description' => $breakfastDescription,
+                'address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria',
+                'latitude' => 39.7436, 'longitude' => -8.8071,
+                'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
+            ],
+            [
+                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Aveiro',
+                'days_from_now' => -30, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
+                'description' => $dinnerDescription,
+                'address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro',
+                'latitude' => 40.6412, 'longitude' => -8.6537,
+                'notes' => $dinnerNotes,
+                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
             ],
         ];
+    }
+
+    /**
+     * Emails dos membros Active numerados da demonstração (ex.: 1 a 3 → demo.membro01 a demo.membro03).
+     *
+     * @return list<string>
+     */
+    private function demoMembers(int $from, int $to): array
+    {
+        return array_map(fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number), range($from, $to));
     }
 }

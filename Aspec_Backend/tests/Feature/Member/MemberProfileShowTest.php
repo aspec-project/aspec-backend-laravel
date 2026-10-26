@@ -53,7 +53,8 @@ class MemberProfileShowTest extends TestCase
             'role_in_congregation' => 'Diácona',
             'description' => 'Serviços de contabilidade.',
             'website_url' => 'https://silva.pt',
-            'commercial_contacts' => 'geral@silva.pt',
+            'commercial_email' => 'geral@silva.pt',
+            'commercial_phone' => '+351213456789',
             'address' => 'Rua Direita 1, Lisboa',
         ]);
         $profile = $user->memberProfile;
@@ -70,7 +71,9 @@ class MemberProfileShowTest extends TestCase
             ->assertJsonPath('data.role_in_congregation', 'Diácona')
             ->assertJsonPath('data.description', 'Serviços de contabilidade.')
             ->assertJsonPath('data.website_url', 'https://silva.pt')
-            ->assertJsonPath('data.commercial_contacts', 'geral@silva.pt')
+            ->assertJsonPath('data.commercial_email', 'geral@silva.pt')
+            ->assertJsonPath('data.commercial_phone', '+351213456789')
+            ->assertJsonMissingPath('data.commercial_contacts')
             ->assertJsonPath('data.address', 'Rua Direita 1, Lisboa')
             ->assertJsonPath('data.email', $user->email)
             ->assertJsonPath('data.phone', $user->phone)

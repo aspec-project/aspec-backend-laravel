@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
+use App\Jobs\CancelStripeSubscriptionJob;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
@@ -46,11 +47,14 @@ class User extends Authenticatable
             'trial_ends_at' => 'datetime',
             'grace_ends_at' => 'datetime',
             'inactive_reason' => InactiveReason::class,
+            'terms_accepted_at' => 'datetime',
+            'subscription_exempt' => 'boolean',
         ];
     }
 
     /**
      * Os dados de faturação só são gravados a partir de um Form Request validado.
+     * A marca subscription_exempt fica de fora: só o aspec:create-admin a escreve (forceFill).
      */
     protected $fillable = [
         'email',
@@ -63,6 +67,7 @@ class User extends Authenticatable
         'billing_address',
         'billing_postal_code',
         'billing_city',
+        'terms_accepted_at',
     ];
 
     /**
@@ -74,6 +79,7 @@ class User extends Authenticatable
         'remember_token',
         'grace_ends_at',
         'inactive_reason',
+        'subscription_exempt',
         'stripe_checkout_session_id',
         'nif',
         'billing_name',
@@ -131,8 +137,7 @@ class User extends Authenticatable
      * Estado da subscrição derivado das colunas da conta (para o backoffice). O estado da conta
      * decide primeiro; numa conta Active, isento > carência > trial > ativo. Espelha o scope
      * inSubscriptionState(): qualquer mudança aqui tem de ser feita lá também.
-     * Espera role, accountStatus e memberProfile carregados (senão faz 3 queries por utilizador),
-     * com memberProfile sem withTrashed(), como no scope.
+     * Espera accountStatus carregado (senão faz 1 query por utilizador); a isenção vem da coluna.
      *
      * @throws \UnhandledMatchError Estado de conta ou motivo de inatividade desconhecido.
      */
@@ -156,22 +161,22 @@ class User extends Authenticatable
     }
 
     /**
-     * Indica se o utilizador não paga subscrição: administrador técnico, ou seja, papel Admin sem
-     * perfil de membro. Mesma regra que o scope subscriptionExempt().
+     * Indica se o utilizador não paga subscrição: só o administrador técnico criado pelo
+     * aspec:create-admin (marca users.subscription_exempt). Os outros admins pagam como qualquer
+     * membro. Mesma regra que o scope subscriptionExempt(); não faz queries.
      */
     public function isSubscriptionExempt(): bool
     {
-        return $this->role?->name === 'Admin' && $this->memberProfile === null;
+        return (bool) $this->subscription_exempt;
     }
 
     /**
-     * Filtra os utilizadores isentos de subscrição (papel Admin sem perfil de membro não apagado).
+     * Filtra os utilizadores isentos de subscrição (marca users.subscription_exempt).
      * Mesma regra que isSubscriptionExempt().
      */
     public function scopeSubscriptionExempt(Builder $query): void
     {
-        $query->whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))
-            ->whereDoesntHave('memberProfile');
+        $query->where('subscription_exempt', true);
     }
 
     /**
@@ -308,12 +313,34 @@ class User extends Authenticatable
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
+     * Grava a prova da anonimização (conta, admin, data) na mesma transação: nunca uma sem a outra.
+     * A conta é relida com lockForUpdate: dois pedidos em simultâneo anonimizam e registam uma só vez.
+     * Tudo o resto parte da linha bloqueada (não da cópia em memória), para limpar também o que mudou
+     * entretanto (ex.: faturação gravada por uma ativação em simultâneo). Se o stripe_id da linha
+     * bloqueada não for o que já foi apagado, o DeleteStripeCustomerJob trata dele depois do commit.
+     * Uma sessão de Checkout ainda guardada é expirada depois do commit (CancelStripeSubscriptionJob),
+     * para ninguém conseguir pagar por uma conta apagada.
+     *
+     * @param  User|null  $anonymizedBy  Admin que pediu a anonimização; null fora da API (tinker, comandos).
+     * @return bool false se a conta já estava apagada (nada é alterado); true se foi anonimizada.
      */
-    public function anonymizeAndDelete(): void
+    public function anonymizeAndDelete(?User $anonymizedBy = null): bool
     {
+        $handledStripeId = $this->stripe_id;
         $stripeCustomerDeleted = $this->deleteStripeCustomer();
+        $checkoutSessionId = null;
 
-        DB::transaction(function () use ($stripeCustomerDeleted) {
+        $anonymized = DB::transaction(function () use ($handledStripeId, $stripeCustomerDeleted, $anonymizedBy, &$checkoutSessionId) {
+            $current = static::withTrashed()->whereKey($this->id)->lockForUpdate()->first();
+
+            if ($current === null || $current->trashed()) {
+                return false;
+            }
+
+            $this->setRawAttributes($current->getAttributes(), true);
+            $stripeCustomerDeleted = $stripeCustomerDeleted && $this->stripe_id === $handledStripeId;
+            $checkoutSessionId = $this->stripe_checkout_session_id;
+
             $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
 
             if ($profile) {
@@ -325,7 +352,8 @@ class User extends Authenticatable
                     'logo_path' => null,
                     'description' => null,
                     'website_url' => null,
-                    'commercial_contacts' => null,
+                    'commercial_email' => null,
+                    'commercial_phone' => null,
                     'address' => null,
                 ]);
 
@@ -398,17 +426,37 @@ class User extends Authenticatable
 
             DB::table(config('session.table'))->where('user_id', $this->id)->delete();
 
+            AccountAnonymization::create([
+                'user_id' => $this->id,
+                'anonymized_by_user_id' => $anonymizedBy?->id,
+            ]);
+
             $this->delete();
 
             if (! $stripeCustomerDeleted) {
                 DeleteStripeCustomerJob::dispatch($this->id)->afterCommit();
             }
+
+            return true;
         });
+
+        if (! $anonymized) {
+            return false;
+        }
 
         DB::afterCommit(function () {
             Storage::disk('public')->deleteDirectory("logos/{$this->id}");
             Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
         });
+
+        if ($checkoutSessionId !== null) {
+            // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.
+            rescue(function () use ($checkoutSessionId) {
+                CancelStripeSubscriptionJob::dispatch($this->id, [], $checkoutSessionId)->afterCommit();
+            }, report: true);
+        }
+
+        return true;
     }
 
     /**
