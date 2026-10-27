@@ -1307,4 +1307,410 @@ class MemberProfileUpdateTest extends TestCase
 
         $this->assertCommercialContactsUnchanged($user);
     }
+
+    private const POSTAL_CODE_FORMAT_MESSAGE = 'O campo código postal tem de ter o formato 0000-000.';
+
+    private function memberWithPostalAddress(string $status = 'Active'): User
+    {
+        return $this->memberWithProfile($status, [
+            'address' => 'Rua Direita 1',
+            'postal_code' => '1100-001',
+            'city' => 'Lisboa',
+        ]);
+    }
+
+    private function assertPostalAddressUnchanged(User $user): void
+    {
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'postal_code' => '1100-001',
+            'city' => 'Lisboa',
+        ]);
+    }
+
+    #[Test]
+    public function postal_code_and_city_are_saved_and_returned(): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'address' => 'Avenida da República 50, 3.º Esq.',
+            'postal_code' => '1050-196',
+            'city' => 'Lisboa',
+        ])
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Perfil atualizado com sucesso.')
+            ->assertJsonPath('data.address', 'Avenida da República 50, 3.º Esq.')
+            ->assertJsonPath('data.postal_code', '1050-196')
+            ->assertJsonPath('data.city', 'Lisboa');
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'address' => 'Avenida da República 50, 3.º Esq.',
+            'postal_code' => '1050-196',
+            'city' => 'Lisboa',
+        ]);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function postalCodesWithoutHyphen(): array
+    {
+        return [
+            'sete dígitos com espaços à volta' => [' 1000100 '],
+            'sete dígitos' => ['1000100'],
+            'espaço em vez de hífen' => ['1000 100'],
+            'newline no fim' => ["1000-100\n"],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('postalCodesWithoutHyphen')]
+    public function postal_code_is_stored_with_hyphen(string $postalCode): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['postal_code' => $postalCode])
+            ->assertOk()
+            ->assertJsonPath('data.postal_code', '1000-100');
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'postal_code' => '1000-100']);
+    }
+
+    /**
+     * @return array<string, array{mixed}>
+     */
+    public static function invalidPostalCodes(): array
+    {
+        return [
+            'só 4 dígitos' => ['1000'],
+            'sufixo com 2 dígitos' => ['1000-10'],
+            'prefixo com 5 dígitos' => ['10001-00'],
+            'letras' => ['ABCD-EFG'],
+            'oito dígitos' => ['10001000'],
+            'estrangeiro' => ['SW1A 1AA'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidPostalCodes')]
+    public function invalid_postal_code_is_rejected_and_kept(mixed $postalCode): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['postal_code' => $postalCode])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Os dados enviados são inválidos.')
+            ->assertJsonValidationErrors(['postal_code' => self::POSTAL_CODE_FORMAT_MESSAGE]);
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    #[Test]
+    public function postal_code_sent_as_integer_is_rejected_and_kept(): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['postal_code' => 1000100])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['postal_code']);
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    /**
+     * @return array<string, array{string, ?string, string}>
+     */
+    public static function emptyPostalAddressFields(): array
+    {
+        return [
+            'código postal vazio' => ['postal_code', '', 'O campo código postal é obrigatório.'],
+            'código postal null' => ['postal_code', null, 'O campo código postal é obrigatório.'],
+            'localidade vazia' => ['city', '', 'O campo localidade é obrigatório.'],
+            'localidade null' => ['city', null, 'O campo localidade é obrigatório.'],
+            'localidade só com espaços' => ['city', '   ', 'O campo localidade é obrigatório.'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('emptyPostalAddressFields')]
+    public function postal_address_field_sent_empty_is_rejected_and_kept(string $field, ?string $value, string $message): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [$field => $value])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors([$field => $message]);
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    #[Test]
+    public function city_longer_than_one_hundred_characters_is_rejected_and_kept(): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['city' => str_repeat('a', 101)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['city']);
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    #[Test]
+    public function city_with_one_hundred_characters_is_accepted(): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['city' => str_repeat('a', 100)])
+            ->assertOk()
+            ->assertJsonPath('data.city', str_repeat('a', 100));
+    }
+
+    #[Test]
+    public function update_without_postal_address_fields_keeps_them_unchanged(): void
+    {
+        $user = $this->memberWithPostalAddress();
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['name' => 'Novo Nome'])
+            ->assertOk()
+            ->assertJsonPath('data.postal_code', '1100-001')
+            ->assertJsonPath('data.city', 'Lisboa');
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    #[Test]
+    public function legacy_profile_without_postal_code_and_city_can_update_other_fields(): void
+    {
+        $user = $this->memberWithProfile(profile: ['postal_code' => null, 'city' => null]);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['name' => 'Novo Nome'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Novo Nome')
+            ->assertJsonPath('data.postal_code', null)
+            ->assertJsonPath('data.city', null);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'name' => 'Novo Nome',
+            'postal_code' => null,
+            'city' => null,
+        ]);
+    }
+
+    #[Test]
+    public function inactive_member_cannot_change_postal_code_or_city(): void
+    {
+        $user = $this->memberWithPostalAddress('Inactive');
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['postal_code' => '4000-001', 'city' => 'Porto'])
+            ->assertForbidden()
+            ->assertJsonPath('success', false);
+
+        $this->assertPostalAddressUnchanged($user);
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function websitesWithoutScheme(): array
+    {
+        return [
+            'www' => ['www.empresa.pt', 'https://www.empresa.pt'],
+            'domínio' => ['empresa.pt', 'https://empresa.pt'],
+            'com caminho' => ['empresa.pt/servicos', 'https://empresa.pt/servicos'],
+            'com porta' => ['empresa.pt:8080/x', 'https://empresa.pt:8080/x'],
+            'espaços à volta' => ['  www.empresa.pt  ', 'https://www.empresa.pt'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('websitesWithoutScheme')]
+    public function website_without_scheme_is_stored_with_https(string $input, string $expected): void
+    {
+        $user = $this->memberWithProfile(profile: ['website_url' => 'https://antigo.pt']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['website_url' => $input])
+            ->assertOk()
+            ->assertJsonPath('data.website_url', $expected);
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'website_url' => $expected]);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function websitesWithHttpScheme(): array
+    {
+        return [
+            'http' => ['http://empresa.pt'],
+            'https' => ['https://empresa.pt'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('websitesWithHttpScheme')]
+    public function website_with_http_or_https_is_stored_unchanged(string $url): void
+    {
+        $user = $this->memberWithProfile(profile: ['website_url' => 'https://antigo.pt']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['website_url' => $url])
+            ->assertOk()
+            ->assertJsonPath('data.website_url', $url);
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'website_url' => $url]);
+    }
+
+    #[Test]
+    public function website_sent_as_null_is_cleared(): void
+    {
+        $user = $this->memberWithProfile(profile: ['website_url' => 'https://antigo.pt']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['website_url' => null])
+            ->assertOk()
+            ->assertJsonPath('data.website_url', null);
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'website_url' => null]);
+    }
+
+    #[Test]
+    public function social_link_without_scheme_is_stored_with_https(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $response = $this->putJson(self::URL, [
+            'social_links' => [
+                ['platform_id' => $this->platformId('LinkedIn'), 'url' => 'linkedin.com/in/x'],
+                ['platform_id' => $this->platformId('Instagram'), 'url' => 'http://instagram.com/x'],
+            ],
+        ])->assertOk();
+
+        $this->assertEqualsCanonicalizing(
+            ['https://linkedin.com/in/x', 'http://instagram.com/x'],
+            array_column($response->json('data.social_links'), 'url'),
+        );
+        $this->assertDatabaseHas('social_links', [
+            'profile_id' => $user->memberProfile->id,
+            'platform_id' => $this->platformId('LinkedIn'),
+            'url' => 'https://linkedin.com/in/x',
+        ]);
+        $this->assertDatabaseHas('social_links', [
+            'profile_id' => $user->memberProfile->id,
+            'platform_id' => $this->platformId('Instagram'),
+            'url' => 'http://instagram.com/x',
+        ]);
+    }
+
+    /**
+     * Esquemas que não são http/https nunca são escondidos atrás de https://, e links com utilizador
+     * ou password antes do "@" (mostram um domínio e abrem outro) são recusados.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function linksWithForbiddenScheme(): array
+    {
+        return [
+            'javascript' => ['javascript:alert(1)'],
+            'javascript com maiúsculas' => ['JavaScript:alert(1)'],
+            'mailto' => ['mailto:a@b.pt'],
+            'ftp' => ['ftp://x.pt'],
+            'data' => ['data:text/html,x'],
+            'relativo ao protocolo' => ['//x.pt'],
+            'espaço no domínio' => ['empresa .pt'],
+            'utilizador antes do @ sem esquema' => ['linkedin.com@evil.pt'],
+            'utilizador antes do @ com esquema' => ['https://linkedin.com@evil.pt'],
+            'utilizador e password antes do @' => ['https://user:pass@evil.pt'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('linksWithForbiddenScheme')]
+    public function website_with_forbidden_scheme_or_invalid_host_is_rejected_and_kept(string $url): void
+    {
+        $user = $this->memberWithProfile(profile: ['website_url' => 'https://silva.pt']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['website_url' => $url])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['website_url']);
+
+        $this->assertDatabaseHas('member_profiles', ['id' => $user->memberProfile->id, 'website_url' => 'https://silva.pt']);
+    }
+
+    #[Test]
+    #[DataProvider('linksWithForbiddenScheme')]
+    public function social_link_with_forbidden_scheme_or_invalid_host_is_rejected_and_kept(string $url): void
+    {
+        $user = $this->memberWithProfile();
+        $user->memberProfile->socialPlatforms()->attach($this->platformId('LinkedIn'), ['url' => 'https://linkedin.com/in/antigo']);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'social_links' => [['platform_id' => $this->platformId('LinkedIn'), 'url' => $url]],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['social_links.0.url']);
+
+        $this->assertDatabaseHas('social_links', [
+            'profile_id' => $user->memberProfile->id,
+            'url' => 'https://linkedin.com/in/antigo',
+        ]);
+        $this->assertDatabaseCount('social_links', 1);
+    }
+
+    /**
+     * @return array<string, array{mixed, string}>
+     */
+    public static function malformedSocialLinks(): array
+    {
+        return [
+            'lista de texto' => [['linkedin.com/in/x'], 'social_links.0.platform_id'],
+            'item sem url' => [[['platform_id' => 'PLATFORM']], 'social_links.0.url'],
+            'url em array' => [[['platform_id' => 'PLATFORM', 'url' => ['linkedin.com/in/x']]], 'social_links.0.url'],
+            'url inteiro' => [[['platform_id' => 'PLATFORM', 'url' => 123]], 'social_links.0.url'],
+            'texto em vez de lista' => ['linkedin.com/in/x', 'social_links'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('malformedSocialLinks')]
+    public function malformed_social_links_are_rejected_with_422_not_500(mixed $socialLinks, string $errorKey): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $platformId = $this->platformId('LinkedIn');
+        if (is_array($socialLinks)) {
+            array_walk_recursive($socialLinks, function (&$value) use ($platformId) {
+                $value = $value === 'PLATFORM' ? $platformId : $value;
+            });
+        }
+
+        $this->putJson(self::URL, ['social_links' => $socialLinks])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors([$errorKey]);
+
+        $this->assertDatabaseMissing('social_links', ['profile_id' => $user->memberProfile->id]);
+    }
 }

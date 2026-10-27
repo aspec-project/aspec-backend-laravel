@@ -28,6 +28,8 @@ class MemberProfile extends Model
         'commercial_email',
         'commercial_phone',
         'address',
+        'postal_code',
+        'city',
     ];
 
     public function user()

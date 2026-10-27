@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\ActivationType;
 use App\Models\User;
 use App\Rules\PortugueseNif;
+use App\Rules\PortuguesePostalCode;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -19,12 +20,17 @@ class StartActivationRequest extends FormRequest
     }
 
     /**
-     * Tira os espaços do NIF (ex. "509 123 457"), para se guardar sempre com 9 dígitos.
+     * Tira os espaços do NIF (ex. "509 123 457"), para se guardar sempre com 9 dígitos, e põe o
+     * código postal no formato NNNN-NNN (ex. "1000100" → "1000-100").
      */
     protected function prepareForValidation(): void
     {
         if (is_string($this->input('nif'))) {
             $this->merge(['nif' => preg_replace('/\s+/', '', $this->input('nif'))]);
+        }
+
+        if ($this->has('billing_postal_code')) {
+            $this->merge(['billing_postal_code' => PortuguesePostalCode::normalize($this->input('billing_postal_code'))]);
         }
     }
 
@@ -47,7 +53,7 @@ class StartActivationRequest extends FormRequest
             'billing_name' => 'required|string|max:255',
             'nif' => ['required', 'string', new PortugueseNif],
             'billing_address' => 'required|string|max:255',
-            'billing_postal_code' => ['required', 'string', 'regex:/^\d{4}-\d{3}\z/'],
+            'billing_postal_code' => ['required', 'string', new PortuguesePostalCode],
             'billing_city' => 'required|string|max:100',
         ];
     }

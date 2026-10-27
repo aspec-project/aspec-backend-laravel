@@ -28,6 +28,8 @@ class MemberProfileResource extends JsonResource
             'commercial_email' => $this->commercial_email,
             'commercial_phone' => $this->commercial_phone,
             'address' => $this->address,
+            'postal_code' => $this->postal_code,
+            'city' => $this->city,
             'email' => $this->user->email,
             'phone' => $this->user->phone,
             'sector' => [

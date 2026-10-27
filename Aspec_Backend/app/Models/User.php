@@ -355,6 +355,8 @@ class User extends Authenticatable
                     'commercial_email' => null,
                     'commercial_phone' => null,
                     'address' => null,
+                    'postal_code' => null,
+                    'city' => null,
                 ]);
 
                 $profile->socialPlatforms()->detach();

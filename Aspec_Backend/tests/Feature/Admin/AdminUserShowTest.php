@@ -29,7 +29,7 @@ class AdminUserShowTest extends TestCase
 
     private const PROFILE_KEYS = [
         'id', 'name', 'business_name', 'congregation', 'role_in_congregation', 'description', 'website_url',
-        'commercial_email', 'commercial_phone', 'address', 'email', 'phone', 'sector', 'location', 'logo_url', 'business_hours',
+        'commercial_email', 'commercial_phone', 'address', 'postal_code', 'city', 'email', 'phone', 'sector', 'location', 'logo_url', 'business_hours',
         'social_links', 'portfolio',
     ];
 
