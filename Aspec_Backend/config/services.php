@@ -65,4 +65,16 @@ return [
         'cache_days' => (int) env('NOMINATIM_CACHE_DAYS', 30),
     ],
 
+    // Fornecedor da geocodificação: 'nominatim' (por omissão e nos testes) ou 'google'.
+    'geocoding' => [
+        'driver' => env('GEOCODING_DRIVER', 'nominatim'),
+    ],
+
+    // Google Maps Platform. Pelos termos do Google só se guarda o place_id; latitude e longitude
+    // no máximo 30 dias, e os resultados só podem ser mostrados em mapas do Google.
+    'google_maps' => [
+        'geocoding_key' => env('GOOGLE_MAPS_GEOCODING_KEY'),
+        'timeout' => (int) env('GOOGLE_MAPS_TIMEOUT', 5),
+    ],
+
 ];
