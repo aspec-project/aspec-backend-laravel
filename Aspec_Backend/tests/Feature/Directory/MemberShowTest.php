@@ -21,7 +21,7 @@ use Tests\TestCase;
  * Perfil público do membro (GET /api/members/{id}).
  *
  * A rota é pública mas deteta um utilizador opcional (sessão SPA ou Bearer). Website, morada,
- * redes sociais e contactos comerciais só aparecem em members_only, e só para contas Active;
+ * código postal, localidade, redes sociais e contactos comerciais só aparecem em members_only, e só para contas Active;
  * para os restantes members_only é null. O email e o telefone da conta nunca aparecem.
  */
 class MemberShowTest extends TestCase
@@ -41,6 +41,10 @@ class MemberShowTest extends TestCase
     private const WEBSITE = 'https://zxqw-site.test';
 
     private const ADDRESS = 'Rua ZXQWMORADA 1';
+
+    private const POSTAL_CODE = '7777-321';
+
+    private const CITY = 'Localidade ZXQWCIDADE';
 
     private const LINKEDIN_URL = 'https://www.linkedin.com/company/zxqw-linkedin';
 
@@ -65,6 +69,8 @@ class MemberShowTest extends TestCase
             'commercial_phone' => self::COMMERCIAL_PHONE,
             'website_url' => self::WEBSITE,
             'address' => self::ADDRESS,
+            'postal_code' => self::POSTAL_CODE,
+            'city' => self::CITY,
         ]);
         $profile->socialPlatforms()->attach([
             $this->platformId('LinkedIn') => ['url' => self::LINKEDIN_URL],
@@ -95,10 +101,14 @@ class MemberShowTest extends TestCase
             ->assertJsonMissingPath('data.website_url')
             ->assertJsonMissingPath('data.address')
             ->assertJsonMissingPath('data.social_links')
+            ->assertJsonMissingPath('data.postal_code')
+            ->assertJsonMissingPath('data.city')
             ->assertDontSee(self::COMMERCIAL_EMAIL)
             ->assertDontSee(self::COMMERCIAL_PHONE)
             ->assertDontSee('zxqw-site')
             ->assertDontSee(self::ADDRESS)
+            ->assertDontSee(self::POSTAL_CODE)
+            ->assertDontSee('ZXQWCIDADE')
             ->assertDontSee('zxqw-linkedin')
             ->assertDontSee('zxqw-instagram');
 
@@ -106,7 +116,7 @@ class MemberShowTest extends TestCase
     }
 
     /**
-     * O que uma conta Active vê: as 5 chaves de members_only com os valores do dono do perfil.
+     * O que uma conta Active vê: as 7 chaves de members_only com os valores do dono do perfil.
      */
     private function assertContactsShown(TestResponse $response): void
     {
@@ -115,9 +125,13 @@ class MemberShowTest extends TestCase
             ->assertJsonPath('data.members_only.commercial_phone', self::COMMERCIAL_PHONE)
             ->assertJsonPath('data.members_only.website_url', self::WEBSITE)
             ->assertJsonPath('data.members_only.address', self::ADDRESS)
+            ->assertJsonPath('data.members_only.postal_code', self::POSTAL_CODE)
+            ->assertJsonPath('data.members_only.city', self::CITY)
             ->assertJsonCount(2, 'data.members_only.social_links')
             ->assertJsonMissingPath('data.website_url')
             ->assertJsonMissingPath('data.address')
+            ->assertJsonMissingPath('data.postal_code')
+            ->assertJsonMissingPath('data.city')
             ->assertJsonMissingPath('data.social_links');
 
         $this->assertEqualsCanonicalizing(self::DETAIL_KEYS, array_keys($response->json('data')));
@@ -265,27 +279,32 @@ class MemberShowTest extends TestCase
     }
 
     #[Test]
-    public function legacy_profile_without_contacts_still_returns_the_five_members_only_keys(): void
+    public function legacy_profile_without_contacts_still_returns_the_seven_members_only_keys(): void
     {
         $profile = $this->listedMember([
             'commercial_email' => null,
             'commercial_phone' => null,
             'website_url' => null,
             'address' => null,
+            'postal_code' => null,
+            'city' => null,
         ]);
         $viewer = $this->listedMember(['business_name' => 'Quem Consulta'])->user;
 
-        $response = $this->showWithToken($viewer, $profile->id)
-            ->assertOk()
-            ->assertJsonPath('data.members_only', [
-                'commercial_phone' => null,
-                'commercial_email' => null,
-                'website_url' => null,
-                'address' => null,
-                'social_links' => [],
-            ]);
+        $response = $this->showWithToken($viewer, $profile->id)->assertOk();
 
-        $this->assertEqualsCanonicalizing(self::MEMBERS_ONLY_KEYS, array_keys($response->json('data.members_only')));
+        $membersOnly = $response->json('data.members_only');
+        ksort($membersOnly);
+        $this->assertSame([
+            'address' => null,
+            'city' => null,
+            'commercial_email' => null,
+            'commercial_phone' => null,
+            'postal_code' => null,
+            'social_links' => [],
+            'website_url' => null,
+        ], $membersOnly);
+        $this->assertEqualsCanonicalizing(self::MEMBERS_ONLY_KEYS, array_keys($membersOnly));
     }
 
     #[Test]

@@ -138,6 +138,23 @@ class AnonymizeAndDeleteTest extends TestCase
     }
 
     #[Test]
+    public function postal_code_and_city_are_erased_from_the_database(): void
+    {
+        $user = User::factory()->create();
+        $profile = MemberProfile::factory()->create([
+            'user_id' => $user->id,
+            'postal_code' => '7777-321',
+            'city' => 'Localidade Apagar',
+        ]);
+
+        $user->anonymizeAndDelete();
+
+        $this->assertSoftDeleted('member_profiles', ['id' => $profile->id, 'postal_code' => null, 'city' => null]);
+        $this->assertDatabaseMissing('member_profiles', ['postal_code' => '7777-321']);
+        $this->assertDatabaseMissing('member_profiles', ['city' => 'Localidade Apagar']);
+    }
+
+    #[Test]
     public function commercial_contacts_are_erased_from_the_database(): void
     {
         $user = User::factory()->create();

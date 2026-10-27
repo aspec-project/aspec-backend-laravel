@@ -157,15 +157,58 @@ class AccountActivationStoreTest extends TestCase
         $this->assertNull($user->fresh()->nif);
     }
 
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function postalCodesWithoutHyphen(): array
+    {
+        return [
+            'sete dígitos' => ['1000001'],
+            'sete dígitos com espaços à volta' => [' 1000001 '],
+            'espaço em vez de hífen' => ['1000 001'],
+        ];
+    }
+
     #[Test]
-    public function postal_code_without_hyphen_is_rejected(): void
+    #[DataProvider('postalCodesWithoutHyphen')]
+    public function postal_code_without_hyphen_is_stored_with_hyphen(string $postalCode): void
+    {
+        $user = User::factory()->approved()->create();
+        $this->expectCheckoutCreated();
+
+        $this->postJson($this->activationPath($user), $this->billing(['billing_postal_code' => $postalCode]))
+            ->assertOk();
+
+        $this->assertSame('1000-001', $user->fresh()->billing_postal_code);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function invalidPostalCodes(): array
+    {
+        return [
+            'só 4 dígitos' => ['1000'],
+            'sufixo com 2 dígitos' => ['1000-10'],
+            'prefixo com 5 dígitos' => ['10001-00'],
+            'letras' => ['ABCD-EFG'],
+            'oito dígitos' => ['10001000'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('invalidPostalCodes')]
+    public function invalid_postal_code_is_rejected_with_the_shared_message(string $postalCode): void
     {
         $user = User::factory()->approved()->create();
         $this->expectNoStripeCalls();
 
-        $this->postJson($this->activationPath($user), $this->billing(['billing_postal_code' => '1000001']))
+        $this->postJson($this->activationPath($user), $this->billing(['billing_postal_code' => $postalCode]))
             ->assertStatus(422)
-            ->assertJsonValidationErrors(['billing_postal_code']);
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['billing_postal_code' => 'O campo código postal tem de ter o formato 0000-000.']);
+
+        $this->assertNull($user->fresh()->billing_postal_code);
     }
 
     public static function requiredBillingFields(): array

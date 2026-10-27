@@ -4,6 +4,9 @@ namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
 use App\Rules\InternationalPhone;
+use App\Rules\PortuguesePostalCode;
+use App\Rules\UrlWithoutCredentials;
+use App\Support\UrlNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,7 +27,9 @@ class UpdateMemberProfileRequest extends FormRequest
 
     /**
      * Primeiro o bloqueio da password atual (trait); depois normaliza os telefones (o da conta e o
-     * comercial) para se guardarem sempre no mesmo formato: E.164, ex. +351912345678.
+     * comercial) para E.164 (ex. +351912345678), o código postal para NNNN-NNN e acrescenta https://
+     * ao website e às redes sociais escritos sem esquema (ex. www.empresa.pt). Só mexe nos campos
+     * enviados; redes sociais mal formadas ficam como estão para a validação dar 422.
      */
     protected function prepareForValidation(): void
     {
@@ -37,6 +42,23 @@ class UpdateMemberProfileRequest extends FormRequest
         if ($this->has('commercial_phone')) {
             $this->merge(['commercial_phone' => InternationalPhone::normalize($this->input('commercial_phone'))]);
         }
+
+        if ($this->has('postal_code')) {
+            $this->merge(['postal_code' => PortuguesePostalCode::normalize($this->input('postal_code'))]);
+        }
+
+        if ($this->has('website_url')) {
+            $this->merge(['website_url' => UrlNormalizer::withScheme($this->input('website_url'))]);
+        }
+
+        if (is_array($this->input('social_links'))) {
+            $this->merge(['social_links' => array_map(
+                fn ($link) => is_array($link) && is_string($link['url'] ?? null)
+                    ? [...$link, 'url' => UrlNormalizer::withScheme($link['url'])]
+                    : $link,
+                $this->input('social_links'),
+            )]);
+        }
     }
 
     /**
@@ -46,6 +68,7 @@ class UpdateMemberProfileRequest extends FormRequest
      * há linhas antigas sem morada e o anonymizeAndDelete() limpa-a. O mesmo vale para o email e o
      * telefone comerciais (obrigatórios só quando enviados, para um perfil antigo sem eles poder
      * mudar outros campos); podem repetir os contactos da conta e não são únicos (ex. geral@ partilhado).
+     * Código postal e localidade seguem a mesma regra; a morada guarda só a rua.
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
@@ -68,10 +91,12 @@ class UpdateMemberProfileRequest extends FormRequest
             'current_password' => 'bail|required_with:email|string|current_password:sanctum',
             'phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'description' => 'nullable|string|max:1000',
-            'website_url' => 'nullable|url:http,https|max:255',
+            'website_url' => ['nullable', 'url:http,https', 'max:255', new UrlWithoutCredentials],
             'commercial_email' => 'sometimes|required|string|email:rfc|max:255',
             'commercial_phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'address' => 'sometimes|required|string|max:255',
+            'postal_code' => ['sometimes', 'required', 'string', new PortuguesePostalCode],
+            'city' => 'sometimes|required|string|max:100',
 
             'business_hours' => 'sometimes|array|max:7',
             'business_hours.*.week_day_id' => 'required|integer|distinct|exists:week_days,id',
@@ -80,7 +105,7 @@ class UpdateMemberProfileRequest extends FormRequest
 
             'social_links' => 'sometimes|array',
             'social_links.*.platform_id' => 'required|uuid|distinct:ignore_case|exists:social_platforms,id',
-            'social_links.*.url' => 'required|url:http,https|max:255',
+            'social_links.*.url' => ['required', 'url:http,https', 'max:255', new UrlWithoutCredentials],
         ];
     }
 }

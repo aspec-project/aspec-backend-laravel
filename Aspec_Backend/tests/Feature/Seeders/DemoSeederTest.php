@@ -11,6 +11,7 @@ use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\User;
 use App\Rules\InternationalPhone;
+use App\Rules\PortuguesePostalCode;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -164,6 +165,29 @@ class DemoSeederTest extends TestCase
         $withoutHours = $profiles->filter(fn (MemberProfile $profile) => $profile->weekDays->isEmpty());
         $this->assertGreaterThanOrEqual(1, $withoutHours->count());
         $this->assertLessThanOrEqual(2, $withoutHours->count());
+    }
+
+    #[Test]
+    public function every_demo_profile_has_street_postal_code_and_city_separated(): void
+    {
+        $this->runDemoSeeder();
+
+        $profiles = MemberProfile::whereHas('user', fn ($query) => $query->where('email', 'like', 'demo.%@aspec.test'))->get();
+        $this->assertNotEmpty($profiles);
+
+        foreach ($profiles as $profile) {
+            $validator = Validator::make(
+                $profile->only(['postal_code', 'city']),
+                [
+                    'postal_code' => ['required', 'string', new PortuguesePostalCode],
+                    'city' => 'required|string|max:100',
+                ],
+            );
+
+            $this->assertFalse($validator->fails(), "{$profile->business_name}: ".$validator->errors()->toJson());
+            $this->assertNotEmpty($profile->address, $profile->business_name);
+            $this->assertStringNotContainsString($profile->postal_code, $profile->address, $profile->business_name);
+        }
     }
 
     #[Test]

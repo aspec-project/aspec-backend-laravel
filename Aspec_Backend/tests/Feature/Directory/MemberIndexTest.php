@@ -322,6 +322,21 @@ class MemberIndexTest extends TestCase
     }
 
     #[Test]
+    public function items_never_have_postal_code_or_city_even_for_active_members(): void
+    {
+        $this->listedMember(['postal_code' => '7777-321', 'city' => 'Localidade ZXQWCIDADE']);
+        $viewer = $this->listedMember(['business_name' => 'Quem Consulta'])->user;
+
+        foreach ([$this->listMembers(), $this->withToken($viewer->createToken('postman')->plainTextToken)->listMembers()] as $response) {
+            $response->assertOk()
+                ->assertJsonMissingPath('data.items.0.postal_code')
+                ->assertJsonMissingPath('data.items.0.city')
+                ->assertDontSee('7777-321')
+                ->assertDontSee('ZXQWCIDADE');
+        }
+    }
+
+    #[Test]
     public function number_of_queries_does_not_grow_with_the_number_of_members(): void
     {
         $this->listedMember(['sector_id' => $this->firstSector()->id, 'location_id' => $this->firstLocation()->id]);

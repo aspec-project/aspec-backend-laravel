@@ -53,8 +53,10 @@ trait BuildsDirectoryMembers
     /** Chaves de members_only, iguais para qualquer conta Active (o próprio e admins incluídos). */
     protected const MEMBERS_ONLY_KEYS = [
         'address',
+        'city',
         'commercial_email',
         'commercial_phone',
+        'postal_code',
         'social_links',
         'website_url',
     ];
