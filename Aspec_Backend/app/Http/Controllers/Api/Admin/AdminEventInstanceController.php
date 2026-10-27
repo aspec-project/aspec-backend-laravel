@@ -8,11 +8,14 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInstanceRequest;
 use App\Http\Resources\EventInstanceResource;
 use App\Models\EventInstance;
+use App\Models\EventSeries;
 use App\Models\Location;
 use App\Notifications\EventCancelledNotification;
 use App\Notifications\EventUpdatedNotification;
+use App\Services\Events\EventSeriesSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
@@ -159,9 +162,15 @@ class AdminEventInstanceController extends Controller
         return null;
     }
 
+    /**
+     * Armazena um novo evento ou série de eventos.
+     */
     public function store(EventInstanceRequest $request, Geocoder $geocoder): JsonResponse
     {
         $validated = $request->validatedEventData();
+        $recurrence = $validated['recurrence'] ?? null;
+
+        unset($validated['recurrence']);
 
         $geocodingError = $this->geocodeMissingCoordinates($validated, $geocoder);
 
@@ -169,14 +178,74 @@ class AdminEventInstanceController extends Controller
             return $geocodingError;
         }
 
-        $event = EventInstance::create($validated);
-        $event->load(['category', 'location']);
+        if ($recurrence === null) {
+            $event = EventInstance::create($validated);
+            $event->load(['category', 'location']);
 
-        return $this->successResponse(
-            new EventInstanceResource($event),
-            'Evento criado com sucesso.',
-            Response::HTTP_CREATED
+            return $this->successResponse(
+                new EventInstanceResource($event),
+                'Evento criado com sucesso.',
+                Response::HTTP_CREATED
+            );
+        }
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $deadlineDaysBefore = (int) $recurrence['registration_deadline_days_before'];
+
+        $sessionDates = app(EventSeriesSchedule::class)->generate(
+            $validated['event_date'],
+            $recurrence['ends_on'],
+            $recurrence['frequency']
         );
+
+        $series = DB::transaction(function () use (
+            $validated,
+            $recurrence,
+            $sessionDates,
+            $deadlineDaysBefore,
+            $timezone
+        ): EventSeries {
+            $series = EventSeries::create([
+                'frequency' => $recurrence['frequency'],
+                'ends_on' => $recurrence['ends_on'],
+                'registration_deadline_days_before' => $deadlineDaysBefore,
+            ]);
+
+            foreach ($sessionDates as $sessionDate) {
+                $deadline = Carbon::createFromFormat(
+                    '!Y-m-d',
+                    $sessionDate,
+                    $timezone
+                )
+                    ->subDays($deadlineDaysBefore)
+                    ->setTime(23, 59);
+
+                $sessionData = $validated;
+                $sessionData['series_id'] = $series->id;
+                $sessionData['event_date'] = $sessionDate;
+                $sessionData['registration_deadline'] = $deadline->format('Y-m-d H:i:s');
+
+                EventInstance::create($sessionData);
+            }
+
+            return $series;
+        });
+
+        $sessions = $series->eventInstances()
+            ->with(['category', 'location'])
+            ->orderBy('event_date')
+            ->orderBy('event_start_time')
+            ->get();
+
+        return $this->successResponse([
+            'series' => [
+                'id' => $series->id,
+                'frequency' => $series->frequency,
+                'ends_on' => $series->ends_on->format('Y-m-d'),
+                'registration_deadline_days_before' => $series->registration_deadline_days_before,
+            ],
+            'sessions' => EventInstanceResource::collection($sessions)->resolve($request),
+        ], 'Série de eventos criada com sucesso.', Response::HTTP_CREATED);
     }
 
     public function show(EventInstance $eventInstance): JsonResponse

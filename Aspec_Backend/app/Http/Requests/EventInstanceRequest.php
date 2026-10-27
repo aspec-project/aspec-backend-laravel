@@ -2,9 +2,11 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Events\EventSeriesSchedule;
 use Illuminate\Contracts\Validation\Validator as ValidatorContract;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
+use OverflowException;
 
 class EventInstanceRequest extends FormRequest
 {
@@ -42,7 +44,11 @@ class EventInstanceRequest extends FormRequest
                 ? ['prohibited']
                 : ['sometimes', 'nullable', 'numeric', 'between:-180,180'],
             'max_attendees' => ['required', 'integer', 'min:1', 'max:100000'],
-            'registration_deadline' => ['required', 'date_format:Y-m-d'],
+            'registration_deadline' => $this->isMethod('post')
+                ? ($this->has('recurrence')
+                    ? ['prohibited']
+                    : ['required', 'date_format:Y-m-d'])
+                : ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'justification' => $this->isMethod('put')
                 ? ['sometimes', 'nullable', 'string', 'max:2000']
@@ -53,6 +59,28 @@ class EventInstanceRequest extends FormRequest
             $now = now(config('app.event_timezone', 'Europe/Lisbon'));
 
             $rules['event_date'][] = 'after_or_equal:'.$now->toDateString();
+            $rules['recurrence'] = [
+                'sometimes',
+                'required',
+                'array:frequency,ends_on,registration_deadline_days_before',
+            ];
+            $rules['recurrence.frequency'] = [
+                'required_with:recurrence',
+                'string',
+                'in:weekly,biweekly,monthly',
+            ];
+            $rules['recurrence.ends_on'] = [
+                'required_with:recurrence',
+                'date_format:Y-m-d',
+                'after_or_equal:event_date',
+            ];
+            $rules['recurrence.registration_deadline_days_before'] = [
+                'required_with:recurrence',
+                'integer',
+                'min:1',
+            ];
+        } else {
+            $rules['recurrence'] = ['prohibited'];
         }
 
         return $rules;
@@ -72,6 +100,48 @@ class EventInstanceRequest extends FormRequest
                     $validator->errors()->add('longitude', $message);
                 }
             }
+
+            if ($this->isMethod('post') && $this->exists('recurrence')) {
+                if ($validator->errors()->any()) {
+                    return;
+                }
+
+                $recurrence = $this->input('recurrence');
+                $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+                try {
+                    app(EventSeriesSchedule::class)->generate(
+                        $this->input('event_date'),
+                        $recurrence['ends_on'],
+                        $recurrence['frequency']
+                    );
+                } catch (OverflowException) {
+                    $validator->errors()->add(
+                        'recurrence.ends_on',
+                        'Uma série não pode exceder 52 sessões.'
+                    );
+
+                    return;
+                }
+
+                $deadline = Carbon::createFromFormat(
+                    '!Y-m-d',
+                    $this->input('event_date'),
+                    $timezone
+                )
+                    ->subDays((int) $recurrence['registration_deadline_days_before'])
+                    ->setTime(23, 59);
+
+                if ($deadline->lessThanOrEqualTo(now($timezone))) {
+                    $validator->errors()->add(
+                        'recurrence.registration_deadline_days_before',
+                        'O prazo calculado para a primeira sessão já passou.'
+                    );
+                }
+
+                return;
+            }
+
             if ($validator->errors()->has('registration_deadline')) {
                 return;
             }
@@ -131,6 +201,9 @@ class EventInstanceRequest extends FormRequest
             'online_url' => 'link do evento online',
             'organizer_notes' => 'notas do organizador',
             'justification' => 'justificação',
+            'recurrence.frequency' => 'frequência da série',
+            'recurrence.ends_on' => 'data final da série',
+            'recurrence.registration_deadline_days_before' => 'antecedência do prazo de inscrição',
         ];
     }
 
@@ -159,6 +232,11 @@ class EventInstanceRequest extends FormRequest
     public function validatedEventData(): array
     {
         $data = $this->validated();
+
+        if (isset($data['recurrence'])) {
+            return $data;
+        }
+
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
 
         $data['registration_deadline'] = Carbon::createFromFormat(

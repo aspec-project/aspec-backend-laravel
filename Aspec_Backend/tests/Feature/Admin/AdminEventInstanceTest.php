@@ -288,6 +288,161 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_create_a_recurring_event_series_with_deadlines_for_each_session(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $firstDate = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        );
+
+        $sessionDates = [
+            $firstDate->toDateString(),
+            $firstDate->copy()->addWeek()->toDateString(),
+            $firstDate->copy()->addWeeks(2)->toDateString(),
+        ];
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ];
+
+        $response = $this->postJson(self::URL, $payload);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.series.frequency', 'weekly')
+            ->assertJsonPath('data.series.ends_on', $sessionDates[2])
+            ->assertJsonPath('data.series.registration_deadline_days_before', 3)
+            ->assertJsonCount(3, 'data.sessions');
+
+        $seriesId = $response->json('data.series.id');
+
+        $this->assertDatabaseHas('event_series', [
+            'id' => $seriesId,
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ]);
+
+        foreach ($sessionDates as $index => $sessionDate) {
+            $deadline = Carbon::createFromFormat('!Y-m-d', $sessionDate, $timezone)
+                ->subDays(3)
+                ->setTime(23, 59);
+
+            $this->assertDatabaseHas('event_instances', [
+                'series_id' => $seriesId,
+                'event_date' => $sessionDate,
+                'registration_deadline' => $deadline->format('Y-m-d H:i:s'),
+            ]);
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.event_date",
+                $sessionDate
+            );
+            $response->assertJsonPath(
+                "data.sessions.{$index}.registration_deadline",
+                $deadline->toIso8601String()
+            );
+        }
+    }
+
+    #[Test]
+    public function event_creation_rejects_invalid_recurring_event_data(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $endsOn = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        )->addWeeks(2)->toDateString();
+
+        $validRecurrence = [
+            'frequency' => 'weekly',
+            'ends_on' => $endsOn,
+            'registration_deadline_days_before' => 2,
+        ];
+
+        $invalidCases = [
+            [
+                'recurrence' => array_merge($validRecurrence, ['frequency' => 'daily']),
+                'error' => 'recurrence.frequency',
+            ],
+            [
+                'recurrence' => [
+                    'frequency' => 'weekly',
+                    'registration_deadline_days_before' => 2,
+                ],
+                'error' => 'recurrence.ends_on',
+            ],
+            [
+                'recurrence' => array_merge(
+                    $validRecurrence,
+                    ['registration_deadline_days_before' => 0]
+                ),
+                'error' => 'recurrence.registration_deadline_days_before',
+            ],
+        ];
+
+        foreach ($invalidCases as $invalidCase) {
+            $response = $this->postJson(self::URL, array_merge(
+                $payload,
+                ['recurrence' => $invalidCase['recurrence']]
+            ));
+
+            $response
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => [$invalidCase['error']],
+                ]);
+        }
+
+        $this->assertDatabaseCount('event_series', 0);
+        $this->assertDatabaseCount('event_instances', 0);
+    }
+
+    #[Test]
+    public function event_creation_rejects_a_recurring_series_with_more_than_52_sessions(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => Carbon::createFromFormat(
+                '!Y-m-d',
+                $payload['event_date'],
+                $timezone
+            )->addWeeks(52)->toDateString(),
+            'registration_deadline_days_before' => 2,
+        ];
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['recurrence.ends_on'],
+            ]);
+
+        $this->assertDatabaseCount('event_series', 0);
+        $this->assertDatabaseCount('event_instances', 0);
+    }
+
+    #[Test]
     public function admin_can_show_an_event(): void
     {
         $this->actingAsAdmin();
