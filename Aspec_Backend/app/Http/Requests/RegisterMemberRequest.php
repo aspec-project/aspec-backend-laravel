@@ -3,6 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Rules\InternationalPhone;
+use App\Rules\PortuguesePostalCode;
+use App\Rules\UrlWithoutCredentials;
+use App\Support\UrlNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
@@ -26,10 +29,27 @@ class RegisterMemberRequest extends FormRequest
                 ),
             ]);
         }
+
         if ($this->has('commercial_phone')) {
             $this->merge([
                 'commercial_phone' => InternationalPhone::normalize(
                     $this->input('commercial_phone')
+                ),
+            ]);
+        }
+
+        if ($this->has('website_url')) {
+            $this->merge([
+                'website_url' => UrlNormalizer::withScheme(
+                    $this->input('website_url')
+                ),
+            ]);
+        }
+
+        if ($this->has('postal_code')) {
+            $this->merge([
+                'postal_code' => PortuguesePostalCode::normalize(
+                    $this->input('postal_code')
                 ),
             ]);
         }
@@ -53,8 +73,15 @@ class RegisterMemberRequest extends FormRequest
             'congregation' => 'required|string|max:255',
             'role_in_congregation' => 'required|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'website_url' => 'nullable|url:http,https|max:255',
+            'website_url' => [
+                'nullable',
+                'url:http,https',
+                'max:255',
+                new UrlWithoutCredentials,
+            ],
             'address' => 'required|string|max:255',
+            'postal_code' => ['required', 'string', new PortuguesePostalCode],
+            'city' => 'required|string|max:100',
             'commercial_email' => 'required|string|email:rfc|max:255',
             'commercial_phone' => ['required', 'string', new InternationalPhone],
             'terms_accepted' => ['required', 'accepted'],

@@ -115,6 +115,8 @@ class AuthController extends Controller
                 'description' => $request->description,
                 'website_url' => $request->website_url,
                 'address' => $request->address,
+                'postal_code' => $request->postal_code,
+                'city' => $request->city,
                 'commercial_email' => $request->commercial_email,
                 'commercial_phone' => $request->commercial_phone,
             ]);
