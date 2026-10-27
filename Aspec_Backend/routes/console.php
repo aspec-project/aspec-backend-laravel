@@ -9,3 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('subscriptions:end-grace')->hourly()->withoutOverlapping(55);
+
+Schedule::command('events:send-weekly-agenda')->weeklyOn(6, '10:00')->timezone('Europe/Lisbon')->withoutOverlapping(60);

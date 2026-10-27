@@ -108,6 +108,7 @@ class DemoSeeder extends Seeder
 
     /**
      * Cria ou repõe a conta (papel, estado, motivo, telefone e password) e o respetivo perfil.
+     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana.
      *
      * @param  array<string, mixed>  $data  Uma entrada de activeMembers() ou applicants().
      */
@@ -123,6 +124,7 @@ class DemoSeeder extends Seeder
             'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
             'inactive_reason' => $data['reason'] ?? null,
             'email_verified_at' => $user->email_verified_at ?? now(),
+            'weekly_agenda_sent_at' => null,
         ])->save();
 
         $profile = $data['profile'];

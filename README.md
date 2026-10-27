@@ -118,6 +118,17 @@ Erros comuns: `535 Username and Password not accepted` → palavra-passe de apli
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
 
+### Emails de eventos
+
+Vão para as contas **Active com perfil de membro** (membros e admins com perfil) que não desligaram a preferência na página da conta (`GET|PUT /api/account/notification-preferences`; ligadas por omissão).
+
+- **Anúncio de novo evento:** sai quando um admin cria um evento **pontual** (as sessões de séries nunca são anunciadas). Um evento só é anunciado uma vez (`event_instances.announced_at`). Nunca inclui o link de um evento online.
+- **Agenda semanal:** comando `events:send-weekly-agenda`, agendado ao **sábado às 10:00 (hora de Lisboa)**. Cada membro recebe os eventos em que está inscrito com início até ao sábado seguinte às 23:59 e até 10 eventos pontuais com inscrições abertas. Quem não tem nada para mostrar não recebe email. No máximo uma agenda por semana a cada conta (`users.weekly_agenda_sent_at`).
+
+Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local, o agendamento só corre com `php artisan schedule:work` (em produção, um cron com `php artisan schedule:run` a cada minuto).
+
+**Demo:** correr à mão `php artisan events:send-weekly-agenda` (com o `queue:work` a correr). Fora do sábado, a agenda vai de agora até ao sábado seguinte às 23:59. Para a enviar outra vez na mesma semana às contas demo, voltar a correr `php artisan db:seed --class=DemoSeeder` (limpa a marca da agenda dessas contas).
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.

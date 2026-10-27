@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 class EventInstance extends Model
 {
@@ -41,7 +42,31 @@ class EventInstance extends Model
             'registration_deadline' => 'datetime',
             'max_attendees' => 'integer',
             'is_online' => 'boolean',
+            'announced_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Início do evento (data + hora de início) na hora de Portugal, o fuso em que o backoffice guarda os eventos.
+     */
+    public function startsAt(): Carbon
+    {
+        return Carbon::createFromFormat(
+            'Y-m-d H:i',
+            $this->event_date->format('Y-m-d').' '.substr((string) $this->event_start_time, 0, 5),
+            config('app.event_timezone', 'Europe/Lisbon')
+        );
+    }
+
+    /**
+     * Indica se o prazo de inscrição já passou. O prazo está guardado na hora de Portugal, por isso
+     * é lido a partir do valor em bruto (o cast datetime interpretá-lo-ia em UTC), como no EventInstanceResource.
+     */
+    public function registrationDeadlinePassed(): bool
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        return now($timezone)->greaterThan(Carbon::parse($this->getRawOriginal('registration_deadline'), $timezone));
     }
 
     public function category(): BelongsTo
