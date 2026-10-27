@@ -139,6 +139,32 @@ class EventInstanceRegistrationMetadataTest extends TestCase
     }
 
     #[Test]
+    public function registered_active_admin_does_not_see_online_url_before_registration_deadline(): void
+    {
+        $event = $this->createOnlineEvent();
+        $admin = User::factory()->admin()->create();
+        $this->registerUser($event, $admin);
+
+        Sanctum::actingAs($admin);
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.is_registered', true)
+            ->assertJsonMissingPath('data.online_url');
+    }
+
+    #[Test]
+    public function technical_admin_can_still_see_online_url_in_admin_event_detail(): void
+    {
+        $event = $this->createOnlineEvent();
+        Sanctum::actingAs(User::factory()->technicalAdmin()->create());
+
+        $this->getJson("/api/admin/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
+    }
+
+    #[Test]
     public function registered_member_does_not_see_online_url_at_the_exact_deadline(): void
     {
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
@@ -185,10 +211,10 @@ class EventInstanceRegistrationMetadataTest extends TestCase
     }
 
     #[Test]
-    public function only_active_members_can_see_online_url_after_deadline_in_public_endpoints(): void
+    public function only_active_members_and_promoted_admins_can_see_online_url_after_deadline_in_public_endpoints(): void
     {
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $event = $this->createOnlineEvent();
+        $event = $this->createOnlineEvent(capacity: 5);
 
         $event->update([
             'registration_deadline' => now($timezone)
@@ -196,13 +222,13 @@ class EventInstanceRegistrationMetadataTest extends TestCase
                 ->format('Y-m-d H:i:s'),
         ]);
 
-        $viewers = [
+        $ineligibleViewers = [
             User::factory()->pending()->create(),
             User::factory()->inactive()->create(),
-            User::factory()->admin()->create(),
+            User::factory()->technicalAdmin()->create(),
         ];
 
-        foreach ($viewers as $viewer) {
+        foreach ($ineligibleViewers as $viewer) {
             $this->registerUser($event, $viewer);
 
             Sanctum::actingAs($viewer);
@@ -216,18 +242,24 @@ class EventInstanceRegistrationMetadataTest extends TestCase
                 ->assertJsonMissingPath('data.online_url');
         }
 
-        $activeMember = User::factory()->create();
-        $this->registerUser($event, $activeMember);
+        $eligibleViewers = [
+            User::factory()->create(),
+            User::factory()->admin()->create(),
+        ];
 
-        Sanctum::actingAs($activeMember);
+        foreach ($eligibleViewers as $viewer) {
+            $this->registerUser($event, $viewer);
 
-        $this->getJson('/api/events')
-            ->assertOk()
-            ->assertJsonPath('data.items.0.online_url', 'https://meet.example.com/event');
+            Sanctum::actingAs($viewer);
 
-        $this->getJson("/api/events/{$event->id}")
-            ->assertOk()
-            ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
+            $this->getJson('/api/events')
+                ->assertOk()
+                ->assertJsonPath('data.items.0.online_url', 'https://meet.example.com/event');
+
+            $this->getJson("/api/events/{$event->id}")
+                ->assertOk()
+                ->assertJsonPath('data.online_url', 'https://meet.example.com/event');
+        }
     }
 
     #[Test]

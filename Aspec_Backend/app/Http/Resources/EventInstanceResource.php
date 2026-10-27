@@ -46,13 +46,14 @@ class EventInstanceResource extends JsonResource
             && $viewer?->accountStatus?->name === 'Active'
             && $viewer?->role?->name === 'Admin';
 
-        $isActiveMember = $viewer?->accountStatus?->name === 'Active'
-            && $viewer?->role?->name === 'Member';
+        $isActiveMemberOrPromotedAdmin = $viewer?->accountStatus?->name === 'Active'
+            && in_array($viewer?->role?->name, ['Member', 'Admin'], true)
+            && ! $viewer?->isSubscriptionExempt();
 
         $canSeeOnlineUrl = (bool) $this->is_online && (
             $isActiveAdmin
             || (
-                $isActiveMember
+                $isActiveMemberOrPromotedAdmin
                 && $isRegistered
                 && $deadlineHasPassed
             )
