@@ -7,6 +7,7 @@ use App\Exceptions\GeocodingUnavailable;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInstanceRequest;
 use App\Http\Resources\EventInstanceResource;
+use App\Jobs\AnnounceNewEventJob;
 use App\Models\EventInstance;
 use App\Models\EventSeries;
 use App\Models\Location;
@@ -25,6 +26,23 @@ use Symfony\Component\HttpFoundation\Response;
 class AdminEventInstanceController extends Controller
 {
     private const PAST_EVENT_MESSAGE = 'Não é possível alterar um evento que já decorreu.';
+
+    private const ATTENDEE_RELEVANT_FIELDS = [
+        'name',
+        'category_id',
+        'event_date',
+        'event_start_time',
+        'event_end_time',
+        'description',
+        'location_id',
+        'address',
+        'venue_name',
+        'latitude',
+        'longitude',
+        'is_online',
+        'online_url',
+        'registration_deadline',
+    ];
 
     public function index(Request $request): JsonResponse
     {
@@ -120,6 +138,48 @@ class AdminEventInstanceController extends Controller
     }
 
     /**
+     * @param  array<string, mixed>  $validated
+     */
+    private function hasAttendeeRelevantChanges(EventInstance $event, array $validated): bool
+    {
+        foreach (self::ATTENDEE_RELEVANT_FIELDS as $field) {
+            if (! array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $original = $event->getRawOriginal($field);
+            $updated = $validated[$field];
+
+            if (
+                $this->normalizeAttendeeRelevantValue($field, $original)
+                !== $this->normalizeAttendeeRelevantValue($field, $updated)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeAttendeeRelevantValue(string $field, mixed $value): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        return match ($field) {
+            'event_date' => Carbon::parse($value, $timezone)->toDateString(),
+            'event_start_time', 'event_end_time' => substr((string) $value, 0, 5),
+            'registration_deadline' => Carbon::parse($value, $timezone)->format('Y-m-d H:i:s'),
+            'latitude', 'longitude' => number_format((float) $value, 7, '.', ''),
+            'is_online' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            default => (string) $value,
+        };
+    }
+
+    /**
      * Geocodifica eventos presenciais quando as coordenadas não foram enviadas.
      *
      * @param  array<string, mixed>  $validated
@@ -180,6 +240,7 @@ class AdminEventInstanceController extends Controller
 
         if ($recurrence === null) {
             $event = EventInstance::create($validated);
+            AnnounceNewEventJob::dispatch($event->id);
             $event->load(['category', 'location']);
 
             return $this->successResponse(
@@ -269,6 +330,7 @@ class AdminEventInstanceController extends Controller
                 Response::HTTP_CONFLICT
             );
         }
+
         $validated = $request->validatedEventData();
 
         $justification = $validated['justification'] ?? null;
@@ -305,12 +367,19 @@ class AdminEventInstanceController extends Controller
                 ]);
             }
 
-            $recipients = $event->registrations()
-                ->with('user')
-                ->get()
-                ->pluck('user')
-                ->filter()
-                ->values();
+            $validated['event_start_time'] .= ':00';
+            $validated['event_end_time'] .= ':00';
+
+            foreach (['latitude', 'longitude'] as $coordinate) {
+                if (isset($validated[$coordinate])) {
+                    $validated[$coordinate] = number_format(
+                        (float) $validated[$coordinate],
+                        7,
+                        '.',
+                        ''
+                    );
+                }
+            }
 
             if ($validated['is_online']) {
                 $validated['address'] = null;
@@ -320,13 +389,31 @@ class AdminEventInstanceController extends Controller
                 $validated['online_url'] = null;
             }
 
+            $hasAttendeeRelevantChanges = $this->hasAttendeeRelevantChanges(
+                $event,
+                $validated
+            );
+
             $event->update($validated);
 
-            if ($recipients->isNotEmpty()) {
-                Notification::send(
-                    $recipients,
-                    new EventUpdatedNotification($event->name, $justification)
-                );
+            if ($hasAttendeeRelevantChanges) {
+                $recipients = $event->registrations()
+                    ->whereHas(
+                        'user.accountStatus',
+                        fn ($query) => $query->where('name', 'Active')
+                    )
+                    ->with('user')
+                    ->get()
+                    ->pluck('user')
+                    ->filter()
+                    ->values();
+
+                if ($recipients->isNotEmpty()) {
+                    Notification::send(
+                        $recipients,
+                        new EventUpdatedNotification($event->name, $justification)
+                    );
+                }
             }
 
             $event->load(['category', 'location']);
@@ -354,7 +441,7 @@ class AdminEventInstanceController extends Controller
             }
 
             $registrations = $event->registrations()
-                ->with('user')
+                ->with('user.accountStatus')
                 ->get();
 
             $validated = $request->validate([
@@ -367,7 +454,7 @@ class AdminEventInstanceController extends Controller
 
             $recipients = $registrations
                 ->pluck('user')
-                ->filter()
+                ->filter(fn ($user) => $user?->accountStatus?->name === 'Active')
                 ->values();
 
             $notification = new EventCancelledNotification(
@@ -380,7 +467,9 @@ class AdminEventInstanceController extends Controller
             $event->registrations()->delete();
             $event->delete();
 
-            Notification::send($recipients, $notification);
+            if ($recipients->isNotEmpty()) {
+                Notification::send($recipients, $notification);
+            }
 
             return null;
         });
