@@ -3652,6 +3652,379 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
             }
           ]
+        },
+        {
+          "name": "Obter preferências de notificação",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/account/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "notification-preferences"
+              ]
+            },
+            "description": "Preferências dos emails de eventos do utilizador autenticado:\n\n- `notify_new_events`: anúncio por email de cada novo evento pontual criado no backoffice;\n- `notify_weekly_agenda`: agenda semanal enviada ao sábado às 10:00 (hora de Lisboa), com os eventos em que está inscrito até ao sábado seguinte e os eventos com inscrições abertas.\n\nAs duas vêm ligadas (`true`) numa conta nova. Os interruptores ficam na página da conta do frontend (`/perfil/conta`), para onde aponta o rodapé dos dois emails.\n\nRequer conta **Active**. Erros: 401 sem sessão/token · 403 conta não ativa."
+          },
+          "response": [
+            {
+              "name": "200 Preferências",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Preferências"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Preferências de notificação obtidas com sucesso.\",\n  \"data\": {\n    \"notify_new_events\": true,\n    \"notify_weekly_agenda\": true\n  }\n}"
+            },
+            {
+              "name": "401 Sem sessão",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Sem sessão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Atualizar preferências de notificação",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/account/notification-preferences",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "account",
+                "notification-preferences"
+              ]
+            },
+            "description": "Grava as duas preferências dos emails de eventos (ver *Obter preferências de notificação*). Os dois campos são **obrigatórios** (o PUT substitui as preferências inteiras) e aceitam `true`/`false` (também `1`/`0`). Só altera a conta autenticada.\n\nRequer conta **Active**. Limite: 10 pedidos por minuto por utilizador (429).\n\nErros: 422 campo em falta ou não booleano · 401 sem sessão/token · 403 conta não ativa · 429 demasiados pedidos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notify_new_events\": false,\n  \"notify_weekly_agenda\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "200 Preferências atualizadas",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Preferências atualizadas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notify_new_events\": false,\n  \"notify_weekly_agenda\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Preferências de notificação atualizadas com sucesso.\",\n  \"data\": {\n    \"notify_new_events\": false,\n    \"notify_weekly_agenda\": true\n  }\n}"
+            },
+            {
+              "name": "422 Validação",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notify_new_events\": \"talvez\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"notify_new_events\": [\n      \"O campo anúncio de novos eventos tem de ser verdadeiro ou falso.\"\n    ],\n    \"notify_weekly_agenda\": [\n      \"O campo agenda semanal é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Sem sessão",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Sem sessão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notify_new_events\": false,\n  \"notify_weekly_agenda\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notify_new_events\": false,\n  \"notify_weekly_agenda\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/notification-preferences",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "notification-preferences"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"notify_new_events\": false,\n  \"notify_weekly_agenda\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
         }
       ]
     },

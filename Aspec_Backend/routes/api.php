@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Account\NotificationPreferenceController;
 use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
@@ -126,6 +127,9 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:portfolio-upload');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
+    Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
+    Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])
+        ->middleware('throttle:notification-preferences');
     Route::get('/subscription', [SubscriptionController::class, 'show']);
     Route::post('/subscription/billing-portal', [BillingPortalSessionController::class, 'store'])->middleware('throttle:billing-portal');
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel'])->middleware('throttle:subscription-change');

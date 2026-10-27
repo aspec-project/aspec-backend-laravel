@@ -49,8 +49,22 @@ class User extends Authenticatable
             'inactive_reason' => InactiveReason::class,
             'terms_accepted_at' => 'datetime',
             'subscription_exempt' => 'boolean',
+            'notify_new_events' => 'boolean',
+            'notify_weekly_agenda' => 'boolean',
+            'weekly_agenda_sent_at' => 'datetime',
         ];
     }
+
+    /**
+     * Valores por omissão iguais aos da base de dados: um utilizador acabado de criar já tem as
+     * preferências dos emails de eventos ligadas, sem ter de ser relido.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'notify_new_events' => true,
+        'notify_weekly_agenda' => true,
+    ];
 
     /**
      * Os dados de faturação só são gravados a partir de um Form Request validado.
@@ -68,6 +82,8 @@ class User extends Authenticatable
         'billing_postal_code',
         'billing_city',
         'terms_accepted_at',
+        'notify_new_events',
+        'notify_weekly_agenda',
     ];
 
     /**
@@ -104,6 +120,28 @@ class User extends Authenticatable
     public function memberProfile()
     {
         return $this->hasOne(MemberProfile::class);
+    }
+
+    /**
+     * Inscrições do utilizador em eventos.
+     */
+    public function eventRegistrations(): HasMany
+    {
+        return $this->hasMany(EventRegistration::class);
+    }
+
+    /**
+     * Destinatários dos emails de eventos: conta Active, com perfil de membro (Member ou Admin) e
+     * com a preferência indicada ligada. É a regra do diretório; o admin técnico (sem perfil) fica
+     * de fora e as contas anonimizadas também (soft delete).
+     *
+     * @param  string  $preference  notify_new_events ou notify_weekly_agenda.
+     */
+    public function scopeReceivesEventEmails(Builder $query, string $preference): void
+    {
+        $this->whereAccountStatus($query, 'Active')
+            ->whereHas('memberProfile')
+            ->where($preference, true);
     }
 
     /**

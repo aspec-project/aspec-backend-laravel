@@ -99,6 +99,24 @@ class RateLimitingTest extends TestCase
     }
 
     #[Test]
+    public function notification_preferences_update_is_limited_to_ten_per_minute_per_user(): void
+    {
+        Sanctum::actingAs($this->activeMember());
+        $payload = ['notify_new_events' => false, 'notify_weekly_agenda' => true];
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->putJson('/api/account/notification-preferences', $payload)->assertOk();
+        }
+        $this->putJson('/api/account/notification-preferences', $payload)->assertTooManyRequests();
+
+        $this->putJson('/api/account/password', [])->assertUnprocessable();
+
+        Sanctum::actingAs($this->activeMember());
+
+        $this->putJson('/api/account/notification-preferences', $payload)->assertOk();
+    }
+
+    #[Test]
     public function login_is_rate_limited_after_five_attempts(): void
     {
         $user = User::factory()->create();

@@ -7,6 +7,7 @@ use App\Exceptions\GeocodingUnavailable;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EventInstanceRequest;
 use App\Http\Resources\EventInstanceResource;
+use App\Jobs\AnnounceNewEventJob;
 use App\Models\EventInstance;
 use App\Models\EventSeries;
 use App\Models\Location;
@@ -180,6 +181,7 @@ class AdminEventInstanceController extends Controller
 
         if ($recurrence === null) {
             $event = EventInstance::create($validated);
+            AnnounceNewEventJob::dispatch($event->id);
             $event->load(['category', 'location']);
 
             return $this->successResponse(

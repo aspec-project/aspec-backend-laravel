@@ -229,6 +229,8 @@ return [
         'min_rating' => 'avaliação mínima',
         'per_page' => 'resultados por página',
         'terms_accepted' => 'aceitação dos termos',
+        'notify_new_events' => 'anúncio de novos eventos',
+        'notify_weekly_agenda' => 'agenda semanal',
     ],
 
 ];

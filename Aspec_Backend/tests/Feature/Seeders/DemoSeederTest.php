@@ -334,6 +334,24 @@ class DemoSeederTest extends TestCase
         $this->assertSame(17, EventInstance::count());
     }
 
+    /**
+     * A agenda semanal só sai uma vez por semana a cada conta; repetir a demonstração tem de
+     * permitir enviá-la de novo às contas demo, sem mexer nas outras contas.
+     */
+    #[Test]
+    public function running_again_clears_the_weekly_agenda_mark_of_demo_accounts_only(): void
+    {
+        $this->runDemoSeeder();
+
+        $otherUser = User::factory()->create(['weekly_agenda_sent_at' => now()]);
+        User::where('email', 'like', 'demo.%@aspec.test')->update(['weekly_agenda_sent_at' => now()]);
+
+        $this->runDemoSeeder();
+
+        $this->assertSame(0, User::where('email', 'like', 'demo.%@aspec.test')->whereNotNull('weekly_agenda_sent_at')->count());
+        $this->assertNotNull($otherUser->fresh()->weekly_agenda_sent_at);
+    }
+
     #[Test]
     public function only_active_members_are_registered_and_never_above_capacity(): void
     {
