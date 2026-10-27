@@ -906,19 +906,23 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
-    public function deleting_an_event_with_registrations_removes_them_and_notifies_each_registrant(): void
+    public function deleting_an_event_with_registrations_removes_them_and_notifies_each_active_registrant(): void
     {
         Notification::fake();
         $this->actingAsAdmin();
 
         $event = EventInstance::factory()->create();
         $registrants = User::factory()->count(2)->create();
+        $inactiveRegistrant = User::factory()->inactive()->create();
+        $pendingRegistrant = User::factory()->pending()->create();
 
-        foreach ($registrants as $user) {
-            EventRegistration::query()->create([
-                'event_instance_id' => $event->id,
-                'user_id' => $user->id,
-            ]);
+        foreach ([$registrants, collect([$inactiveRegistrant, $pendingRegistrant])] as $users) {
+            foreach ($users as $user) {
+                EventRegistration::query()->create([
+                    'event_instance_id' => $event->id,
+                    'user_id' => $user->id,
+                ]);
+            }
         }
 
         $justification = 'O evento foi cancelado pela organização.';
@@ -943,6 +947,9 @@ class AdminEventInstanceTest extends TestCase
                 }
             );
         }
+
+        Notification::assertNotSentTo($inactiveRegistrant, EventCancelledNotification::class);
+        Notification::assertNotSentTo($pendingRegistrant, EventCancelledNotification::class);
 
         $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
         $this->assertDatabaseMissing('event_registrations', [
@@ -1184,11 +1191,15 @@ class AdminEventInstanceTest extends TestCase
 
         $event = EventInstance::factory()->create();
         $registrant = User::factory()->create();
+        $inactiveRegistrant = User::factory()->inactive()->create();
+        $pendingRegistrant = User::factory()->pending()->create();
 
-        EventRegistration::query()->create([
-            'event_instance_id' => $event->id,
-            'user_id' => $registrant->id,
-        ]);
+        foreach ([$registrant, $inactiveRegistrant, $pendingRegistrant] as $user) {
+            EventRegistration::query()->create([
+                'event_instance_id' => $event->id,
+                'user_id' => $user->id,
+            ]);
+        }
 
         $payload = $this->validPayload();
         $payload['justification'] = 'Alteração do horário do evento.';
@@ -1208,6 +1219,57 @@ class AdminEventInstanceTest extends TestCase
                 return $notification->justification === 'Alteração do horário do evento.';
             }
         );
+
+        Notification::assertNotSentTo($inactiveRegistrant, EventUpdatedNotification::class);
+        Notification::assertNotSentTo($pendingRegistrant, EventUpdatedNotification::class);
+    }
+
+    #[Test]
+    public function updating_an_event_without_attendee_relevant_changes_does_not_notify_registrants(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $deadline = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['registration_deadline'],
+            $timezone
+        )
+            ->setTime(23, 59)
+            ->format('Y-m-d H:i:s');
+
+        $event = EventInstance::factory()->create([
+            'category_id' => $payload['category_id'],
+            'location_id' => $payload['location_id'],
+            'name' => $payload['name'],
+            'event_date' => $payload['event_date'],
+            'event_start_time' => $payload['event_start_time'].':00',
+            'event_end_time' => $payload['event_end_time'].':00',
+            'description' => $payload['description'],
+            'address' => $payload['address'],
+            'latitude' => number_format((float) $payload['latitude'], 7, '.', ''),
+            'longitude' => number_format((float) $payload['longitude'], 7, '.', ''),
+            'max_attendees' => $payload['max_attendees'],
+            'registration_deadline' => $deadline,
+            'organizer_notes' => $payload['organizer_notes'],
+            'is_online' => false,
+            'online_url' => null,
+        ]);
+
+        $registrant = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk();
+
+        Notification::assertNothingSent();
     }
 
     #[Test]
