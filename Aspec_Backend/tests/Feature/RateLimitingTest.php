@@ -201,6 +201,8 @@ class RateLimitingTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@empresa-teste.pt',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
@@ -210,16 +212,14 @@ class RateLimitingTest extends TestCase
             $payload = $basePayload;
             $payload['email'] = "member{$attempt}@example.com";
 
-            $this
-                ->postJson('/api/auth/register', $payload)
+            $this->postJson('/api/auth/register', $payload)
                 ->assertCreated();
         }
 
         $payload = $basePayload;
         $payload['email'] = 'member6@example.com';
 
-        $this
-            ->postJson('/api/auth/register', $payload)
+        $this->postJson('/api/auth/register', $payload)
             ->assertTooManyRequests();
     }
 

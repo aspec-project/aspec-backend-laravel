@@ -55,9 +55,9 @@ class GoogleGeocoderTest extends TestCase
         config([
             'logging.default' => 'null',
             'services.geocoding.driver' => 'google',
-            'services.google.geocoding_key' => self::KEY,
-            'services.google.cache_days' => 30,
-            'services.google.timeout' => 5,
+            'services.google_maps.geocoding_key' => self::KEY,
+            'services.google_maps.cache_days' => 30,
+            'services.google_maps.timeout' => 5,
         ]);
         Event::listen(MessageLogged::class, fn (MessageLogged $event) => $this->logged[] = $event);
     }
@@ -425,7 +425,7 @@ class GoogleGeocoderTest extends TestCase
     #[Test]
     public function the_cache_never_lasts_more_than_thirty_days_even_if_configured(): void
     {
-        config(['services.google.cache_days' => 90]);
+        config(['services.google_maps.cache_days' => 90]);
         $this->freezeTime();
         $this->fakeGoogle(self::coimbraRooftop());
 
@@ -587,7 +587,7 @@ class GoogleGeocoderTest extends TestCase
     #[DataProvider('timeouts')]
     public function requests_use_the_configured_timeouts(int $configured, int $timeout, int $connectTimeout): void
     {
-        config(['services.google.timeout' => $configured]);
+        config(['services.google_maps.timeout' => $configured]);
         Http::fake(function (Request $request, array $options) {
             $this->sentOptions[] = $options;
 

@@ -99,7 +99,8 @@ Route::prefix('admin')
         Route::delete('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'destroy'])
             ->whereUuid('eventCategory');
         Route::get('/events', [AdminEventInstanceController::class, 'index']);
-        Route::post('/events', [AdminEventInstanceController::class, 'store']);
+        Route::post('/events', [AdminEventInstanceController::class, 'store'])
+            ->middleware('throttle:admin-event-create');
         Route::get('/events/{eventInstance}', [AdminEventInstanceController::class, 'show'])
             ->whereUuid('eventInstance');
         Route::put('/events/{eventInstance}', [AdminEventInstanceController::class, 'update'])

@@ -29,7 +29,7 @@ class GeocoderFactory
     }
 
     /**
-     * Cria o fornecedor Google com os valores de `services.google`.
+     * Cria o fornecedor Google com os valores de `services.google_maps`.
      *
      * @return GoogleGeocoder Fornecedor Google com a chave, o timeout e os dias de cache configurados.
      *
@@ -37,7 +37,7 @@ class GeocoderFactory
      */
     private function makeGoogleGeocoder(): GoogleGeocoder
     {
-        $config = config('services.google');
+        $config = config('services.google_maps');
 
         if (blank($config['geocoding_key'] ?? null)) {
             throw new InvalidArgumentException('Falta a chave da API de geocodificação da Google.');

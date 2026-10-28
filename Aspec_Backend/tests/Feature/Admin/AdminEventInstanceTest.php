@@ -288,6 +288,34 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function event_creation_is_limited_to_20_per_hour_per_admin(): void
+    {
+        Notification::fake();
+
+        $admin = $this->actingAsAdmin();
+        $payload = $this->validPayload();
+
+        for ($i = 1; $i <= 20; $i++) {
+            $this->postJson(self::URL, $payload)->assertCreated();
+        }
+
+        $this->postJson(self::URL, $payload)
+            ->assertTooManyRequests()
+            ->assertJsonPath(
+                'message',
+                'Demasiados pedidos. Tente novamente mais tarde.'
+            );
+
+        $this->actingAsAdmin();
+        $this->postJson(self::URL, $payload)->assertCreated();
+
+        $this->travel(61)->minutes();
+        Sanctum::actingAs($admin);
+
+        $this->postJson(self::URL, $payload)->assertCreated();
+    }
+
+    #[Test]
     public function admin_can_create_a_recurring_event_series_with_deadlines_for_each_session(): void
     {
         $this->actingAsAdmin();

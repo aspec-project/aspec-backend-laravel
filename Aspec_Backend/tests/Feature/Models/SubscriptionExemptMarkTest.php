@@ -75,13 +75,18 @@ class SubscriptionExemptMarkTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@empresa-isenta.pt',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
             'subscription_exempt' => true,
         ])->assertCreated();
 
-        $this->assertDatabaseHas('users', ['email' => 'quer.isencao@example.com', 'subscription_exempt' => false]);
+        $this->assertDatabaseHas('users', [
+            'email' => 'quer.isencao@example.com',
+            'subscription_exempt' => false,
+        ]);
     }
 
     #[Test]

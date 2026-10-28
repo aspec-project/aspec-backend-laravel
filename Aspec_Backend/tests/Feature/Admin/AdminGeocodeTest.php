@@ -406,9 +406,9 @@ class AdminGeocodeTest extends TestCase
     {
         config([
             'services.geocoding.driver' => 'google',
-            'services.google.geocoding_key' => self::GOOGLE_KEY,
-            'services.google.cache_days' => 30,
-            'services.google.timeout' => 5,
+            'services.google_maps.geocoding_key' => self::GOOGLE_KEY,
+            'services.google_maps.cache_days' => 30,
+            'services.google_maps.timeout' => 5,
         ]);
     }
 

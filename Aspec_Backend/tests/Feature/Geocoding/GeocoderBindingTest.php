@@ -32,14 +32,14 @@ class GeocoderBindingTest extends TestCase
     public function tests_use_nominatim_without_a_google_key_by_default(): void
     {
         $this->assertSame('nominatim', config('services.geocoding.driver'));
-        $this->assertEmpty(config('services.google.geocoding_key'));
+        $this->assertEmpty(config('services.google_maps.geocoding_key'));
         $this->assertInstanceOf(NominatimGeocoder::class, app(Geocoder::class));
     }
 
     #[Test]
     public function google_driver_with_a_key_resolves_the_google_geocoder(): void
     {
-        config(['services.geocoding.driver' => 'google', 'services.google.geocoding_key' => self::KEY]);
+        config(['services.geocoding.driver' => 'google', 'services.google_maps.geocoding_key' => self::KEY]);
 
         $this->assertInstanceOf(GoogleGeocoder::class, app(Geocoder::class));
     }
@@ -57,7 +57,7 @@ class GeocoderBindingTest extends TestCase
     #[DataProvider('missingKeys')]
     public function google_driver_without_a_key_fails_instead_of_falling_back_to_nominatim(?string $key): void
     {
-        config(['services.geocoding.driver' => 'google', 'services.google.geocoding_key' => $key]);
+        config(['services.geocoding.driver' => 'google', 'services.google_maps.geocoding_key' => $key]);
 
         $this->assertSame(
             'Falta a chave da API de geocodificação da Google.',
@@ -82,7 +82,7 @@ class GeocoderBindingTest extends TestCase
         config(['services.geocoding.driver' => 'nominatim']);
         $first = app(Geocoder::class);
 
-        config(['services.geocoding.driver' => 'google', 'services.google.geocoding_key' => self::KEY]);
+        config(['services.geocoding.driver' => 'google', 'services.google_maps.geocoding_key' => self::KEY]);
         $second = app(Geocoder::class);
 
         $this->assertInstanceOf(NominatimGeocoder::class, $first);

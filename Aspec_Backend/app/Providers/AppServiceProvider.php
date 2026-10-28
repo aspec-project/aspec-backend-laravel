@@ -196,6 +196,13 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perHour(5)->by($request->user()?->id ?: $request->ip())
         );
 
+        // Criação de eventos pelo admin: 20/hora por admin.
+        RateLimiter::for(
+            'admin-event-create',
+            fn (Request $request) => Limit::perHour(20)
+                ->by($request->user()?->id ?: $request->ip())
+        );
+
         // Emails de pagamento pelo backoffice: 30/hora por admin (sessão roubada ou script) e 3/hora por membro alvo
         // (duplo clique ou dois admins ao mesmo tempo). O throttle corre antes do route model binding, por isso o alvo
         // pode ainda ser a string do UUID (em minúsculas, porque o MySQL encontra o mesmo id em qualquer caixa).

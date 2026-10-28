@@ -67,8 +67,10 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'description' => 'Descrição do perfil de teste.',
-            'website_url' => 'https://example.com',
+            'website_url' => 'www.example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000 100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@empresa-teste.pt',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
@@ -85,14 +87,8 @@ class AuthControllerTest extends TestCase
             ->assertJsonPath('data.phone', '+351912345678')
             ->assertJsonPath('data.role.name', 'Member')
             ->assertJsonPath('data.account_status.name', 'Pending')
-            ->assertJsonPath(
-                'data.member_profile.business_name',
-                'Empresa de Teste'
-            )
-            ->assertJsonPath(
-                'data.member_profile.congregation',
-                'Congregação de Teste'
-            )
+            ->assertJsonPath('data.member_profile.business_name', 'Empresa de Teste')
+            ->assertJsonPath('data.member_profile.congregation', 'Congregação de Teste')
             ->assertJsonPath(
                 'data.member_profile.commercial_email',
                 'geral@empresa-teste.pt'
@@ -101,6 +97,12 @@ class AuthControllerTest extends TestCase
                 'data.member_profile.commercial_phone',
                 '+351213456789'
             )
+            ->assertJsonPath(
+                'data.member_profile.website_url',
+                'https://www.example.com'
+            )
+            ->assertJsonPath('data.member_profile.postal_code', '1000-100')
+            ->assertJsonPath('data.member_profile.city', 'Lisboa')
             ->assertJsonMissingPath('data.password')
             ->assertJsonMissingPath('data.remember_token')
             ->assertJsonMissingPath('data.user')
@@ -126,6 +128,9 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'commercial_email' => 'geral@empresa-teste.pt',
             'commercial_phone' => '+351213456789',
+            'website_url' => 'https://www.example.com',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
         ]);
     }
 
@@ -148,11 +153,85 @@ class AuthControllerTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['commercial_email']);
+    }
+
+    #[Test]
+    public function registration_requires_postal_code_and_city(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $payload = [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ];
+
+        $withoutPostalCode = $payload;
+        unset($withoutPostalCode['postal_code']);
+        $withoutPostalCode['email'] = 'sem-codigo-postal@example.com';
+
+        $this->postJson('/api/auth/register', $withoutPostalCode)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['postal_code']);
+
+        $withoutCity = $payload;
+        unset($withoutCity['city']);
+        $withoutCity['email'] = 'sem-cidade@example.com';
+
+        $this->postJson('/api/auth/register', $withoutCity)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['city']);
+    }
+
+    #[Test]
+    public function registration_rejects_website_with_credentials(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'website-credentials@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://trusted.example@attacker.example',
+            'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
     }
 
     #[Test]
@@ -174,6 +253,8 @@ class AuthControllerTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@example.com',
             'terms_accepted' => true,
         ])
@@ -200,6 +281,8 @@ class AuthControllerTest extends TestCase
             'description' => 'Descrição do perfil de teste.',
             'website_url' => 'https://example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'email-invalido',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
@@ -849,6 +932,8 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => 'telefone-invalido',
             'terms_accepted' => true,
@@ -875,6 +960,8 @@ class AuthControllerTest extends TestCase
             'role_in_congregation' => 'Membro',
             'website_url' => 'javascript:alert(1)',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'terms_accepted' => true,
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => '213 456 789',
@@ -901,6 +988,8 @@ class AuthControllerTest extends TestCase
             'role_in_congregation' => 'Membro',
             'website_url' => 'ftp://example.com',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'terms_accepted' => true,
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => '213 456 789',
@@ -926,6 +1015,8 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'terms_accepted' => true,
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => '213 456 789',
@@ -960,6 +1051,8 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => '213 456 789',
         ])
@@ -988,6 +1081,8 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@example.com',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => false,
@@ -1016,6 +1111,8 @@ class AuthControllerTest extends TestCase
             'congregation' => 'Congregação de Teste',
             'role_in_congregation' => 'Membro',
             'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
             'commercial_email' => 'geral@empresa-teste.pt',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
