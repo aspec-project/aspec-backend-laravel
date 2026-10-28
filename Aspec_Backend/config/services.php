@@ -75,6 +75,7 @@ return [
     'google_maps' => [
         'geocoding_key' => env('GOOGLE_MAPS_GEOCODING_KEY'),
         'timeout' => (int) env('GOOGLE_MAPS_TIMEOUT', 5),
+        'cache_days' => (int) env('GOOGLE_MAPS_CACHE_DAYS', 30),
     ],
 
 ];
