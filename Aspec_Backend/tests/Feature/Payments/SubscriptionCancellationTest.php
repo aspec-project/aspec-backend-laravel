@@ -359,6 +359,20 @@ class SubscriptionCancellationTest extends TestCase
     }
 
     #[Test]
+    public function cancel_or_resume_over_the_daily_limit_is_throttled(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member);
+        $this->stripe();
+        $this->fillRateLimit('subscription-change', 'day:'.$member->id, 10, 86400);
+
+        Sanctum::actingAs($member);
+
+        $this->postJson(self::CANCEL_URL)->assertTooManyRequests();
+        $this->postJson(self::RESUME_URL)->assertTooManyRequests();
+    }
+
+    #[Test]
     public function member_keeps_access_after_scheduling_the_cancellation(): void
     {
         $member = $this->member();

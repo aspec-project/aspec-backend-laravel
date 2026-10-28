@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
@@ -23,7 +26,7 @@ class RateLimitConfigurationTest extends TestCase
     private const IP = '203.0.113.7';
 
     /**
-     * As 9 ações do membro: cada uma conta à parte, com 120/min e 2000/hora.
+     * As 8 ações do membro com 120/min e 2000/hora, cada uma a contar à parte (cancelar/retomar tem o seu).
      *
      * @return array<string, array{string}>
      */
@@ -36,7 +39,6 @@ class RateLimitConfigurationTest extends TestCase
             'portfolio-delete' => ['portfolio-delete'],
             'password-update' => ['password-update'],
             'billing-portal' => ['billing-portal'],
-            'subscription-change' => ['subscription-change'],
             'invoice-download' => ['invoice-download'],
             'notification-preferences' => ['notification-preferences'],
         ];
@@ -102,6 +104,28 @@ class RateLimitConfigurationTest extends TestCase
         return null;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function middlewareOf(Route $route): array
+    {
+        return array_values(array_filter(
+            $this->app['router']->gatherRouteMiddleware($route),
+            'is_string'
+        ));
+    }
+
+    private function hasThrottle(array $middleware): bool
+    {
+        foreach ($middleware as $name) {
+            if (str_starts_with($name, ThrottleRequests::class)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // C1 — ações do membro
 
     #[Test]
@@ -132,6 +156,52 @@ class RateLimitConfigurationTest extends TestCase
 
         $this->assertSame('minute:'.self::IP, $this->limitWithDecay($limits, 60)?->key);
         $this->assertSame('hour:'.self::IP, $this->limitWithDecay($limits, 3600)?->key);
+    }
+
+    /**
+     * Cancelar e retomar envia um email por pedido: o limite diário trava quem alterna as duas ações
+     * para esgotar a quota de email da plataforma.
+     */
+    #[Test]
+    public function subscription_change_has_a_minute_and_a_daily_limit_per_user(): void
+    {
+        $user = $this->newUser();
+        $limits = $this->limitsFor('subscription-change', $this->requestFrom($user));
+
+        $this->assertCount(2, $limits);
+
+        $minute = $this->limitWithDecay($limits, 60);
+        $day = $this->limitWithDecay($limits, 86400);
+        $this->assertNotNull($minute, 'Falta o limite por minuto.');
+        $this->assertNotNull($day, 'Falta o limite diário.');
+
+        $this->assertSame(120, $minute->maxAttempts);
+        $this->assertSame(10, $day->maxAttempts);
+        $this->assertSame('minute:'.$user->id, $minute->key);
+        $this->assertSame('day:'.$user->id, $day->key);
+    }
+
+    // C1 — limite geral da API
+
+    #[Test]
+    public function general_api_limit_is_three_hundred_per_minute_per_user_without_an_hourly_cap(): void
+    {
+        $user = $this->newUser();
+        $limits = $this->limitsFor('api', $this->requestFrom($user));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(300, $limits[0]->maxAttempts);
+        $this->assertSame(60, $limits[0]->decaySeconds);
+        $this->assertSame('minute:'.$user->id, $limits[0]->key);
+    }
+
+    #[Test]
+    public function general_api_limit_without_a_user_is_keyed_by_ip(): void
+    {
+        $limits = $this->limitsFor('api', $this->requestFrom());
+
+        $this->assertCount(1, $limits);
+        $this->assertSame('minute:'.self::IP, $limits[0]->key);
     }
 
     // C2 — diretório e agenda
@@ -194,5 +264,24 @@ class RateLimitConfigurationTest extends TestCase
         $this->assertCount(1, $limits);
         $this->assertSame(5, $limits[0]->maxAttempts);
         $this->assertSame(3600, $limits[0]->decaySeconds);
+    }
+
+    // C5 — onde se aplica o limite geral
+
+    #[Test]
+    public function stripe_webhook_has_no_throttle(): void
+    {
+        $route = RouteFacade::getRoutes()->getByName('stripe.webhook');
+        $this->assertNotNull($route);
+
+        $this->assertFalse($this->hasThrottle($this->middlewareOf($route)));
+    }
+
+    #[Test]
+    public function routes_without_their_own_limiter_get_the_general_api_limit(): void
+    {
+        $route = RouteFacade::getRoutes()->match(Request::create('/api/sectors', 'GET'));
+
+        $this->assertContains(ThrottleRequests::class.':api', $this->middlewareOf($route));
     }
 }

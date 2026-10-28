@@ -18,6 +18,11 @@ use Laravel\Cashier\Cashier;
 class AppServiceProvider extends ServiceProvider
 {
     /**
+     * Limite geral da API por minuto, acima dos específicos para que estes continuem a ser o limite efetivo.
+     */
+    private const API_PER_MINUTE = 300;
+
+    /**
      * Ações do membro, diretório e eventos públicos: 120 por minuto (trava scripts, não o uso humano).
      */
     private const PER_MINUTE = 120;
@@ -26,6 +31,12 @@ class AppServiceProvider extends ServiceProvider
      * Ações do membro: 2000 por hora (valor sugerido pelos professores).
      */
     private const PER_HOUR = 2000;
+
+    /**
+     * Cancelar e retomar a subscrição: 10 por dia. Ação rara que chama o Stripe e envia um email; com
+     * 2000/hora, alternar as duas esgotava a quota diária do serviço de email de toda a plataforma.
+     */
+    private const SUBSCRIPTION_CHANGES_PER_DAY = 10;
 
     private const REGISTER_PER_MINUTE = 20;
 
@@ -103,14 +114,19 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Um limitador por ação nas rotas de risco; cada ação do membro com 120/min e 2000/hora.
+     * Limites de pedidos: um geral para toda a API e um por ação nas rotas de risco.
      *
-     * Com throttle:10,1 sem nome, o Laravel usava só o utilizador como chave e todas as rotas
-     * partilhavam o mesmo contador: guardar a montra (PUT + logótipo + até 10 imagens) dava 429
-     * a meio. Com limitadores com nome, a chave inclui o nome e cada ação conta à parte.
+     * O limite geral (`api`, 300/min por utilizador ou IP) cobre as rotas sem limitador próprio,
+     * incluindo as futuras. Cada ação do membro tem o seu (120/min e 2000/hora): com throttle:10,1
+     * sem nome, o Laravel usava só o utilizador como chave e todas as rotas partilhavam o mesmo
+     * contador (guardar a montra dava 429 a meio); com limitadores com nome, cada ação conta à parte.
+     * Num pedido com os dois, ganha o primeiro que se esgotar.
      */
     private function configureRateLimiting(): void
     {
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(self::API_PER_MINUTE)
+            ->by('minute:'.$this->requesterKey($request)));
+
         $actions = [
             'profile-update',
             'logo-upload',
@@ -118,7 +134,6 @@ class AppServiceProvider extends ServiceProvider
             'portfolio-delete',
             'password-update',
             'billing-portal',
-            'subscription-change',
             'invoice-download',
             'notification-preferences',
         ];
@@ -129,6 +144,11 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perHour(self::PER_HOUR)->by('hour:'.$this->requesterKey($request)),
             ]);
         }
+
+        RateLimiter::for('subscription-change', fn (Request $request) => [
+            Limit::perMinute(self::PER_MINUTE)->by('minute:'.$this->requesterKey($request)),
+            Limit::perDay(self::SUBSCRIPTION_CHANGES_PER_DAY)->by('day:'.$this->requesterKey($request)),
+        ]);
 
         $authActions = [
             'auth-login',

@@ -26,6 +26,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
 
+        // Limite geral (limitador api) em todas as rotas api/*; o webhook do Stripe sai em routes/api.php.
+        $middleware->throttleApi();
+
         $middleware->alias([
             'account.active' => CheckAccountActive::class,
             'admin' => EnsureAdmin::class,

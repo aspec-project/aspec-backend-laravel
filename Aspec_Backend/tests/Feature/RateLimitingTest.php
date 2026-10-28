@@ -183,6 +183,52 @@ class RateLimitingTest extends TestCase
         $this->putJson('/api/member-profile', ['business_name' => 'Nova Empresa'])->assertOk();
     }
 
+    // B3 — limite geral por utilizador numa rota sem limitador próprio
+
+    #[Test]
+    public function general_api_limit_applies_per_user_to_routes_without_their_own_limiter(): void
+    {
+        $member = $this->activeMember();
+        $other = $this->activeMember();
+        $this->fillRateLimit('api', 'minute:'.$member->id, 300);
+
+        Sanctum::actingAs($member);
+        $this->getJson('/api/member-profile')
+            ->assertTooManyRequests()
+            ->assertExactJson(['success' => false, 'message' => self::MSG_429]);
+
+        Sanctum::actingAs($other);
+        $this->getJson('/api/member-profile')->assertOk();
+    }
+
+    // B4 — limite geral por IP para visitantes
+
+    #[Test]
+    public function general_api_limit_applies_per_ip_to_visitors(): void
+    {
+        $this->fillRateLimit('api', 'minute:'.self::DEFAULT_IP, 300);
+
+        $this->getJson('/api/sectors')->assertTooManyRequests();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.0.2'])
+            ->getJson('/api/sectors')
+            ->assertOk();
+    }
+
+    // B5 — webhook do Stripe fora do limite geral
+
+    #[Test]
+    public function stripe_webhook_is_not_subject_to_the_general_api_limit(): void
+    {
+        $this->fillRateLimit('api', 'minute:'.self::DEFAULT_IP, 300);
+
+        // Sem assinatura: o Stripe nunca envia assim, mas basta para ver que o pedido chega ao controller.
+        $this->call('POST', '/api/stripe/webhook', [], [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+        ], '{}')->assertForbidden();
+    }
+
     #[Test]
     public function registration_is_rate_limited_after_twenty_attempts(): void
     {
