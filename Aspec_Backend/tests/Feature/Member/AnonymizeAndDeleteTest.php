@@ -688,7 +688,7 @@ class AnonymizeAndDeleteTest extends TestCase
     public function future_event_registrations_are_deleted_but_past_ones_are_kept(): void
     {
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $now = now($timezone)->startOfSecond();
+        $now = now($timezone)->startOfDay()->addHours(12);
 
         $this->travelTo($now);
 

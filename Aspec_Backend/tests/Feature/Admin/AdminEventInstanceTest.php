@@ -503,6 +503,90 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_update_one_session_in_a_recurring_series_without_changing_the_others(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $firstDate = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        );
+
+        $sessionDates = [
+            $firstDate->toDateString(),
+            $firstDate->copy()->addWeek()->toDateString(),
+            $firstDate->copy()->addWeeks(2)->toDateString(),
+        ];
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ];
+
+        $createResponse = $this->postJson(self::URL, $payload)
+            ->assertCreated();
+
+        $seriesId = $createResponse->json('data.series.id');
+
+        $sessions = EventInstance::query()
+            ->where('series_id', $seriesId)
+            ->orderBy('event_date')
+            ->get();
+
+        $this->assertCount(3, $sessions);
+
+        $firstSession = $sessions[0];
+        $sessionToUpdate = $sessions[1];
+        $thirdSession = $sessions[2];
+
+        $firstSessionBefore = $firstSession->getAttributes();
+        $thirdSessionBefore = $thirdSession->getAttributes();
+
+        $updatePayload = $this->validPayload();
+        $updatePayload['name'] = 'Sessão individual atualizada';
+        $updatePayload['event_date'] = $sessionToUpdate->event_date->toDateString();
+        $updatePayload['registration_deadline'] = substr(
+            (string) $sessionToUpdate->getRawOriginal('registration_deadline'),
+            0,
+            10
+        );
+
+        $this->putJson(self::URL."/{$sessionToUpdate->id}", $updatePayload)
+            ->assertOk()
+            ->assertJsonPath('data.id', $sessionToUpdate->id)
+            ->assertJsonPath('data.name', 'Sessão individual atualizada');
+
+        $this->assertSame(
+            $firstSessionBefore,
+            $firstSession->fresh()->getAttributes()
+        );
+        $this->assertSame(
+            $thirdSessionBefore,
+            $thirdSession->fresh()->getAttributes()
+        );
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $sessionToUpdate->id,
+            'series_id' => $seriesId,
+            'name' => 'Sessão individual atualizada',
+            'event_date' => $sessionToUpdate->event_date->toDateString(),
+        ]);
+
+        $this->assertDatabaseHas('event_series', [
+            'id' => $seriesId,
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ]);
+    }
+
+    #[Test]
     public function admin_cannot_update_an_event_that_has_already_passed(): void
     {
         $this->actingAsAdmin();
