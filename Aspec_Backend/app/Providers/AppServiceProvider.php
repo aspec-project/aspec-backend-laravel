@@ -5,7 +5,7 @@ namespace App\Providers;
 use App\Contracts\Geocoder;
 use App\Contracts\InvoiceService;
 use App\Models\User;
-use App\Services\Geocoding\NominatimGeocoder;
+use App\Services\Geocoding\GeocoderFactory;
 use App\Services\Invoicing\InvoiceServiceFactory;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -55,14 +55,18 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Liga o contrato Geocoder à implementação com o Nominatim.
+     * Liga o contrato Geocoder ao fornecedor de `services.geocoding.driver` (nominatim ou google).
      *
-     * `bind` e não `singleton`: a implementação lê a config em cada chamada, por isso mudar
-     * a config (ex. nos testes) tem efeito imediato.
+     * `bind` e não `singleton`: a config é lida sempre que o contrato é resolvido, por isso
+     * mudar a config (ex. nos testes) muda o fornecedor. Fornecedor desconhecido ou Google sem
+     * chave falham ao resolver, com mensagens sem os valores configurados (ver GeocoderFactory).
+     *
+     * @throws InvalidArgumentException
      */
     private function registerGeocoder(): void
     {
-        $this->app->bind(Geocoder::class, NominatimGeocoder::class);
+        $this->app->bind(Geocoder::class, fn ($app) => $app->make(GeocoderFactory::class)
+            ->make((string) config('services.geocoding.driver')));
     }
 
     /**
@@ -174,7 +178,7 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perMinute(60)->by($request->ip())
         );
 
-        // Localizar moradas no backoffice: 30/min por admin, para um só separador não esgotar o limite global de 1/s do Nominatim.
+        // Localizar moradas no backoffice: 30/min por admin, para um separador ou script não repetir pedidos ao fornecedor de geocodificação.
         RateLimiter::for(
             'geocode',
             fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())

@@ -42,6 +42,9 @@
         <env name="CASHIER_CURRENCY" value="eur"/>
         <!-- Nominatim numa porta local fechada: um teste sem Http::fake falha logo em vez de sair para a Internet. -->
         <env name="NOMINATIM_BASE_URL" value="http://127.0.0.1:9"/>
+        <!-- Geocodificação sempre com o Nominatim e sem chave da Google nos testes: um .env local com a chave real nunca chega aos testes. -->
+        <env name="GEOCODING_DRIVER" value="nominatim"/>
+        <env name="GOOGLE_MAPS_GEOCODING_KEY" value=""/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

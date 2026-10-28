@@ -65,4 +65,14 @@ return [
         'cache_days' => (int) env('NOMINATIM_CACHE_DAYS', 30),
     ],
 
+    'geocoding' => [
+        'driver' => env('GEOCODING_DRIVER', 'nominatim'),
+    ],
+
+    'google' => [
+        'geocoding_key' => env('GOOGLE_MAPS_GEOCODING_KEY'),
+        'timeout' => (int) env('GOOGLE_GEOCODING_TIMEOUT', 5),
+        'cache_days' => (int) env('GOOGLE_GEOCODING_CACHE_DAYS', 30),
+    ],
+
 ];

@@ -5,8 +5,11 @@ namespace Tests\Feature\Admin;
 use App\Models\Location;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
@@ -14,6 +17,7 @@ use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * Endpoint do backoffice para localizar moradas no mapa.
@@ -32,6 +36,8 @@ class AdminGeocodeTest extends TestCase
     private const NOT_FOUND_MESSAGE = 'Não foi possível encontrar esta morada no mapa. Verifique a morada e tente novamente.';
 
     private const UNAVAILABLE_MESSAGE = 'O serviço de localização não está disponível de momento. Tente novamente dentro de instantes.';
+
+    private const GOOGLE_KEY = 'test-google-key-7f3a9c';
 
     protected function setUp(): void
     {
@@ -394,5 +400,66 @@ class AdminGeocodeTest extends TestCase
         $this->geocode(['address' => 'Rua Augusta 100, 1100-053 Lisboa', 'location_id' => $this->locationId('Lisboa')])
             ->assertServiceUnavailable()
             ->assertExactJson(['success' => false, 'message' => self::UNAVAILABLE_MESSAGE]);
+    }
+
+    private function useGoogle(): void
+    {
+        config([
+            'services.geocoding.driver' => 'google',
+            'services.google.geocoding_key' => self::GOOGLE_KEY,
+            'services.google.cache_days' => 30,
+            'services.google.timeout' => 5,
+        ]);
+    }
+
+    #[Test]
+    public function google_driver_locates_the_address_through_the_endpoint(): void
+    {
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        Http::fake(['maps.googleapis.com/maps/api/geocode/json*' => Http::response(['status' => 'OK', 'results' => [[
+            'place_id' => 'ChIJTesteCoimbraRuaBrasil25_Aspec',
+            'formatted_address' => 'R. do Brasil 25, 3030-175 Coimbra, Portugal',
+            'types' => ['street_address'],
+            'geometry' => ['location' => ['lat' => 40.2085123, 'lng' => -8.4198765], 'location_type' => 'ROOFTOP'],
+        ]]], 200)]);
+
+        $response = $this->geocode(['address' => 'Rua do Brasil nº 25, 3º Esq', 'location_id' => $this->locationId('Coimbra')])
+            ->assertOk()
+            ->assertJsonPath('message', 'Morada localizada com sucesso.');
+
+        Http::assertSentCount(1);
+        Http::assertSent(fn (Request $request) => str_starts_with($request->url(), 'https://maps.googleapis.com/'));
+        $this->assertStringNotContainsString(self::GOOGLE_KEY, $response->getContent());
+    }
+
+    #[Test]
+    public function google_connection_failure_returns_503_without_exposing_the_key_even_in_debug(): void
+    {
+        config(['app.debug' => true, 'logging.default' => 'null']);
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        $logged = [];
+        Event::listen(MessageLogged::class, function (MessageLogged $event) use (&$logged) {
+            $logged[] = $event->message.' '.json_encode(array_map(
+                fn ($value) => $value instanceof Throwable ? (string) $value : $value,
+                $event->context
+            ), JSON_UNESCAPED_SLASHES);
+        });
+        $requestedUrls = [];
+        Http::fake(function (Request $request) use (&$requestedUrls) {
+            $requestedUrls[] = $request->url();
+
+            throw new ConnectionException('cURL error 28: Operation timed out for https://maps.googleapis.com/maps/api/geocode/json?key='.self::GOOGLE_KEY);
+        });
+
+        $response = $this->geocode(['address' => 'Rua do Brasil 25', 'location_id' => $this->locationId('Coimbra')])
+            ->assertServiceUnavailable()
+            ->assertExactJson(['success' => false, 'message' => self::UNAVAILABLE_MESSAGE]);
+
+        $this->assertCount(1, $requestedUrls);
+        $this->assertStringStartsWith('https://maps.googleapis.com/', $requestedUrls[0]);
+        $this->assertStringNotContainsString(self::GOOGLE_KEY, $response->getContent());
+        $this->assertStringNotContainsString(self::GOOGLE_KEY, implode("\n", $logged));
     }
 }
