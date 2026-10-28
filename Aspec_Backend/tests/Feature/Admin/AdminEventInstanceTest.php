@@ -322,7 +322,14 @@ class AdminEventInstanceTest extends TestCase
 
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
         $payload = $this->validPayload();
-        unset($payload['registration_deadline']);
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+
+        $payload['place_id'] = $placeId;
+        unset($payload['registration_deadline'], $payload['latitude'], $payload['longitude']);
+
+        $this->mock(Geocoder::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('geocode');
+        });
 
         $firstDate = Carbon::createFromFormat(
             '!Y-m-d',
@@ -369,12 +376,16 @@ class AdminEventInstanceTest extends TestCase
                 'series_id' => $seriesId,
                 'event_date' => $sessionDate,
                 'registration_deadline' => $deadline->format('Y-m-d H:i:s'),
+                'place_id' => $placeId,
+                'latitude' => null,
+                'longitude' => null,
             ]);
 
             $response->assertJsonPath(
                 "data.sessions.{$index}.event_date",
                 $sessionDate
             );
+
             $response->assertJsonPath(
                 "data.sessions.{$index}.registration_deadline",
                 $deadline->toIso8601String()
@@ -383,6 +394,11 @@ class AdminEventInstanceTest extends TestCase
             $response->assertJsonPath(
                 "data.sessions.{$index}.series_id",
                 $seriesId
+            );
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.place_id",
+                $placeId
             );
         }
     }
@@ -675,6 +691,152 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_clear_place_id_when_updating_a_google_event_to_online(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create([
+            'address' => 'Rua de teste, 10',
+            'place_id' => 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.place_id', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'is_online' => true,
+            'place_id' => null,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_create_and_update_events_with_place_id_without_coordinates(): void
+    {
+        $this->actingAsAdmin();
+
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+        $payload = $this->validPayload();
+        $payload['place_id'] = $placeId;
+
+        unset($payload['latitude'], $payload['longitude']);
+
+        $this->mock(Geocoder::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('geocode');
+        });
+
+        $created = $this->postJson(self::URL, $payload);
+
+        $created
+            ->assertCreated()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $created->json('data.id'),
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $event = EventInstance::factory()->create([
+            'latitude' => 38.7223,
+            'longitude' => -9.1393,
+            'place_id' => null,
+        ]);
+
+        $updatePayload = $payload;
+        $updatePayload['name'] = 'Workshop atualizado com Google Maps';
+
+        $updated = $this->putJson(self::URL."/{$event->id}", $updatePayload);
+
+        $updated
+            ->assertOk()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
+    public function geocoding_persists_google_place_id_on_create_and_update(): void
+    {
+        $this->actingAsAdmin();
+
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+        $payload = $this->validPayload();
+
+        unset($payload['latitude'], $payload['longitude']);
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+
+        $result = new GeocodingResult(
+            null,
+            null,
+            'Rua Augusta, Lisboa',
+            false,
+            $placeId
+        );
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query, $result): void {
+            $mock->shouldReceive('geocode')
+                ->twice()
+                ->with($query)
+                ->andReturn($result);
+        });
+
+        $created = $this->postJson(self::URL, $payload);
+
+        $created
+            ->assertCreated()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $created->json('data.id'),
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $event = EventInstance::factory()->create();
+        $updated = $this->putJson(self::URL."/{$event->id}", $payload);
+
+        $updated
+            ->assertOk()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
     public function online_event_rejects_physical_address_and_coordinates(): void
     {
         $this->actingAsAdmin();
@@ -684,6 +846,7 @@ class AdminEventInstanceTest extends TestCase
         $payload = $this->validPayload();
         $payload['is_online'] = true;
         $payload['online_url'] = 'https://meet.example.com/event';
+        $payload['place_id'] = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
 
         foreach ([
             ['method' => 'post', 'url' => self::URL],
@@ -692,7 +855,7 @@ class AdminEventInstanceTest extends TestCase
             $this->{$request['method'].'Json'}($request['url'], $payload)
                 ->assertUnprocessable()
                 ->assertJsonStructure([
-                    'errors' => ['address', 'latitude', 'longitude'],
+                    'errors' => ['address', 'latitude', 'longitude', 'place_id'],
                 ]);
         }
     }

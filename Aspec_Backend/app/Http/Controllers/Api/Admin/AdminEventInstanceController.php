@@ -42,6 +42,7 @@ class AdminEventInstanceController extends Controller
         'is_online',
         'online_url',
         'registration_deadline',
+        'place_id',
     ];
 
     public function index(Request $request): JsonResponse
@@ -190,7 +191,16 @@ class AdminEventInstanceController extends Controller
             return null;
         }
 
+        if (($validated['place_id'] ?? null) !== null) {
+            $validated['latitude'] = null;
+            $validated['longitude'] = null;
+
+            return null;
+        }
+
         if (isset($validated['latitude'], $validated['longitude'])) {
+            $validated['place_id'] = null;
+
             return null;
         }
 
@@ -218,6 +228,7 @@ class AdminEventInstanceController extends Controller
 
         $validated['latitude'] = $result->latitude;
         $validated['longitude'] = $result->longitude;
+        $validated['place_id'] = $result->placeId;
 
         return null;
     }
@@ -385,6 +396,7 @@ class AdminEventInstanceController extends Controller
                 $validated['address'] = null;
                 $validated['latitude'] = null;
                 $validated['longitude'] = null;
+                $validated['place_id'] = null;
             } else {
                 $validated['online_url'] = null;
             }

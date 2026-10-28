@@ -78,6 +78,7 @@ class EventInstanceResource extends JsonResource
             'description' => $this->description,
             'address' => $this->address,
             'venue_name' => $this->venue_name,
+            'place_id' => $this->place_id,
             'latitude' => $this->latitude === null ? null : (float) $this->latitude,
             'longitude' => $this->longitude === null ? null : (float) $this->longitude,
             'max_attendees' => $this->max_attendees,
