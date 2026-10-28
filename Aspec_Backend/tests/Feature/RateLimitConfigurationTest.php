@@ -1,0 +1,198 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
+
+/**
+ * Números e chaves de cada limitador com nome, lidos diretamente da configuração.
+ *
+ * Testar 2000 pedidos por hora com pedidos reais seria lento; aqui resolve-se o limitador para um
+ * pedido construído à mão e verificam-se os Limit devolvidos. O comportamento HTTP (429, Retry-After,
+ * contadores por utilizador ou IP) fica no RateLimitingTest.
+ */
+class RateLimitConfigurationTest extends TestCase
+{
+    private const IP = '203.0.113.7';
+
+    /**
+     * As 9 ações do membro: cada uma conta à parte, com 120/min e 2000/hora.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function memberActions(): array
+    {
+        return [
+            'profile-update' => ['profile-update'],
+            'logo-upload' => ['logo-upload'],
+            'portfolio-upload' => ['portfolio-upload'],
+            'portfolio-delete' => ['portfolio-delete'],
+            'password-update' => ['password-update'],
+            'billing-portal' => ['billing-portal'],
+            'subscription-change' => ['subscription-change'],
+            'invoice-download' => ['invoice-download'],
+            'notification-preferences' => ['notification-preferences'],
+        ];
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function publicReadLimiters(): array
+    {
+        return [
+            'member-directory' => ['member-directory'],
+            'public-events' => ['public-events'],
+        ];
+    }
+
+    private function newUser(): User
+    {
+        return (new User)->forceFill(['id' => (string) Str::uuid()]);
+    }
+
+    /**
+     * Pedido com o IP de teste e, se houver, o utilizador autenticado no guard sanctum (sessão da SPA
+     * ou Bearer). O guard por omissão (web) fica sem utilizador, como numa rota pública com Bearer.
+     */
+    private function requestFrom(?User $user = null, array $input = []): Request
+    {
+        $request = Request::create('/api/rate-limit-probe', 'POST', $input, [], [], ['REMOTE_ADDR' => self::IP]);
+
+        if ($user) {
+            $this->app['auth']->guard('sanctum')->setUser($user);
+        }
+
+        $request->setUserResolver(fn (?string $guard = null) => $this->app['auth']->guard($guard)->user());
+
+        return $request;
+    }
+
+    /**
+     * @return list<Limit>
+     */
+    private function limitsFor(string $name, Request $request): array
+    {
+        $limiter = RateLimiter::limiter($name);
+        $this->assertNotNull($limiter, "O limitador '{$name}' não está definido.");
+
+        $result = $limiter($request);
+
+        return is_array($result) ? array_values($result) : [$result];
+    }
+
+    /**
+     * @param  list<Limit>  $limits
+     */
+    private function limitWithDecay(array $limits, int $decaySeconds): ?Limit
+    {
+        foreach ($limits as $limit) {
+            if ($limit->decaySeconds === $decaySeconds) {
+                return $limit;
+            }
+        }
+
+        return null;
+    }
+
+    // C1 — ações do membro
+
+    #[Test]
+    #[DataProvider('memberActions')]
+    public function member_action_has_a_minute_and_an_hour_limit_per_user(string $action): void
+    {
+        $user = $this->newUser();
+        $limits = $this->limitsFor($action, $this->requestFrom($user));
+
+        $this->assertCount(2, $limits);
+
+        $minute = $this->limitWithDecay($limits, 60);
+        $hour = $this->limitWithDecay($limits, 3600);
+        $this->assertNotNull($minute, 'Falta o limite por minuto.');
+        $this->assertNotNull($hour, 'Falta o limite por hora.');
+
+        $this->assertSame(120, $minute->maxAttempts);
+        $this->assertSame(2000, $hour->maxAttempts);
+        $this->assertSame('minute:'.$user->id, $minute->key);
+        $this->assertSame('hour:'.$user->id, $hour->key);
+    }
+
+    #[Test]
+    #[DataProvider('memberActions')]
+    public function member_action_without_a_user_is_keyed_by_ip(string $action): void
+    {
+        $limits = $this->limitsFor($action, $this->requestFrom());
+
+        $this->assertSame('minute:'.self::IP, $this->limitWithDecay($limits, 60)?->key);
+        $this->assertSame('hour:'.self::IP, $this->limitWithDecay($limits, 3600)?->key);
+    }
+
+    // C2 — diretório e agenda
+
+    #[Test]
+    #[DataProvider('publicReadLimiters')]
+    public function public_read_limit_is_a_hundred_and_twenty_per_minute_per_user(string $name): void
+    {
+        $user = $this->newUser();
+        $limits = $this->limitsFor($name, $this->requestFrom($user));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(120, $limits[0]->maxAttempts);
+        $this->assertSame(60, $limits[0]->decaySeconds);
+        $this->assertSame((string) $user->id, $limits[0]->key);
+    }
+
+    #[Test]
+    #[DataProvider('publicReadLimiters')]
+    public function public_read_limit_for_visitors_is_keyed_by_ip(string $name): void
+    {
+        $limits = $this->limitsFor($name, $this->requestFrom());
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(120, $limits[0]->maxAttempts);
+        $this->assertSame(self::IP, $limits[0]->key);
+    }
+
+    // C3 — registo
+
+    #[Test]
+    public function registration_is_limited_to_twenty_per_minute_per_ip(): void
+    {
+        $limits = $this->limitsFor('auth-register', $this->requestFrom($this->newUser()));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(20, $limits[0]->maxAttempts);
+        $this->assertSame(60, $limits[0]->decaySeconds);
+        $this->assertSame(self::IP, $limits[0]->key);
+    }
+
+    // C4 — limites que não mudam
+
+    #[Test]
+    public function login_limit_is_unchanged(): void
+    {
+        $limits = $this->limitsFor('auth-login', $this->requestFrom(null, ['email' => ' Membro@Exemplo.pt ']));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(5, $limits[0]->maxAttempts);
+        $this->assertSame(60, $limits[0]->decaySeconds);
+        $this->assertSame('membro@exemplo.pt|'.self::IP, $limits[0]->key);
+    }
+
+    #[Test]
+    public function admin_anonymize_limit_is_unchanged(): void
+    {
+        $limits = $this->limitsFor('admin-anonymize', $this->requestFrom($this->newUser()));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(5, $limits[0]->maxAttempts);
+        $this->assertSame(3600, $limits[0]->decaySeconds);
+    }
+}

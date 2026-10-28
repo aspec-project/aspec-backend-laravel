@@ -16,10 +16,12 @@ use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class MemberProfileUpdateTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/member-profile';
@@ -888,15 +890,14 @@ class MemberProfileUpdateTest extends TestCase
     }
 
     #[Test]
-    public function update_is_limited_to_ten_requests_per_minute(): void
+    public function update_is_limited_per_minute(): void
     {
-        Sanctum::actingAs($this->memberWithProfile());
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+        $this->fillRateLimit('profile-update', 'minute:'.$user->id, 119);
 
-        for ($i = 0; $i < 10; $i++) {
-            $this->putJson(self::URL, ['business_name' => "Empresa $i"])->assertOk();
-        }
-
-        $this->putJson(self::URL, ['business_name' => 'Empresa 11'])->assertTooManyRequests();
+        $this->putJson(self::URL, ['business_name' => 'Empresa 120'])->assertOk();
+        $this->putJson(self::URL, ['business_name' => 'Empresa 121'])->assertTooManyRequests();
     }
 
     #[Test]

@@ -8,10 +8,12 @@ use App\Models\Location;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class EventInstanceAgendaTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/events';
@@ -245,14 +247,12 @@ class EventInstanceAgendaTest extends TestCase
     }
 
     #[Test]
-    public function public_event_routes_share_a_sixty_requests_per_minute_ip_limit(): void
+    public function public_event_routes_share_a_hundred_and_twenty_requests_per_minute_ip_limit(): void
     {
         $event = EventInstance::factory()->create();
+        $this->fillRateLimit('public-events', '127.0.0.1', 119);
 
-        for ($i = 1; $i <= 60; $i++) {
-            $this->getJson(self::URL)->assertOk();
-        }
-
+        $this->getJson(self::URL)->assertOk();
         $this->getJson('/api/events/'.$event->id)
             ->assertTooManyRequests();
     }
