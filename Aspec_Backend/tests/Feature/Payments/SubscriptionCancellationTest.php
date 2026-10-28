@@ -23,6 +23,7 @@ use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Stripe\Exception\ApiConnectionException;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 /**
@@ -33,6 +34,7 @@ use Tests\TestCase;
  */
 class SubscriptionCancellationTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const CANCEL_URL = '/api/subscription/cancel';
@@ -336,26 +338,38 @@ class SubscriptionCancellationTest extends TestCase
     }
 
     #[Test]
-    public function eleventh_cancel_or_resume_in_a_minute_is_throttled_per_member(): void
+    public function cancel_or_resume_over_the_minute_limit_is_throttled_per_member(): void
     {
         $member = $this->member();
         $other = $this->member();
         $this->subscriptionFor($member);
         $this->subscriptionFor($other);
         $this->stripe();
+        $this->fillRateLimit('subscription-change', 'minute:'.$member->id, 120);
 
         Sanctum::actingAs($member);
-        for ($i = 0; $i < 5; $i++) {
-            $this->postJson(self::CANCEL_URL)->assertOk();
-            $this->postJson(self::RESUME_URL)->assertOk();
-        }
 
         $this->postJson(self::CANCEL_URL)
             ->assertTooManyRequests()
             ->assertExactJson(['success' => false, 'message' => 'Demasiados pedidos. Tente novamente mais tarde.']);
+        $this->postJson(self::RESUME_URL)->assertTooManyRequests();
 
         Sanctum::actingAs($other);
         $this->postJson(self::CANCEL_URL)->assertOk();
+    }
+
+    #[Test]
+    public function cancel_or_resume_over_the_daily_limit_is_throttled(): void
+    {
+        $member = $this->member();
+        $this->subscriptionFor($member);
+        $this->stripe();
+        $this->fillRateLimit('subscription-change', 'day:'.$member->id, 10, 86400);
+
+        Sanctum::actingAs($member);
+
+        $this->postJson(self::CANCEL_URL)->assertTooManyRequests();
+        $this->postJson(self::RESUME_URL)->assertTooManyRequests();
     }
 
     #[Test]

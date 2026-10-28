@@ -71,8 +71,10 @@ Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)->group(functi
     });
 });
 
-// Público e sem throttle: protegido pela assinatura do Stripe, que envia eventos em rajada.
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])->name('stripe.webhook');
+// Público e fora do limite geral: protegido pela assinatura do Stripe, que envia eventos em rajada e repete após erro.
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])
+    ->withoutMiddleware('throttle:api')
+    ->name('stripe.webhook');
 
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'account.active', 'admin'])

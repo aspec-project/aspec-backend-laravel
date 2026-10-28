@@ -18,10 +18,12 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class UpdatePasswordTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/account/password';
@@ -319,17 +321,19 @@ class UpdatePasswordTest extends TestCase
     }
 
     #[Test]
-    public function requests_are_limited_to_ten_per_minute(): void
+    public function requests_are_limited_per_minute(): void
     {
-        Sanctum::actingAs($this->makeUser());
+        $user = $this->makeUser();
+        $hashBefore = $this->storedHash($user);
+        Sanctum::actingAs($user);
+        $this->fillRateLimit('password-update', 'minute:'.$user->id, 119);
 
-        // Erros que não são do current_password, para não acionar o bloqueio de falhas (decisão 26).
-        for ($i = 0; $i < 10; $i++) {
-            $this->putJson(self::URL, $this->validPayload(['password_confirmation' => "Mismatch{$i}xx"]))
-                ->assertUnprocessable();
-        }
+        // Erro que não é do current_password, para não acionar o bloqueio de falhas.
+        $this->putJson(self::URL, $this->validPayload(['password_confirmation' => 'Mismatch120xx']))
+            ->assertUnprocessable();
 
         $this->putJson(self::URL, $this->validPayload())->assertTooManyRequests();
+        $this->assertSame($hashBefore, $this->storedHash($user));
     }
 
     // Bloqueio de falhas do current_password (decisão 26)
@@ -352,7 +356,7 @@ class UpdatePasswordTest extends TestCase
 
         $this->failCurrentPassword(5);
 
-        // 6.º pedido: abaixo do limite de 10/min (password-update), por isso o 429 vem do bloqueio de falhas.
+        // 6.º pedido: abaixo do limite de 120/min (password-update), por isso o 429 vem do bloqueio de falhas.
         $this->putJson(self::URL, $this->validPayload())
             ->assertTooManyRequests()
             ->assertHeader('Retry-After')

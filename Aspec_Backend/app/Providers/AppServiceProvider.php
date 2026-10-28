@@ -18,6 +18,29 @@ use Laravel\Cashier\Cashier;
 class AppServiceProvider extends ServiceProvider
 {
     /**
+     * Limite geral da API por minuto, acima dos específicos para que estes continuem a ser o limite efetivo.
+     */
+    private const API_PER_MINUTE = 300;
+
+    /**
+     * Ações do membro, diretório e eventos públicos: 120 por minuto (trava scripts, não o uso humano).
+     */
+    private const PER_MINUTE = 120;
+
+    /**
+     * Ações do membro: 2000 por hora (valor sugerido pelos professores).
+     */
+    private const PER_HOUR = 2000;
+
+    /**
+     * Cancelar e retomar a subscrição: 10 por dia. Ação rara que chama o Stripe e envia um email; com
+     * 2000/hora, alternar as duas esgotava a quota diária do serviço de email de toda a plataforma.
+     */
+    private const SUBSCRIPTION_CHANGES_PER_DAY = 10;
+
+    private const REGISTER_PER_MINUTE = 20;
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -91,14 +114,19 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Um limitador por ação, com 10 pedidos por minuto por utilizador.
+     * Limites de pedidos: um geral para toda a API e um por ação nas rotas de risco.
      *
-     * Com throttle:10,1 sem nome, o Laravel usa só o utilizador como chave e todas as rotas
-     * partilham o mesmo contador: guardar a montra (PUT + logótipo + até 10 imagens) dava 429
-     * a meio. Com limitadores com nome, a chave inclui o nome e cada ação conta à parte.
+     * O limite geral (`api`, 300/min por utilizador ou IP) cobre as rotas sem limitador próprio,
+     * incluindo as futuras. Cada ação do membro tem o seu (120/min e 2000/hora): com throttle:10,1
+     * sem nome, o Laravel usava só o utilizador como chave e todas as rotas partilhavam o mesmo
+     * contador (guardar a montra dava 429 a meio); com limitadores com nome, cada ação conta à parte.
+     * Num pedido com os dois, ganha o primeiro que se esgotar.
      */
     private function configureRateLimiting(): void
     {
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(self::API_PER_MINUTE)
+            ->by('minute:'.$this->requesterKey($request)));
+
         $actions = [
             'profile-update',
             'logo-upload',
@@ -106,15 +134,21 @@ class AppServiceProvider extends ServiceProvider
             'portfolio-delete',
             'password-update',
             'billing-portal',
-            'subscription-change',
             'invoice-download',
             'notification-preferences',
         ];
 
         foreach ($actions as $action) {
-            RateLimiter::for($action, fn (Request $request) => Limit::perMinute(10)
-                ->by($request->user()?->id ?: $request->ip()));
+            RateLimiter::for($action, fn (Request $request) => [
+                Limit::perMinute(self::PER_MINUTE)->by('minute:'.$this->requesterKey($request)),
+                Limit::perHour(self::PER_HOUR)->by('hour:'.$this->requesterKey($request)),
+            ]);
         }
+
+        RateLimiter::for('subscription-change', fn (Request $request) => [
+            Limit::perMinute(self::PER_MINUTE)->by('minute:'.$this->requesterKey($request)),
+            Limit::perDay(self::SUBSCRIPTION_CHANGES_PER_DAY)->by('day:'.$this->requesterKey($request)),
+        ]);
 
         $authActions = [
             'auth-login',
@@ -140,10 +174,10 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->ip())
         );
 
-        // Registo: 5/min por IP.
+        // Registo: 20/min por IP, para um grupo se poder inscrever da mesma rede num evento.
         RateLimiter::for(
             'auth-register',
-            fn (Request $request) => Limit::perMinute(5)
+            fn (Request $request) => Limit::perMinute(self::REGISTER_PER_MINUTE)
                 ->by($request->ip())
         );
 
@@ -166,16 +200,17 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perMinute(5)->by($request->ip())
         );
 
-        // Diretório público: 60/min por IP, partilhado por lista e perfil; trava a recolha automática de perfis.
+        // Diretório público: 120/min, partilhado por lista e perfil. Visitantes por IP (trava a recolha automática
+        // de perfis); membros com login pelo seu id, para não se bloquearem uns aos outros atrás do mesmo IP.
         RateLimiter::for(
             'member-directory',
-            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+            fn (Request $request) => Limit::perMinute(self::PER_MINUTE)->by($this->requesterKey($request))
         );
 
-        // Eventos públicos: 60/min por IP.
+        // Eventos públicos: 120/min, por utilizador com login ou por IP, como o diretório.
         RateLimiter::for(
             'public-events',
-            fn (Request $request) => Limit::perMinute(60)->by($request->ip())
+            fn (Request $request) => Limit::perMinute(self::PER_MINUTE)->by($this->requesterKey($request))
         );
 
         // Localizar moradas no backoffice: 30/min por admin, para um separador ou script não repetir pedidos ao fornecedor de geocodificação.
@@ -214,5 +249,16 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perHour(3)->by('target:'.strtolower($target instanceof User ? $target->id : (string) $target)),
             ];
         });
+    }
+
+    /**
+     * Id do utilizador autenticado (sessão ou Bearer, guard sanctum) ou, sem login válido, o IP.
+     *
+     * Usa o guard sanctum e não o por omissão (web), que ignora o Bearer nas rotas públicas.
+     * Token inválido ou expirado não dá utilizador, por isso a chave cai no IP e não se falsifica.
+     */
+    private function requesterKey(Request $request): string
+    {
+        return (string) ($request->user('sanctum')?->getAuthIdentifier() ?: $request->ip());
     }
 }

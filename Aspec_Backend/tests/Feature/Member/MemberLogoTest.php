@@ -14,10 +14,12 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class MemberLogoTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/member-profile/logo';
@@ -269,17 +271,14 @@ class MemberLogoTest extends TestCase
         $this->assertSame([$oldPath], Storage::disk('public')->allFiles("logos/{$user->id}"));
     }
 
-    // ---- Throttle: 10 pedidos/min (logo-upload), como no portfólio ----
+    // ---- Throttle: 120 pedidos/min e 2000/hora (logo-upload), como no portfólio ----
 
     #[Test]
-    public function eleventh_upload_in_the_same_minute_is_throttled(): void
+    public function upload_over_the_minute_limit_is_throttled(): void
     {
         $user = $this->memberWithProfile();
         Sanctum::actingAs($user);
-
-        for ($i = 1; $i <= 10; $i++) {
-            $this->postJson(self::URL, [])->assertUnprocessable();
-        }
+        $this->fillRateLimit('logo-upload', 'minute:'.$user->id, 120);
 
         $this->postJson(self::URL, ['logo' => UploadedFile::fake()->image('logo.png')])
             ->assertTooManyRequests()

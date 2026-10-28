@@ -15,6 +15,7 @@ use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class InvoicePdfTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const PDF_BYTES = '%PDF-1.4 fatura demo de teste';
@@ -338,17 +340,16 @@ class InvoicePdfTest extends TestCase
     // --- P11 ---
 
     #[Test]
-    public function eleventh_download_in_a_minute_gets_429_only_for_that_member(): void
+    public function download_over_the_minute_limit_gets_429_only_for_that_member(): void
     {
         $member = $this->member();
         $invoice = $this->demoInvoiceWithFile($member);
         $other = $this->member();
         $otherInvoice = $this->demoInvoiceWithFile($other);
         Sanctum::actingAs($member);
+        $this->fillRateLimit('invoice-download', 'minute:'.$member->id, 119);
 
-        for ($i = 1; $i <= 10; $i++) {
-            $this->get($this->url($invoice->id))->assertOk();
-        }
+        $this->get($this->url($invoice->id))->assertOk();
         $this->getJson($this->url($invoice->id))->assertTooManyRequests();
 
         Sanctum::actingAs($other);
@@ -361,12 +362,9 @@ class InvoicePdfTest extends TestCase
         $member = $this->member();
         $invoice = $this->demoInvoiceWithFile($member);
         Sanctum::actingAs($member);
+        $this->fillRateLimit('invoice-download', 'minute:'.$member->id, 120);
 
-        for ($i = 1; $i <= 10; $i++) {
-            $this->get($this->url($invoice->id))->assertOk();
-        }
         $this->getJson($this->url($invoice->id))->assertTooManyRequests();
-
         $this->getJson('/api/invoices')->assertOk();
     }
 

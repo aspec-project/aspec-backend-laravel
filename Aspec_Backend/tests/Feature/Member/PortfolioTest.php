@@ -15,10 +15,12 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class PortfolioTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/member-portfolio';
@@ -260,16 +262,12 @@ class PortfolioTest extends TestCase
         $this->assertNothingStored($user);
     }
 
-    // Os 10 primeiros pedidos são inválidos (422) para o 429 não se confundir com o 422 do limite de 10 imagens.
     #[Test]
-    public function eleventh_upload_in_the_same_minute_is_throttled(): void
+    public function upload_over_the_minute_limit_is_throttled(): void
     {
         $user = $this->memberWithProfile();
         Sanctum::actingAs($user);
-
-        for ($i = 1; $i <= 10; $i++) {
-            $this->postJson(self::URL, [])->assertUnprocessable();
-        }
+        $this->fillRateLimit('portfolio-upload', 'minute:'.$user->id, 120);
 
         $this->postJson(self::URL, ['image' => UploadedFile::fake()->image('foto.jpg')])
             ->assertTooManyRequests()
@@ -419,15 +417,12 @@ class PortfolioTest extends TestCase
     }
 
     #[Test]
-    public function eleventh_delete_in_the_same_minute_is_throttled(): void
+    public function delete_over_the_minute_limit_is_throttled(): void
     {
         $user = $this->memberWithProfile();
         $image = $this->addStoredImage($user);
         Sanctum::actingAs($user);
-
-        for ($i = 1; $i <= 10; $i++) {
-            $this->deleteJson(self::URL.'/'.Str::uuid())->assertNotFound();
-        }
+        $this->fillRateLimit('portfolio-delete', 'minute:'.$user->id, 120);
 
         $this->deleteJson(self::URL."/{$image->id}")
             ->assertTooManyRequests()

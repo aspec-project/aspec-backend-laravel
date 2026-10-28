@@ -239,13 +239,13 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 - **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.
 - **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `storage/app/private/invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` (disco privado, nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
 - **Email das faturas:** `MAIL_MAILER=log` é só para desenvolvimento local: o email da fatura (com o PDF, que tem NIF e morada) fica escrito no `storage/logs/laravel.log`, por isso limpar esse ficheiro depois de testar. Na apresentação usar um SMTP de teste (Mailpit, Mailtrap ou uma conta de email com password de aplicação).
-- **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 10 por minuto). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
+- **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 120 por minuto e 2000 por hora). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
 - **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
 - **InvoiceExpress:** o trial gratuito de 30 dias serve de sandbox (sem comunicação à AT). Criá-lo perto da apresentação (~2/11, para cobrir a semana de 30/11), copiar o nome da conta e a chave da API para `INVOICEEXPRESS_ACCOUNT_NAME` / `INVOICEEXPRESS_API_KEY` e mudar para `INVOICING_DRIVER=invoiceexpress`. "Limpar Conta" (definições da InvoiceExpress) apaga os documentos de teste. As faturas já emitidas com `demo` continuam a descarregar-se pelo driver que as emitiu.
 
 ## Diretório
 
-- **Endpoints públicos** (sem login; limite partilhado de 60 pedidos por minuto por IP):
+- **Endpoints públicos** (sem login; limite partilhado de 120 pedidos por minuto por utilizador com login, senão por IP):
   - `GET /api/members` — lista paginada, ordenada por empresa, nome e id. Filtros opcionais e combináveis: `search` (nome, empresa ou descrição; até 100 caracteres), `sector_id`, `location_id` (distrito), `min_rating` (1 a 5; devolve uma lista vazia enquanto não existirem avaliações), `page` e `per_page` (12 por omissão, máximo 50). Cada item traz `id`, `name`, `business_name`, `description` (texto completo ou `null`; o corte para o cartão é feito no frontend), `sector`, `location`, `logo_url`, `average_rating` e `reviews_count`.
   - `GET /api/members/{id}` — perfil público (`id` = id do perfil, o mesmo da lista).
 - **Quem aparece:** contas **Active** com perfil de membro, seja qual for o papel (um admin com perfil aparece; um admin sem perfil nunca). Contas Pending, Approved, Inactive ou apagadas não aparecem e o perfil devolve 404 "Membro não encontrado.", igual a um id que não existe. Contas em trial ou em período de carência continuam a aparecer.
@@ -257,6 +257,26 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 - **Formato:** o registo e `PUT /api/member-profile` aceitam números de qualquer país (telefone pessoal e comercial), validados com a libphonenumber. Sem indicativo, o número é tratado como português (`912345678`); estrangeiros precisam do indicativo (`+44 7911 123456` ou `0044…`). Espaços, `-`, `.` e parênteses são ignorados.
 - **Guardado e devolvido em E.164** (`+351912345678`, `+447911123456`) em todas as respostas (`phone`, `commercial_phone`). A formatação para mostrar é feita no frontend.
 - **Bases de dados existentes:** `php artisan migrate` converte os telefones antigos de 9 dígitos para `+351…`. O `down()` só repõe os números portugueses; os estrangeiros ficam em E.164.
+
+## Limites de pedidos
+
+Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite a API responde `429` "Demasiados pedidos. Tente novamente mais tarde." com o header `Retry-After` (segundos). Uma rota com limite próprio conta também no limite geral: ganha o primeiro que se esgotar. "Por utilizador" = utilizador com login (sessão do frontend ou token Bearer); sem login válido, conta por IP.
+
+| Limite | Valor | Porquê |
+|---|---|---|
+| Geral (`api`, todas as rotas `api/*` exceto o webhook) | 300/min por utilizador ou IP | Cobre as rotas sem limite próprio, incluindo as futuras; mais largo que os específicos, para estes continuarem a ser o limite efetivo |
+| Ações do membro (perfil, logótipo, portefólio, password, preferências, portal de faturação, PDF da fatura) | 120/min e 2000/hora por utilizador, cada ação à parte | 2000/hora sugerido pelos professores; 120/min trava scripts sem afetar o uso normal (guardar a montra são ~12 pedidos) |
+| Cancelar / retomar a subscrição | 120/min e 10/dia por utilizador (partilhado pelas duas) | Ação rara que chama o Stripe e envia um email: sem limite diário, alternar as duas esgotava a quota de email da plataforma (o Gmail de demonstração tem ~500 destinatários/dia; um serviço de email de produção tem mais, mas o envio em massa continuaria a ser abuso) |
+| Diretório e eventos públicos | 120/min por utilizador ou IP | Visitantes por IP travam a recolha automática; membros pelo seu id não se bloqueiam atrás do mesmo IP (escritório, evento) |
+| Registo | 20/min por IP | Um grupo pode inscrever-se da mesma rede num evento; bots continuam travados |
+| Login e token | 5/min por email + IP | Valor habitual do Laravel; OWASP Authentication Cheat Sheet |
+| Falhas da password atual | 5 em 15 min por utilizador | NIST SP 800-63B e OWASP (limitar tentativas falhadas) |
+| Recuperar / redefinir password | 5/min (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
+| Ativação; reenvio do link | 20/min por IP; 3 em 15 min por email + IP, 10/hora por IP, 5/dia por email | Cada pedido chama o Stripe ou envia um email |
+| Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
+| Webhook do Stripe | sem limite | Autenticado pela assinatura; o Stripe envia em rajada e repete após erro |
+
+Em produção atrás de um proxy ou balanceador é preciso configurar os proxies de confiança (`$middleware->trustProxies(at: [...])` com os IPs do proxy), senão todos os visitantes contam com o IP do proxy. Nunca usar `at: '*'` com a API exposta diretamente: o header `X-Forwarded-For` passaria a ser falsificável e cada pedido teria um contador novo, também no login.
 
 ## Mapas (Google)
 
