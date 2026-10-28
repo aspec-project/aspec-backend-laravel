@@ -21,11 +21,11 @@ class AdminGeocodeController extends Controller
     public const APPROXIMATE_MESSAGE = 'Foi encontrado um local aproximado. Confirme se corresponde à morada.';
 
     /**
-     * Devolve as coordenadas da morada pedida (com o distrito, quando indicado), indicando se o local é aproximado.
+     * Devolve o local encontrado para a morada pedida (com o distrito, quando indicado), indicando se é aproximado.
      *
      * @param  GeocodeAddressRequest  $request  Pedido com a morada e o distrito opcional.
      * @param  Geocoder  $geocoder  Serviço de geocodificação ligado no AppServiceProvider.
-     * @return JsonResponse 200 com as coordenadas, 404 se a morada não for encontrada ou 503 se o serviço estiver indisponível.
+     * @return JsonResponse 200 com o local encontrado, 404 se a morada não for encontrada ou 503 se o serviço estiver indisponível.
      */
     public function __invoke(GeocodeAddressRequest $request, Geocoder $geocoder): JsonResponse
     {

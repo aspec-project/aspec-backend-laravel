@@ -15,6 +15,7 @@ use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 use Throwable;
@@ -38,6 +39,14 @@ class AdminGeocodeTest extends TestCase
     private const UNAVAILABLE_MESSAGE = 'O serviço de localização não está disponível de momento. Tente novamente dentro de instantes.';
 
     private const GOOGLE_KEY = 'test-google-key-7f3a9c';
+
+    private const GOOGLE_URL_PATTERN = 'maps.googleapis.com/maps/api/geocode/json*';
+
+    private const COIMBRA_PLACE_ID = 'ChIJTesteCoimbraRuaBrasil25_Aspec';
+
+    private const COIMBRA_FORMATTED_ADDRESS = 'R. do Brasil 25, 3030-175 Coimbra, Portugal';
+
+    private const PONTA_DELGADA_PLACE_ID = 'ChIJTestePontaDelgadaCidade_Aspec';
 
     protected function setUp(): void
     {
@@ -112,6 +121,7 @@ class AdminGeocodeTest extends TestCase
                     'display_name' => self::DISPLAY_NAME,
                     'attribution' => '© OpenStreetMap contributors',
                     'approximate' => false,
+                    'place_id' => null,
                 ],
             ]);
 
@@ -239,9 +249,14 @@ class AdminGeocodeTest extends TestCase
 
         $response = $this->geocode(['address' => 'Rua Augusta 1'])->assertOk();
 
-        $this->assertSame(['latitude', 'longitude', 'display_name', 'attribution', 'approximate'], array_keys($response->json('data')));
+        $this->assertSame(
+            ['latitude', 'longitude', 'display_name', 'attribution', 'approximate', 'place_id'],
+            array_keys($response->json('data'))
+        );
+        $this->assertNull($response->json('data.place_id'));
         $this->assertStringNotContainsString('osm_id', $response->getContent());
-        $this->assertStringNotContainsString('place_id', $response->getContent());
+        $this->assertStringNotContainsString('licence', $response->getContent());
+        $this->assertStringNotContainsString('boundingbox', $response->getContent());
     }
 
     private function sentQueries(): array
@@ -461,5 +476,164 @@ class AdminGeocodeTest extends TestCase
         $this->assertStringStartsWith('https://maps.googleapis.com/', $requestedUrls[0]);
         $this->assertStringNotContainsString(self::GOOGLE_KEY, $response->getContent());
         $this->assertStringNotContainsString(self::GOOGLE_KEY, implode("\n", $logged));
+    }
+
+    private static function googleCoimbraRooftop(): array
+    {
+        return ['status' => 'OK', 'results' => [[
+            'place_id' => self::COIMBRA_PLACE_ID,
+            'formatted_address' => self::COIMBRA_FORMATTED_ADDRESS,
+            'types' => ['street_address'],
+            'geometry' => ['location' => ['lat' => 40.2085123, 'lng' => -8.4198765], 'location_type' => 'ROOFTOP'],
+            'address_components' => [
+                ['long_name' => '25', 'short_name' => '25', 'types' => ['street_number']],
+                ['long_name' => 'Rua do Brasil', 'short_name' => 'R. do Brasil', 'types' => ['route']],
+                ['long_name' => 'Coimbra', 'short_name' => 'Coimbra', 'types' => ['locality', 'political']],
+                ['long_name' => 'Portugal', 'short_name' => 'PT', 'types' => ['country', 'political']],
+            ],
+        ]]];
+    }
+
+    private static function googlePontaDelgadaApproximate(): array
+    {
+        return ['status' => 'OK', 'results' => [[
+            'place_id' => self::PONTA_DELGADA_PLACE_ID,
+            'formatted_address' => 'Ponta Delgada, Portugal',
+            'partial_match' => true,
+            'types' => ['locality', 'political'],
+            'geometry' => ['location' => ['lat' => 37.7412345, 'lng' => -25.6756789], 'location_type' => 'APPROXIMATE'],
+            'address_components' => [
+                ['long_name' => 'Ponta Delgada', 'short_name' => 'Ponta Delgada', 'types' => ['locality', 'political']],
+                ['long_name' => 'Portugal', 'short_name' => 'PT', 'types' => ['country', 'political']],
+            ],
+        ]]];
+    }
+
+    private static function googleCoimbraData(): array
+    {
+        return [
+            'latitude' => null,
+            'longitude' => null,
+            'display_name' => self::COIMBRA_FORMATTED_ADDRESS,
+            'attribution' => 'Google Maps',
+            'approximate' => false,
+            'place_id' => self::COIMBRA_PLACE_ID,
+        ];
+    }
+
+    #[Test]
+    public function google_driver_returns_the_place_id_without_coordinates(): void
+    {
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        Http::fake([self::GOOGLE_URL_PATTERN => Http::response(self::googleCoimbraRooftop(), 200)]);
+
+        $response = $this->geocode(['address' => 'Rua do Brasil nº 25, 3º Esq', 'location_id' => $this->locationId('Coimbra')])
+            ->assertOk()
+            ->assertExactJson([
+                'success' => true,
+                'message' => 'Morada localizada com sucesso.',
+                'data' => self::googleCoimbraData(),
+            ]);
+
+        $content = $response->getContent();
+        foreach (['40.208', '-8.419', 'geometry', 'location_type', 'address_components', 'partial_match', self::GOOGLE_KEY] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $content);
+        }
+    }
+
+    #[Test]
+    public function google_driver_returns_an_approximate_place_with_its_place_id(): void
+    {
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        Http::fake([self::GOOGLE_URL_PATTERN => Http::response(self::googlePontaDelgadaApproximate(), 200)]);
+
+        $response = $this->geocode([
+            'address' => 'Rua da Sé 10, Ponta Delgada, Região Autónoma dos Açores',
+            'location_id' => $this->locationId('Açores'),
+        ])
+            ->assertOk()
+            ->assertJsonPath('message', 'Foi encontrado um local aproximado. Confirme se corresponde à morada.')
+            ->assertJsonPath('data.approximate', true)
+            ->assertJsonPath('data.place_id', self::PONTA_DELGADA_PLACE_ID)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null)
+            ->assertJsonPath('data.attribution', 'Google Maps');
+
+        $this->assertStringNotContainsString('partial_match', $response->getContent());
+    }
+
+    #[Test]
+    public function google_result_from_the_cache_keeps_the_place_id_in_the_response(): void
+    {
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        Http::fake([self::GOOGLE_URL_PATTERN => Http::response(self::googleCoimbraRooftop(), 200)]);
+        $query = ['address' => 'Rua do Brasil nº 25, 3º Esq', 'location_id' => $this->locationId('Coimbra')];
+
+        $first = $this->geocode($query)->assertOk();
+        $second = $this->geocode($query)->assertOk();
+
+        Http::assertSentCount(1);
+        $this->assertSame(self::googleCoimbraData(), $first->json('data'));
+        $this->assertSame(self::googleCoimbraData(), $second->json('data'));
+    }
+
+    public static function googleErrors(): array
+    {
+        return [
+            'ZERO_RESULTS' => [['status' => 'ZERO_RESULTS', 'results' => []], 200, 404, self::NOT_FOUND_MESSAGE],
+            'OVER_QUERY_LIMIT' => [['status' => 'OVER_QUERY_LIMIT', 'results' => []], 200, 503, self::UNAVAILABLE_MESSAGE],
+            'HTTP 500' => ['', 500, 503, self::UNAVAILABLE_MESSAGE],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('googleErrors')]
+    public function google_errors_keep_the_same_responses(array|string $body, int $httpStatus, int $expectedStatus, string $message): void
+    {
+        config(['logging.default' => 'null']);
+        $this->actingAsAdmin();
+        $this->useGoogle();
+        Http::fake([self::GOOGLE_URL_PATTERN => Http::response($body, $httpStatus)]);
+
+        $response = $this->geocode(['address' => 'Rua do Brasil 25', 'location_id' => $this->locationId('Coimbra')])
+            ->assertStatus($expectedStatus)
+            ->assertExactJson(['success' => false, 'message' => $message]);
+
+        $this->assertStringNotContainsString(self::GOOGLE_KEY, $response->getContent());
+    }
+
+    #[Test]
+    public function attribution_follows_the_provider_that_answered(): void
+    {
+        $this->actingAsAdmin();
+        Http::fake([
+            self::URL_PATTERN => Http::response([[
+                'lat' => '38.70845912345',
+                'lon' => '-9.13652841234',
+                'display_name' => self::DISPLAY_NAME,
+                'address' => [
+                    'road' => 'Rua Augusta',
+                    'city' => 'Lisboa',
+                    'ISO3166-2-lvl6' => 'PT-11',
+                    'country_code' => 'pt',
+                ],
+            ]], 200),
+            self::GOOGLE_URL_PATTERN => Http::response(self::googleCoimbraRooftop(), 200),
+        ]);
+
+        $this->geocode(['address' => 'Rua Augusta 1'])
+            ->assertOk()
+            ->assertJsonPath('data.attribution', '© OpenStreetMap contributors')
+            ->assertJsonPath('data.place_id', null);
+
+        $this->useGoogle();
+
+        $this->geocode(['address' => 'Rua do Brasil 25', 'location_id' => $this->locationId('Coimbra')])
+            ->assertOk()
+            ->assertJsonPath('data.attribution', 'Google Maps')
+            ->assertJsonPath('data.place_id', self::COIMBRA_PLACE_ID);
     }
 }
