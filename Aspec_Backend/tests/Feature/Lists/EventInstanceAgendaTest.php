@@ -4,6 +4,7 @@ namespace Tests\Feature\Lists;
 
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventSeries;
 use App\Models\Location;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -72,6 +73,34 @@ class EventInstanceAgendaTest extends TestCase
             ->assertJsonPath('data.items.0.id', $todayLater->id)
             ->assertJsonPath('data.items.1.id', $tomorrow->id)
             ->assertJsonPath('data.items.0.category.id', $category->id);
+    }
+
+    #[Test]
+    public function public_agenda_includes_series_id_for_series_sessions(): void
+    {
+        $category = EventCategory::factory()->create();
+        $eventDate = today()->addDays(30)->toDateString();
+
+        $event = $this->createEvent(
+            $category,
+            $eventDate,
+            '10:00',
+            'Sessão de uma série'
+        );
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => Carbon::parse($eventDate)->addWeeks(2)->toDateString(),
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        $event->update(['series_id' => $series->id]);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $event->id)
+            ->assertJsonPath('data.items.0.series_id', $series->id);
     }
 
     #[Test]

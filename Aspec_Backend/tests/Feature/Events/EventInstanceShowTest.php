@@ -3,6 +3,7 @@
 namespace Tests\Feature\Events;
 
 use App\Models\EventInstance;
+use App\Models\EventSeries;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
@@ -35,6 +36,7 @@ class EventInstanceShowTest extends TestCase
         $this->getJson("/api/events/{$event->id}")
             ->assertOk()
             ->assertJsonPath('data.id', $event->id)
+            ->assertJsonPath('data.series_id', null)
             ->assertJsonPath('data.name', 'Workshop público')
             ->assertJsonPath('data.is_online', false)
             ->assertJsonPath('data.category.id', $event->category_id)
@@ -49,6 +51,24 @@ class EventInstanceShowTest extends TestCase
                 $event->fresh()->registration_deadline->toIso8601String()
             )
             ->assertJsonPath('data.organizer_notes', 'Entrada pela porta lateral.');
+    }
+
+    #[Test]
+    public function guest_can_see_series_id_for_a_series_session(): void
+    {
+        $event = EventInstance::factory()->create();
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => $event->event_date->copy()->addWeeks(2)->toDateString(),
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        $event->update(['series_id' => $series->id]);
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.series_id', $series->id);
     }
 
     #[Test]

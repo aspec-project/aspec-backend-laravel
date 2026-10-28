@@ -379,6 +379,11 @@ class AdminEventInstanceTest extends TestCase
                 "data.sessions.{$index}.registration_deadline",
                 $deadline->toIso8601String()
             );
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.series_id",
+                $seriesId
+            );
         }
     }
 

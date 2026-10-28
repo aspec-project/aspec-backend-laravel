@@ -287,6 +287,70 @@ class EventRegistrationStoreTest extends TestCase
     }
 
     #[Test]
+    public function series_registration_is_all_or_nothing_when_already_registered_for_a_following_session(): void
+    {
+        [, $selectedSession, $followingSession] = $this->createSeriesSessions();
+
+        $user = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $followingSession->id,
+            'user_id' => $user->id,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson($this->url($selectedSession), [
+            'scope' => 'this_and_following',
+        ])->assertConflict();
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $selectedSession->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertDatabaseHas('event_registrations', [
+            'event_instance_id' => $followingSession->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertSame(1, EventRegistration::query()->count());
+    }
+
+    #[Test]
+    public function series_registration_is_all_or_nothing_when_a_following_session_deadline_has_passed(): void
+    {
+        [$selectedSession, $followingSession] = $this->createSeriesSessions();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $followingSession->update([
+            'registration_deadline' => now($timezone)
+                ->subMinute()
+                ->format('Y-m-d H:i:s'),
+        ]);
+
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson($this->url($selectedSession), [
+            'scope' => 'this_and_following',
+        ])->assertConflict();
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $selectedSession->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $followingSession->id,
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertSame(0, EventRegistration::query()->count());
+    }
+
+    #[Test]
     public function this_and_following_scope_is_rejected_for_a_standalone_event(): void
     {
         $user = User::factory()->create();

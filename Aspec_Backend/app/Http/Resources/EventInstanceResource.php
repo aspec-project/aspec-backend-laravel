@@ -61,6 +61,7 @@ class EventInstanceResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'series_id' => $this->series_id,
             'name' => $this->name,
             'category' => $this->whenLoaded('category', fn () => [
                 'id' => $this->category->id,

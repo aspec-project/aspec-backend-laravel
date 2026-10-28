@@ -4928,7 +4928,7 @@
                 }
               ]
             },
-            "description": "Agenda pública de eventos futuros, ordenados por data e hora de início. Filtros opcionais e combináveis:\n\n- `category_id`: UUID da categoria.\n- `location_id`: UUID da localização.\n- `search`: pesquisa até 100 caracteres no nome ou descrição do evento, na categoria ou na localização.\n- `per_page`: resultados por página, entre 1 e 100 (predefinição: 9).\n- `page`: número da página, entre 1 e 10000.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só o recebe depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
+            "description": "Agenda pública de eventos futuros, ordenados por data e hora de início. Filtros opcionais e combináveis:\n\n- `category_id`: UUID da categoria.\n- `location_id`: UUID da localização.\n- `search`: pesquisa até 100 caracteres no nome ou descrição do evento, na categoria ou na localização.\n- `per_page`: resultados por página, entre 1 e 100 (predefinição: 9).\n- `page`: número da página, entre 1 e 10000.\n\nCada evento devolve `series_id`: UUID da série, ou `null` se for um evento avulso.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só o recebe depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
             "auth": {
               "type": "noauth"
             }
@@ -4983,7 +4983,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Agenda de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_registered\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": false,\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 9,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Agenda de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_registered\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": false,\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 9,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
             }
           ]
         },
@@ -5009,7 +5009,7 @@
                 }
               ]
             },
-            "description": "Devolve o detalhe do evento, incluindo categoria, localização, data, horários, morada ou link, lotação, prazo e estado das inscrições.\n\nOs campos `is_online` e `venue_name` identificam se o evento é online e o nome do local presencial. Para eventos online, `address`, `venue_name`, `latitude` e `longitude` são `null`.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só recebe o link depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
+            "description": "Devolve o detalhe do evento, incluindo categoria, localização, data, horários, morada ou link, lotação, prazo e estado das inscrições.\n\nO campo `series_id` devolve o UUID da série ou `null` se o evento for avulso. Os campos `is_online` e `venue_name` identificam se o evento é online e o nome do local presencial. Para eventos online, `address`, `venue_name`, `latitude` e `longitude` são `null`.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só recebe o link depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
             "auth": {
               "type": "noauth"
             }
@@ -5047,7 +5047,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_registered\": false,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_registered\": false,\n    \"is_online\": false\n  }\n}"
             },
             {
               "name": "200 Evento online — membro inscrito após o prazo",
@@ -5081,7 +5081,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n    \"name\": \"Jantar online — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-20\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"description\": \"Encontro online para partilha de experiências entre membros.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n    \"organizer_notes\": null,\n    \"registrations_count\": 40,\n    \"available_spots\": 0,\n    \"registration_open\": false,\n    \"is_registered\": true,\n    \"online_url\": \"https://meet.example.com/jantar-aspec\",\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n    \"series_id\": null,\n    \"name\": \"Jantar online — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-20\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"description\": \"Encontro online para partilha de experiências entre membros.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n    \"organizer_notes\": null,\n    \"registrations_count\": 40,\n    \"available_spots\": 0,\n    \"registration_open\": false,\n    \"is_registered\": true,\n    \"online_url\": \"https://meet.example.com/jantar-aspec\",\n    \"is_online\": true\n  }\n}"
             },
             {
               "name": "200 Evento online — inscrito antes do prazo (sem link)",
@@ -5115,7 +5115,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-8888-4c88-8888-888888888888\",\n    \"name\": \"Webinar: Faturação Eletrónica sem Complicações\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-25\",\n    \"event_start_time\": \"18:00\",\n    \"event_end_time\": \"19:30\",\n    \"description\": \"Sessão online sobre as regras da faturação eletrónica, com tempo para perguntas no fim.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 100,\n    \"registration_deadline\": \"2030-11-24T23:59:00Z\",\n    \"organizer_notes\": \"O link da sessão aparece na página do evento depois do fecho das inscrições.\",\n    \"registrations_count\": 2,\n    \"available_spots\": 98,\n    \"registration_open\": true,\n    \"is_registered\": true,\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-8888-4c88-8888-888888888888\",\n    \"series_id\": null,\n    \"name\": \"Webinar: Faturação Eletrónica sem Complicações\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-25\",\n    \"event_start_time\": \"18:00\",\n    \"event_end_time\": \"19:30\",\n    \"description\": \"Sessão online sobre as regras da faturação eletrónica, com tempo para perguntas no fim.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 100,\n    \"registration_deadline\": \"2030-11-24T23:59:00Z\",\n    \"organizer_notes\": \"O link da sessão aparece na página do evento depois do fecho das inscrições.\",\n    \"registrations_count\": 2,\n    \"available_spots\": 98,\n    \"registration_open\": true,\n    \"is_registered\": true,\n    \"is_online\": true\n  }\n}"
             },
             {
               "name": "404 Evento não encontrado",
@@ -5379,7 +5379,7 @@
                 }
               ]
             },
-            "description": "Inscreve o membro autenticado. Fecha automaticamente quando a lotação é atingida ou o prazo termina. Requer conta **Active**."
+            "description": "Inscreve o membro autenticado **apenas na sessão indicada**. Mesmo que a sessão pertença a uma série, este pedido não inscreve nas sessões seguintes. Não enviar body nem `scope`. Para inscrever nesta e nas seguintes, usar **Inscrever-me nesta e nas seguintes**. Fecha automaticamente quando a lotação é atingida ou o prazo termina. Requer conta **Active**."
           },
           "response": [
             {
@@ -5578,6 +5578,347 @@
                     "e5a6b7c8-5555-4c55-8555-555555555555",
                     "registrations"
                   ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Inscrever-me nesta e nas seguintes",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/events/:id/registrations",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                ":id",
+                "registrations"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "e5a6b7c8-1111-4c11-8111-111111111111"
+                }
+              ]
+            },
+            "description": "Inscreve o membro autenticado na sessão indicada e em todas as sessões seguintes da mesma série. Requer conta **Active**.\n\n- Envia `{\"scope\":\"this_and_following\"}` no body.\n- A sessão indicada está incluída; sessões anteriores não são incluídas.\n- A inscrição é atómica: se alguma sessão elegível estiver lotada, tiver o prazo terminado ou já tiver uma inscrição do membro, o pedido falha sem criar inscrições parciais.\n- Este scope só pode ser usado numa sessão pertencente a uma série. Num evento avulso, a API devolve 422."
+          },
+          "response": [
+            {
+              "name": "201 Inscrições confirmadas",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "201 Inscrições confirmadas"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Inscrições efetuadas com sucesso.\",\n  \"data\": {\n    \"registrations\": [\n      {\n        \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n        \"event_instance_id\": \"e5a6b7c8-1111-4c11-8111-111111111111\"\n      },\n      {\n        \"id\": \"a1b2c3d4-8888-4d88-8888-888888888888\",\n        \"event_instance_id\": \"e5a6b7c8-2222-4c22-8222-222222222222\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "409 Evento lotado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Evento lotado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O evento atingiu a lotação máxima.\"\n}"
+            },
+            {
+              "name": "409 Já inscrito numa sessão seguinte",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Já inscrito numa sessão seguinte"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Já está inscrito neste evento.\"\n}"
+            },
+            {
+              "name": "409 Prazo terminado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Prazo terminado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo de inscrição para este evento terminou.\"\n}"
+            },
+            {
+              "name": "422 Evento avulso",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Evento avulso"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-9999-4c99-8999-999999999999/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-9999-4c99-8999-999999999999",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"scope\": [\n      \"O campo scope não é permitido.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-1111-4c11-8111-111111111111/registrations",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-1111-4c11-8111-111111111111",
+                    "registrations"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"scope\": \"this_and_following\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
                 }
               },
               "status": "Forbidden",
@@ -5813,7 +6154,7 @@
                 "registrations"
               ]
             },
-            "description": "Inscrições do membro autenticado, eventos futuros primeiro. Requer conta **Active**."
+            "description": "Inscrições do membro autenticado, eventos futuros primeiro. O evento de cada inscrição devolve `series_id`: UUID da série ou `null` se for avulso. Requer conta **Active**."
           },
           "response": [
             {
@@ -5848,7 +6189,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de inscrições obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n      \"created_at\": \"2030-11-01T10:00:00+00:00\",\n      \"event\": {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": true,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    }\n  ]\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de inscrições obtida com sucesso.\",\n  \"data\": [\n    {\n      \"id\": \"f9e8d7c6-7777-4d77-8777-777777777777\",\n      \"created_at\": \"2030-11-01T10:00:00+00:00\",\n      \"event\": {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": true,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    }\n  ]\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -13453,35 +13794,35 @@
         {
           "name": "Listar eventos",
           "request": {
-          "method": "GET",
-          "header": [],
-          "url": {
-            "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
-            "host": [
-              "{{base_url}}"
-            ],
-            "path": [
-              "api",
-              "admin",
-              "events"
-            ],
-            "query": [
-              {
-                "key": "period",
-                "value": "upcoming"
-              },
-              {
-                "key": "per_page",
-                "value": "6"
-              },
-              {
-                "key": "page",
-                "value": "1"
-              }
-            ]
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/events?period=upcoming&per_page=6&page=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "upcoming"
+                },
+                {
+                  "key": "per_page",
+                  "value": "6"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            },
+            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422."
           },
-          "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Valores inválidos devolvem 422."
-        },
           "response": [
             {
               "name": "200 Próximos",
@@ -13529,7 +13870,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Passados",
@@ -13577,7 +13918,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#C62828\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#B84A00\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"series_id\": null,\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#C62828\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"series_id\": null,\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#B84A00\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Eventos filtrados",
@@ -13641,7 +13982,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
             },
             {
               "name": "422 Filtros inválidos",
@@ -13806,7 +14147,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento presencial ou online.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, `latitude` e `longitude` devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento avulso, presencial ou online. Este pedido não cria uma série; na resposta, `series_id` é `null`.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, `latitude` e `longitude` devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara criar uma série, usar o pedido **Criar série de eventos**. Para localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
@@ -13850,7 +14191,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
             },
             {
               "name": "422 Validação",
@@ -13991,6 +14332,211 @@
           ]
         },
         {
+          "name": "Criar série de eventos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/admin/events",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "events"
+              ]
+            },
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar recorrente — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-11-05\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"ends_on\": \"2030-11-12\",\n    \"registration_deadline_days_before\": 3\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Série criada",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "201 Série criada"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Série de eventos criada com sucesso.\",\n  \"data\": {\n    \"series\": {\n      \"id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n      \"frequency\": \"weekly\",\n      \"ends_on\": \"2030-11-12\",\n      \"registration_deadline_days_before\": 3\n    },\n    \"sessions\": [\n      {\n        \"id\": \"e5a6b7c8-1111-4c11-8111-111111111111\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-05\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-02T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-2222-4c22-8222-222222222222\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Validação — série",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação — série"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"recurrence.ends_on\": [\n      \"Uma série não pode exceder 52 sessões.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Criar evento online",
           "request": {
             "method": "POST",
@@ -14011,7 +14557,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento online. `category_id`, `location_id`, nome, descrição, data, horas, lotação e prazo seguem as mesmas regras do pedido presencial.\n\n- `is_online`: obrigatório e `true`.\n- `online_url`: obrigatório e tem de ser um URL válido.\n- Não enviar `address`, `latitude` ou `longitude`; esses campos não são permitidos para eventos online.\n- `venue_name`: opcional.\n- `registration_deadline`: formato `YYYY-MM-DD`; o servidor define o prazo para as 23:59 em `Europe/Lisbon` e este tem de ser anterior ou igual ao início do evento.\n- `event_end_time` tem de ser posterior a `event_start_time`.\n\nNa resposta administrativa, o link online é devolvido. Nos endpoints públicos, só é visível para membros inscritos depois de o prazo de inscrição passar.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento online avulso; a resposta inclui `series_id: null`. `category_id`, `location_id`, nome, descrição, data, horas, lotação e prazo seguem as mesmas regras do pedido presencial.\n\n- `is_online`: obrigatório e `true`.\n- `online_url`: obrigatório e tem de ser um URL válido.\n- Não enviar `address`, `latitude` ou `longitude`; esses campos não são permitidos para eventos online.\n- `venue_name`: opcional.\n- `registration_deadline`: formato `YYYY-MM-DD`; o servidor define o prazo para as 23:59 em `Europe/Lisbon` e este tem de ser anterior ou igual ao início do evento.\n- `event_end_time` tem de ser posterior a `event_start_time`.\n\nNa resposta administrativa, o link online é devolvido. Nos endpoints públicos, só é visível para membros inscritos depois de o prazo de inscrição passar. Para criar uma série, usar o pedido **Criar série de eventos**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Workshop online — Lisboa\",\n  \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"21:00\",\n  \"is_online\": true,\n  \"online_url\": \"https://meet.example.com/workshop-aspec\",\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\"\n}",
@@ -14055,7 +14601,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"series_id\": null,\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true\n  }\n}"
             },
             {
               "name": "422 Validação — link obrigatório",
@@ -14184,7 +14730,7 @@
                 }
               ]
             },
-            "description": "Detalhe do evento, incluindo inscrições."
+            "description": "Detalhe do evento, incluindo inscrições. `series_id` devolve o UUID da série ou `null` se o evento for avulso."
           },
           "response": [
             {
@@ -14220,7 +14766,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -14357,7 +14903,7 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza um evento através de `PUT`; os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, enviar `address`; latitude e longitude devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, enviar `address`; latitude e longitude devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa atualizado\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Estacionamento gratuito no local.\",\n  \"justification\": \"A lotação foi ajustada a pedido do espaço.\"\n}",
@@ -14402,7 +14948,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
             },
             {
               "name": "422 Lotação inferior aos inscritos",
