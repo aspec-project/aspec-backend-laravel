@@ -29,8 +29,8 @@ use Throwable;
  * Webhook do Stripe. A assinatura é verificada pelo middleware do Cashier (aplicado no
  * construtor dele quando há STRIPE_WEBHOOK_SECRET); os handlers do Cashier sincronizam as
  * subscrições locais e este controller acrescenta a idempotência, a ativação da conta quando a
- * subscrição é criada ou passa a ativa, a fatura de cada pagamento, o período de carência quando
- * a cobrança falha e a desativação quando a subscrição termina.
+ * subscrição é criada ou passa a ativa, a fatura de cada pagamento (com o período pago), o período
+ * de carência quando a cobrança falha e a desativação quando a subscrição termina.
  */
 class StripeWebhookController extends WebhookController
 {
@@ -333,9 +333,8 @@ class StripeWebhookController extends WebhookController
     }
 
     /**
-     * Pagamento recebido: termina o período de carência, grava a fatura pendente e põe a emissão
-     * em fila depois do commit
-     * (um rollback do webhook nunca emite fatura).
+     * Pagamento recebido: termina o período de carência, grava a fatura pendente com o período pago
+     * e põe a emissão em fila depois do commit (um rollback do webhook nunca emite fatura).
      * Corre primeiro o handler do Cashier, que no Checkout limpa o metadata da sessão no Stripe.
      * Pagamentos de 0 (início do trial) não têm fatura; um cliente que não é nosso só fica no log.
      * O mesmo pagamento (stripe_invoice_id) nunca gera duas faturas, mesmo vindo em eventos diferentes.
@@ -372,6 +371,7 @@ class StripeWebhookController extends WebhookController
                 'amount' => $object['amount_paid'],
                 'currency' => strtolower($object['currency']),
                 'status' => InvoiceStatus::Pending,
+                ...$this->paidPeriod($object),
             ],
         );
 
@@ -380,6 +380,54 @@ class StripeWebhookController extends WebhookController
         }
 
         return $response;
+    }
+
+    /**
+     * Período pago, da linha da subscrição da fatura (formato basil: lines.data[].period, fim
+     * exclusivo). Nunca usa o period_start/period_end do topo da fatura: numa renovação referem-se
+     * ao período anterior. Sem linha de subscrição usa a 1.ª linha; sem período válido (inteiros,
+     * fim depois do início) grava null, e a fatura é criada na mesma.
+     *
+     * @param  array<string, mixed>  $invoice  Objeto fatura do evento.
+     * @return array{period_start: ?Carbon, period_end: ?Carbon}
+     */
+    private function paidPeriod(array $invoice): array
+    {
+        $period = $this->subscriptionLine($invoice)['period'] ?? null;
+        $start = is_array($period) ? ($period['start'] ?? null) : null;
+        $end = is_array($period) ? ($period['end'] ?? null) : null;
+
+        if (! is_int($start) || ! is_int($end) || $end <= $start) {
+            return ['period_start' => null, 'period_end' => null];
+        }
+
+        return [
+            'period_start' => Carbon::createFromTimestamp($start),
+            'period_end' => Carbon::createFromTimestamp($end),
+        ];
+    }
+
+    /**
+     * Linha da subscrição numa fatura do Stripe (parent.type subscription_item_details), ou a 1.ª
+     * linha se nenhuma o for. Null se a fatura não tiver linhas.
+     *
+     * @param  array<string, mixed>  $invoice
+     * @return array<string, mixed>|null
+     */
+    private function subscriptionLine(array $invoice): ?array
+    {
+        $lines = array_values(array_filter(
+            (array) ($invoice['lines']['data'] ?? []),
+            fn ($line) => is_array($line),
+        ));
+
+        foreach ($lines as $line) {
+            if (($line['parent']['type'] ?? null) === 'subscription_item_details') {
+                return $line;
+            }
+        }
+
+        return $lines[0] ?? null;
     }
 
     /**

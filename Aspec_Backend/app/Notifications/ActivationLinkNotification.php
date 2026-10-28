@@ -45,7 +45,7 @@ class ActivationLinkNotification extends Notification implements ShouldQueue
         return $this->paymentMail($notifiable)
             ->subject('Ative a sua conta ASPEC')
             ->line('A sua candidatura à ASPEC foi aprovada.')
-            ->line("Para ativar a conta, indique os dados de faturação e o cartão. Tem {$trialDays} dias de período experimental sem custos; depois, a quota é de {$this->formattedPrice()} € por mês.")
+            ->line("Para ativar a conta, indique os dados de faturação e o cartão. Tem {$trialDays} dias de período experimental sem custos; depois, a quota é de {$this->formattedPriceWithInterval()}.")
             ->action('Ativar conta', app(SubscriptionService::class)->activationUrl($notifiable))
             ->line("O link é válido durante {$linkDays} dias. Se expirar, peça um novo em {$newLinkUrl}.");
     }

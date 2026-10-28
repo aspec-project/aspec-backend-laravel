@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\SubscriptionInterval;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -65,11 +66,13 @@ class SubscriptionResource extends JsonResource
     }
 
     /**
-     * Data prevista da próxima cobrança, calculada só com dados locais (o Cashier não guarda o fim
-     * do período). Em trial é o fim do trial; ativa é a fatura mais recente do membro (qualquer
-     * estado, a linha nasce quando o Stripe confirma o pagamento) mais um intervalo, sem
-     * transbordar para o mês seguinte (31/01 + 1 mês = 28/02). Null se não vai haver cobrança:
-     * cancelamento agendado, pagamento em atraso, subscrição terminada ou ativa ainda sem faturas.
+     * Data prevista da próxima cobrança, calculada só com dados locais. Em trial é o fim do trial;
+     * ativa é o fim do período pago da fatura mais recente do membro (qualquer estado, a linha nasce
+     * quando o Stripe confirma o pagamento): é a data do Stripe, independente da configuração.
+     * Uma fatura sem período (anterior a essa coluna) usa a data do pagamento mais um intervalo
+     * configurado, sem transbordar para o mês seguinte (31/01 + 1 mês = 28/02). Null se não vai
+     * haver cobrança: cancelamento agendado, pagamento em atraso, subscrição terminada ou ativa
+     * ainda sem faturas.
      */
     private function nextPaymentAt(): ?CarbonInterface
     {
@@ -85,18 +88,16 @@ class SubscriptionResource extends JsonResource
             return null;
         }
 
-        $lastPaidAt = $this->owner->issuedInvoices()
+        $lastInvoice = $this->owner->issuedInvoices()
             ->latest()
             ->orderByDesc('id')
-            ->first()
-            ?->created_at;
+            ->first();
 
-        if ($lastPaidAt === null) {
+        if ($lastInvoice === null) {
             return null;
         }
 
-        return config('subscription.interval') === 'year'
-            ? $lastPaidAt->copy()->addYearNoOverflow()
-            : $lastPaidAt->copy()->addMonthNoOverflow();
+        return $lastInvoice->period_end
+            ?? SubscriptionInterval::configured()->addTo($lastInvoice->created_at);
     }
 }
