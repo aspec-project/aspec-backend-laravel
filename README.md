@@ -134,10 +134,10 @@ Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
 
 - **Chaves:** criar uma conta Stripe e, em **modo de teste**, copiar a `pk_test_…` para `STRIPE_KEY` e a `sk_test_…` para `STRIPE_SECRET` no `.env`. Nunca usar chaves `live` e nunca commitar o `.env`. Depois de mudar o `.env`: `php artisan config:clear` (não usar `config:cache` em desenvolvimento).
-- **Preço:** no dashboard, criar o Product "Quota mensal ASPEC" com um Price mensal de 60 € e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor mostrado ao membro (`SUBSCRIPTION_PRICE_AMOUNT`) tem de bater certo com esse Price.
+- **Preço:** no dashboard, criar o Product "Quota ASPEC" com um Price recorrente (ver "Quota mensal ou anual" abaixo) e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor, a moeda e a periodicidade mostrados ao membro (`SUBSCRIPTION_PRICE_AMOUNT`, `CASHIER_CURRENCY`, `SUBSCRIPTION_INTERVAL`) têm de bater certo com esse Price: confirmar com `php artisan subscriptions:check-price`.
 - **Webhooks locais:** instalar a Stripe CLI, `stripe login` e depois
   ```
-  stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed
+  stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed,invoice.upcoming
   ```
   Copiar o `whsec_…` mostrado para `STRIPE_WEBHOOK_SECRET`. Mantém-se enquanto o login da CLI for válido; se mudar, atualizar o `.env` e `php artisan config:clear` (senão os webhooks locais dão 403). Para gerar eventos: `stripe trigger invoice.payment_failed`.
 - **Versão da API dos webhooks:** o código lê os eventos no formato **`2025-06-30.basil`** (a versão do Cashier 16.8). Ao criar o endpoint no dashboard (servidor), escolher essa versão. O `stripe listen` usa a versão por omissão da conta: confirmar em Developers → versão da API e verificar o `api_version` de um evento no `stripe listen`. Com uma versão anterior, as cobranças falhadas não abrem o período de carência e o log mostra "Falha de pagamento num formato antigo da API do Stripe; carência não aberta.".
@@ -171,6 +171,17 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 - **Test clocks:** só servem para clientes criados dentro de um clock; os clientes criados pelo Checkout não estão, por isso a demo usa o guião "Ciclo de vida da subscrição" abaixo.
 - **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e o scheduler (fim da carência, de hora a hora): `php artisan schedule:work` em local; no servidor, um cron `* * * * * php artisan schedule:run`. Para a demo, `php artisan subscriptions:end-grace` corre o fim da carência à mão.
 - **Depois de `git pull`:** `composer install` e `php artisan migrate`.
+
+### Quota mensal ou anual
+
+O mesmo código serve as duas periodicidades: muda-se só o `.env` e o Price no Stripe.
+
+- **Prices no Stripe (modo de teste):** no Product "Quota ASPEC", criar dois Prices recorrentes em EUR: 20 € **mensal** e 20 € **anual** (intervalo "a cada 1 mês" / "a cada 1 ano"; nunca "a cada 3 anos").
+- **Mudar de periodicidade:** no `.env`, `STRIPE_PRICE_ID` (o Price da nova periodicidade) + `SUBSCRIPTION_INTERVAL` (`month` ou `year`, igual ao intervalo do Price) + `SUBSCRIPTION_PRICE_AMOUNT`; depois `php artisan config:clear` e `php artisan subscriptions:check-price`.
+- **`php artisan subscriptions:check-price`:** lê o Price no Stripe e compara-o com o `.env` (ativo, moeda, valor em cêntimos, intervalo e `interval_count` = 1). Sai com 0 se bater certo; senão mostra cada diferença com a variável a corrigir e sai com 1. Correr sempre que mudar o Price ou estes valores: quem cobra é o Stripe, mas os emails, a página da subscrição e as faturas usam o `.env`, e um erro só aparecia num email errado a um membro.
+- **Subscrições existentes não mudam:** só as novas ativações usam o novo Price. Converter subscrições já ativas (`swap()` do Cashier) está fora da Fase 1; sem membros reais não é preciso.
+- **Faturas:** a descrição indica o período pago, do Stripe (ex. "Quota ASPEC — período de 28/10/2026 a 27/10/2027"), guardado em `invoices.period_start` / `period_end`; `GET /api/invoices` devolve-o em `period_start` / `period_end` (datas de Lisboa, fim inclusivo). O `next_payment_at` de `GET /api/subscription` é o fim desse período.
+- **Aviso de renovação (só quota anual):** o webhook `invoice.upcoming` envia ao membro Active, sem cancelamento agendado, o email "A sua quota anual de 20,00 € renova a dd/mm/aaaa". No dashboard: Settings → Billing → Subscriptions and emails → **Upcoming renewal events**, 7 dias antes; e acrescentar `invoice.upcoming` aos eventos do endpoint (e ao `stripe listen`, como acima). Com quota mensal o evento é ignorado (seriam 12 emails por ano).
 
 ### Ativação da conta (demo ponta a ponta)
 

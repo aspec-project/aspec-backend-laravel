@@ -13,7 +13,12 @@ use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
 use App\Services\Payments\StripeCustomerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\Str;
 use Mockery;
 use Mockery\MockInterface;
@@ -36,6 +41,7 @@ class IssueInvoiceJobTest extends TestCase
         parent::setUp();
 
         $this->travelTo('2026-10-20 10:00');
+        config(['subscription.invoice_description' => 'Quota ASPEC']);
     }
 
     private function runJob(string $invoiceId): void
@@ -102,11 +108,24 @@ class IssueInvoiceJobTest extends TestCase
         $this->assertNotNull($fresh->issued_at);
     }
 
-    #[Test]
-    public function invoice_data_uses_the_issue_date_and_the_payment_month(): void
+    /**
+     * Mock do serviço de faturação que só aceita a descrição indicada.
+     */
+    private function expectDescription(string $description): void
     {
-        // A data é a da emissão (séries fiscais com datas não decrescentes); o mês descrito é o do pagamento.
-        $invoice = $this->pendingInvoice([
+        $this->mock(InvoiceService::class, function (MockInterface $mock) use ($description) {
+            $mock->shouldReceive('issue')->once()
+                ->withArgs(fn (InvoiceCustomerData $customer, InvoiceData $data) => $data->description === $description)
+                ->andReturn(new IssuedInvoice('log', null, 'LOG-2026-ABCDEF12', null, IssuedInvoice::ISSUED));
+        });
+    }
+
+    #[Test]
+    public function invoice_data_uses_the_issue_date_and_the_payment_month_when_there_is_no_period(): void
+    {
+        // A data é a da emissão (séries fiscais com datas não decrescentes); sem período pago
+        // gravado (faturas antigas), a descrição diz o mês do pagamento.
+        $invoice = Invoice::factory()->withoutPeriod()->create([
             'stripe_invoice_id' => 'in_test_outubro',
             'amount' => 6000,
             'currency' => 'eur',
@@ -118,12 +137,159 @@ class IssueInvoiceJobTest extends TestCase
                     && $data->amount === 6000
                     && $data->currency === 'eur'
                     && $data->date->format('Y-m-d') === '2026-11-02'
-                    && $data->description === 'Quota mensal ASPEC — outubro 2026')
+                    && $data->description === 'Quota ASPEC — outubro 2026')
                 ->andReturn(new IssuedInvoice('log', null, 'LOG-2026-ABCDEF12', null, IssuedInvoice::ISSUED));
         });
 
         $this->runJob($invoice->id);
 
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    // --- Período pago na descrição ---
+
+    /**
+     * O fim do período no Stripe é exclusivo (é o início do seguinte): a fatura mostra o dia antes.
+     */
+    #[Test]
+    public function annual_invoice_describes_the_paid_year_with_an_inclusive_end(): void
+    {
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+        $this->expectDescription('Quota ASPEC — período de 28/10/2026 a 27/10/2027');
+
+        $this->runJob($invoice->id);
+
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    #[Test]
+    public function monthly_invoice_describes_the_paid_month_with_an_inclusive_end(): void
+    {
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2026-11-28 10:00:00',
+        ]);
+        $this->expectDescription('Quota ASPEC — período de 28/10/2026 a 27/11/2026');
+
+        $this->runJob($invoice->id);
+
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    /**
+     * 23:30 UTC no verão já é o dia seguinte em Lisboa (UTC+1): as datas da fatura são as de Portugal.
+     */
+    #[Test]
+    public function period_dates_are_the_lisbon_dates(): void
+    {
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-06-14 23:30:00',
+            'period_end' => '2026-07-14 23:30:00',
+        ]);
+        $this->expectDescription('Quota ASPEC — período de 15/06/2026 a 14/07/2026');
+
+        $this->runJob($invoice->id);
+
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    /**
+     * O período vem do Stripe e não da configuração: mudar SUBSCRIPTION_INTERVAL não altera a
+     * descrição de uma fatura mensal já paga.
+     */
+    #[Test]
+    public function period_description_does_not_depend_on_the_configured_interval(): void
+    {
+        config(['subscription.interval' => 'year']);
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2026-11-28 10:00:00',
+        ]);
+        $this->expectDescription('Quota ASPEC — período de 28/10/2026 a 27/11/2026');
+
+        $this->runJob($invoice->id);
+
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    #[Test]
+    public function description_starts_with_the_configured_name(): void
+    {
+        config(['subscription.invoice_description' => 'Quotização ASPEC']);
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+        $this->expectDescription('Quotização ASPEC — período de 28/10/2026 a 27/10/2027');
+
+        $this->runJob($invoice->id);
+
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    #[Test]
+    public function demo_driver_receives_the_period_description(): void
+    {
+        config(['services.invoicing.driver' => 'demo']);
+        Mail::fake();
+        Storage::fake('local');
+        $captured = null;
+        View::composer('invoices.demo', function ($view) use (&$captured) {
+            $captured = $view->getData();
+        });
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+
+        $this->runJob($invoice->id);
+
+        $this->assertNotNull($captured, 'A vista invoices.demo não foi renderizada.');
+        $this->assertSame('Quota ASPEC — período de 28/10/2026 a 27/10/2027', $captured['description'] ?? null);
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
+    #[Test]
+    public function invoiceexpress_driver_sends_the_period_description_in_the_item(): void
+    {
+        Http::preventStrayRequests();
+        config([
+            'services.invoicing.driver' => 'invoiceexpress',
+            'services.invoiceexpress.account_name' => 'aspec-test',
+            'services.invoiceexpress.api_key' => 'secret-key-123',
+            'services.invoiceexpress.document_type' => 'invoice_receipts',
+            'services.invoiceexpress.sequence_id' => null,
+            'services.invoiceexpress.item_name' => 'Quota ASPEC',
+            'services.invoiceexpress.tax_name' => 'IVA23',
+            'services.invoiceexpress.vat_rate' => 23,
+            'services.invoiceexpress.tax_exemption' => null,
+            'services.invoiceexpress.retry_times' => 1,
+            'services.invoiceexpress.retry_sleep_ms' => 0,
+        ]);
+        Http::fake([
+            '*aspec-test.app.invoicexpress.com/invoice_receipts.json*' => Http::response(['invoice_receipt' => ['id' => 987, 'status' => 'draft']], 201),
+            '*aspec-test.app.invoicexpress.com/invoice_receipts/987/change-state.json*' => Http::response(['invoice_receipt' => [
+                'id' => 987,
+                'status' => 'settled',
+                'sequence_number' => 'FR ASPEC2026/1',
+                'permalink' => 'https://aspec-test.app.invoicexpress.com/documents/abc123',
+            ]], 200),
+            '*aspec-test.app.invoicexpress.com/invoice_receipts/987/email-document.json*' => Http::response([], 200),
+        ]);
+        $invoice = $this->pendingInvoice([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+
+        $this->runJob($invoice->id);
+
+        Http::assertSent(fn (Request $request) => $request->method() === 'POST'
+            && str_contains($request->url(), '/invoice_receipts.json')
+            && data_get($request->data(), 'invoice.items.0.name') === 'Quota ASPEC'
+            && data_get($request->data(), 'invoice.items.0.description') === 'Quota ASPEC — período de 28/10/2026 a 27/10/2027');
         $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
     }
 

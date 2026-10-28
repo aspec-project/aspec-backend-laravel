@@ -18,7 +18,7 @@ class InvoiceDataTest extends TestCase
             stripeInvoiceId: 'in_test_123',
             amount: $amount,
             currency: $currency,
-            description: 'Quota mensal ASPEC — outubro 2026',
+            description: 'Quota ASPEC — período de 07/10/2026 a 06/10/2027',
             date: new DateTimeImmutable('2026-10-07'),
         );
     }

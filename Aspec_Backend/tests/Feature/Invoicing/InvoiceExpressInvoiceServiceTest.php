@@ -52,7 +52,7 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             'services.invoiceexpress.api_key' => self::API_KEY,
             'services.invoiceexpress.document_type' => 'invoice_receipts',
             'services.invoiceexpress.sequence_id' => null,
-            'services.invoiceexpress.item_name' => 'Quota mensal ASPEC',
+            'services.invoiceexpress.item_name' => 'Quota ASPEC',
             'services.invoiceexpress.tax_name' => 'IVA23',
             'services.invoiceexpress.vat_rate' => 23,
             'services.invoiceexpress.tax_exemption' => null,
@@ -188,8 +188,8 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
         $this->assertSame(self::CUSTOMER_EMAIL, data_get($payload, 'invoice.client.email'));
 
         $this->assertCount(1, data_get($payload, 'invoice.items'));
-        $this->assertSame('Quota mensal ASPEC', data_get($payload, 'invoice.items.0.name'));
-        $this->assertSame('Quota mensal ASPEC — outubro 2026', data_get($payload, 'invoice.items.0.description'));
+        $this->assertSame('Quota ASPEC', data_get($payload, 'invoice.items.0.name'));
+        $this->assertSame('Quota ASPEC — período de 07/10/2026 a 06/10/2027', data_get($payload, 'invoice.items.0.description'));
         $this->assertSame('1', data_get($payload, 'invoice.items.0.quantity'));
         $this->assertSame('IVA23', data_get($payload, 'invoice.items.0.tax.name'));
     }

@@ -301,7 +301,7 @@ class InvoiceExpressInvoiceService implements InvoiceService
                 ['message' => [
                     'client' => ['email' => $customer->email, 'save' => '0'],
                     'subject' => "Fatura {$issued->number} — ASPEC",
-                    'body' => 'Segue em anexo a fatura da sua quota mensal da ASPEC.',
+                    'body' => 'Segue em anexo a fatura da sua quota da ASPEC.',
                 ]],
             );
 

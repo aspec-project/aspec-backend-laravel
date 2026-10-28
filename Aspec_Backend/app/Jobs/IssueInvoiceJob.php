@@ -106,17 +106,24 @@ class IssueInvoiceJob implements ShouldQueue
     /**
      * Pagamento a faturar. A data é a de emissão e não a do pagamento: as séries fiscais exigem
      * datas não decrescentes, e uma nova tentativa dias depois com a data antiga podia ser recusada.
-     * O mês descrito é o do pagamento (a linha é criada pelo webhook segundos depois de pago).
+     * A descrição diz o período pago, do Stripe, em datas de Lisboa e com o último dia pago como fim
+     * (ex. "Quota ASPEC — período de 28/10/2026 a 27/10/2027"), igual para a quota mensal e anual.
+     * Faturas sem período (anteriores a esta coluna ou payload sem período) descrevem o mês do
+     * pagamento (a linha é criada pelo webhook segundos depois de pago).
      */
     private function invoiceData(Invoice $invoice): InvoiceData
     {
-        $month = $invoice->created_at->locale('pt_PT')->translatedFormat('F Y');
+        $period = $invoice->paidPeriodDates();
+
+        $paid = $period
+            ? "período de {$period[0]->format('d/m/Y')} a {$period[1]->format('d/m/Y')}"
+            : $invoice->created_at->locale('pt_PT')->translatedFormat('F Y');
 
         return new InvoiceData(
             stripeInvoiceId: $invoice->stripe_invoice_id,
             amount: $invoice->amount,
             currency: $invoice->currency,
-            description: config('subscription.invoice_description').' — '.$month,
+            description: config('subscription.invoice_description').' — '.$paid,
             date: CarbonImmutable::now(),
         );
     }

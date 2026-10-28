@@ -9,6 +9,7 @@ use Laravel\Cashier\Subscription;
 use RuntimeException;
 use Stripe\Exception\ApiErrorException;
 use Stripe\Exception\InvalidRequestException;
+use Stripe\Price;
 use Stripe\Subscription as StripeSubscription;
 
 /**
@@ -93,6 +94,17 @@ class StripeSubscriptionService
 
             return new CheckoutSessionData($sessionId, null, 'expired');
         }
+    }
+
+    /**
+     * Price do Stripe com o id indicado (valor, moeda, intervalo e se está ativo), usado pelo
+     * comando subscriptions:check-price para comparar com a configuração.
+     *
+     * @throws ApiErrorException Se o Stripe falhar ou o Price não existir.
+     */
+    public function retrievePrice(string $priceId): Price
+    {
+        return Cashier::stripe()->prices->retrieve($priceId);
     }
 
     /**

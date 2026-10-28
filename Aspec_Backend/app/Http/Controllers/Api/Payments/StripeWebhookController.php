@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Payments;
 
 use App\Enums\InactiveReason;
 use App\Enums\InvoiceStatus;
+use App\Enums\SubscriptionInterval;
 use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
 use App\Models\Invoice;
@@ -11,6 +12,7 @@ use App\Models\ProcessedWebhookEvent;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use App\Notifications\SubscriptionActivatedNotification;
+use App\Notifications\SubscriptionRenewalReminderNotification;
 use App\Services\Payments\StripeSubscriptionService;
 use App\Services\Payments\SubscriptionService;
 use App\Traits\ApiResponse;
@@ -29,8 +31,9 @@ use Throwable;
  * Webhook do Stripe. A assinatura é verificada pelo middleware do Cashier (aplicado no
  * construtor dele quando há STRIPE_WEBHOOK_SECRET); os handlers do Cashier sincronizam as
  * subscrições locais e este controller acrescenta a idempotência, a ativação da conta quando a
- * subscrição é criada ou passa a ativa, a fatura de cada pagamento, o período de carência quando
- * a cobrança falha e a desativação quando a subscrição termina.
+ * subscrição é criada ou passa a ativa, a fatura de cada pagamento (com o período pago), o período
+ * de carência quando a cobrança falha, a desativação quando a subscrição termina e o aviso de
+ * renovação da quota anual.
  */
 class StripeWebhookController extends WebhookController
 {
@@ -333,9 +336,8 @@ class StripeWebhookController extends WebhookController
     }
 
     /**
-     * Pagamento recebido: termina o período de carência, grava a fatura pendente e põe a emissão
-     * em fila depois do commit
-     * (um rollback do webhook nunca emite fatura).
+     * Pagamento recebido: termina o período de carência, grava a fatura pendente com o período pago
+     * e põe a emissão em fila depois do commit (um rollback do webhook nunca emite fatura).
      * Corre primeiro o handler do Cashier, que no Checkout limpa o metadata da sessão no Stripe.
      * Pagamentos de 0 (início do trial) não têm fatura; um cliente que não é nosso só fica no log.
      * O mesmo pagamento (stripe_invoice_id) nunca gera duas faturas, mesmo vindo em eventos diferentes.
@@ -372,6 +374,7 @@ class StripeWebhookController extends WebhookController
                 'amount' => $object['amount_paid'],
                 'currency' => strtolower($object['currency']),
                 'status' => InvoiceStatus::Pending,
+                ...$this->paidPeriod($object),
             ],
         );
 
@@ -380,6 +383,117 @@ class StripeWebhookController extends WebhookController
         }
 
         return $response;
+    }
+
+    /**
+     * Renovação próxima (invoice.upcoming, enviado pelo Stripe com a antecedência configurada no
+     * dashboard): avisa o membro por email, depois do commit, com a data e o valor da cobrança.
+     * Só com quota anual: uma cobrança grande uma vez por ano não deve ser surpresa; no mensal
+     * seriam 12 emails por ano de ruído. A fatura futura não tem id nem cria linha em invoices; a
+     * idempotência vem de processed_webhook_events.
+     * Não faz nada se: a quota é mensal; a fatura não é de uma subscrição; o cliente não é nosso, é
+     * isento (admin técnico) ou a conta não está Active; a subscrição não é uma subscrição local
+     * deste utilizador em curso, ou tem cancelamento agendado (não vai haver cobrança); não há data.
+     * Data = next_payment_attempt, ou o início do período a cobrar na linha da subscrição.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function handleInvoiceUpcoming(array $payload)
+    {
+        if (SubscriptionInterval::configured() !== SubscriptionInterval::Year) {
+            return $this->successMethod();
+        }
+
+        $invoice = $payload['data']['object'];
+        $subscriptionId = $invoice['parent']['subscription_details']['subscription'] ?? null;
+
+        if (blank($subscriptionId)) {
+            return $this->successMethod();
+        }
+
+        $user = $this->lockUserByCustomer($invoice['customer'] ?? null);
+
+        if (! $user
+            || $user->isSubscriptionExempt()
+            || $user->accountStatus?->name !== 'Active'
+            || ! $this->renewsSubscription($user, $subscriptionId)) {
+            return $this->successMethod();
+        }
+
+        $renewsAt = $invoice['next_payment_attempt'] ?? $this->subscriptionLine($invoice)['period']['start'] ?? null;
+
+        if (! is_int($renewsAt)) {
+            return $this->successMethod();
+        }
+
+        $user->notify(new SubscriptionRenewalReminderNotification(
+            Carbon::createFromTimestamp($renewsAt),
+            (int) ($invoice['amount_due'] ?? 0),
+            $subscriptionId,
+        ));
+
+        return $this->successMethod();
+    }
+
+    /**
+     * Indica se a subscrição é uma subscrição local deste utilizador em curso e sem cancelamento
+     * agendado (ends_at null), ou seja, que vai mesmo ser renovada.
+     */
+    private function renewsSubscription(User $user, string $stripeSubscriptionId): bool
+    {
+        return Subscription::where('user_id', $user->id)
+            ->where('stripe_id', $stripeSubscriptionId)
+            ->whereNotIn('stripe_status', self::ENDED_STATUSES)
+            ->whereNull('ends_at')
+            ->exists();
+    }
+
+    /**
+     * Período pago, da linha da subscrição da fatura (formato basil: lines.data[].period, fim
+     * exclusivo). Nunca usa o period_start/period_end do topo da fatura: numa renovação referem-se
+     * ao período anterior. Sem linha de subscrição usa a 1.ª linha; sem período válido (inteiros,
+     * fim depois do início) grava null, e a fatura é criada na mesma.
+     *
+     * @param  array<string, mixed>  $invoice  Objeto fatura do evento.
+     * @return array{period_start: ?Carbon, period_end: ?Carbon}
+     */
+    private function paidPeriod(array $invoice): array
+    {
+        $period = $this->subscriptionLine($invoice)['period'] ?? null;
+        $start = is_array($period) ? ($period['start'] ?? null) : null;
+        $end = is_array($period) ? ($period['end'] ?? null) : null;
+
+        if (! is_int($start) || ! is_int($end) || $end <= $start) {
+            return ['period_start' => null, 'period_end' => null];
+        }
+
+        return [
+            'period_start' => Carbon::createFromTimestamp($start),
+            'period_end' => Carbon::createFromTimestamp($end),
+        ];
+    }
+
+    /**
+     * Linha da subscrição numa fatura do Stripe (parent.type subscription_item_details), ou a 1.ª
+     * linha se nenhuma o for. Null se a fatura não tiver linhas.
+     *
+     * @param  array<string, mixed>  $invoice
+     * @return array<string, mixed>|null
+     */
+    private function subscriptionLine(array $invoice): ?array
+    {
+        $lines = array_values(array_filter(
+            (array) ($invoice['lines']['data'] ?? []),
+            fn ($line) => is_array($line),
+        ));
+
+        foreach ($lines as $line) {
+            if (($line['parent']['type'] ?? null) === 'subscription_item_details') {
+                return $line;
+            }
+        }
+
+        return $lines[0] ?? null;
     }
 
     /**

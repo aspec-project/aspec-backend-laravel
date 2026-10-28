@@ -184,7 +184,7 @@ class DemoInvoiceServiceTest extends TestCase
             '1000-001',
             'Lisboa',
             '60,00 €',
-            'Quota mensal ASPEC — outubro 2026',
+            'Quota ASPEC — período de 07/10/2026 a 06/10/2027',
             $this->expectedNumber('in_test_123'),
             'in_test_123',
         ] as $expected) {
