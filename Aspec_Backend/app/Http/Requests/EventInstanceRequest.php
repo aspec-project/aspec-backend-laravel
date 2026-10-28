@@ -37,6 +37,9 @@ class EventInstanceRequest extends FormRequest
                 ? ['prohibited']
                 : ['required', 'string', 'max:255'],
             'venue_name' => ['nullable', 'string', 'max:255'],
+            'place_id' => $isOnline
+                ? ['prohibited']
+                : ['sometimes', 'nullable', 'string', 'regex:/^[A-Za-z0-9_-]{1,512}$/D'],
             'latitude' => $isOnline
                 ? ['prohibited']
                 : ['sometimes', 'nullable', 'numeric', 'between:-90,90'],
@@ -98,6 +101,16 @@ class EventInstanceRequest extends FormRequest
 
                     $validator->errors()->add('latitude', $message);
                     $validator->errors()->add('longitude', $message);
+                }
+
+                if (
+                    $this->filled('place_id')
+                    && ($hasLatitude || $hasLongitude)
+                ) {
+                    $validator->errors()->add(
+                        'place_id',
+                        'Envie o identificador do local sem latitude ou longitude.'
+                    );
                 }
             }
 
@@ -193,6 +206,7 @@ class EventInstanceRequest extends FormRequest
             'event_end_time' => 'hora de fim',
             'description' => 'descrição',
             'address' => 'morada',
+            'place_id' => 'identificador do local',
             'latitude' => 'latitude',
             'longitude' => 'longitude',
             'max_attendees' => 'lotação máxima',
@@ -214,6 +228,8 @@ class EventInstanceRequest extends FormRequest
             'max_attendees.min' => 'A lotação máxima tem de ser pelo menos 1.',
             'latitude.between' => 'A latitude tem de estar entre -90 e 90.',
             'longitude.between' => 'A longitude tem de estar entre -180 e 180.',
+            'place_id.regex' => 'O identificador do local não é válido.',
+            'place_id.prohibited' => 'Eventos online não devem ter identificador do local.',
             'is_online.required' => 'Indique se o evento é online.',
             'is_online.boolean' => 'O campo evento online deve ser verdadeiro ou falso.',
             'online_url.required' => 'O link é obrigatório para eventos online.',

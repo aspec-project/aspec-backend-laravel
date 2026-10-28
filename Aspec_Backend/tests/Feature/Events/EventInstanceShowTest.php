@@ -54,6 +54,24 @@ class EventInstanceShowTest extends TestCase
     }
 
     #[Test]
+    public function guest_can_see_place_id_for_a_google_event(): void
+    {
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+
+        $event = EventInstance::factory()->create([
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+    }
+
+    #[Test]
     public function guest_can_see_series_id_for_a_series_session(): void
     {
         $event = EventInstance::factory()->create();
