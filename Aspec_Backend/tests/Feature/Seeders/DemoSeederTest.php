@@ -247,6 +247,43 @@ class DemoSeederTest extends TestCase
         $this->assertGreaterThanOrEqual(2, $replicated->count());
     }
 
+    /**
+     * Cada evento presencial (futuro ou passado) tem o place_id da Google da sua morada, válido como
+     * o backoffice o aceita e diferente dos outros; os online não têm local.
+     */
+    #[Test]
+    public function in_person_events_have_a_distinct_google_place_id_and_online_events_have_none(): void
+    {
+        $this->runDemoSeeder();
+
+        $events = EventInstance::all();
+        $inPerson = $events->where('is_online', false);
+
+        $this->assertCount(13, $inPerson);
+
+        foreach ($inPerson as $event) {
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]{1,512}$/D', (string) $event->place_id, $event->name);
+        }
+
+        $this->assertCount(13, $inPerson->pluck('place_id')->unique());
+
+        foreach ($events->where('is_online', true) as $event) {
+            $this->assertNull($event->place_id, $event->name);
+        }
+    }
+
+    #[Test]
+    public function public_event_api_returns_the_demo_place_id(): void
+    {
+        $this->runDemoSeeder();
+
+        $event = $this->demoEvent('Pequeno-almoço de Negócios ASPEC', 'Lisboa');
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.place_id', 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k');
+    }
+
     #[Test]
     public function demo_events_use_the_five_real_categories(): void
     {

@@ -266,6 +266,7 @@ class DemoSeeder extends Seeder
                     'online_url' => $event['online_url'] ?? null,
                     'address' => $event['address'] ?? null,
                     'venue_name' => $event['venue'] ?? null,
+                    'place_id' => $event['place_id'] ?? null,
                     'latitude' => $event['latitude'] ?? null,
                     'longitude' => $event['longitude'] ?? null,
                     'max_attendees' => $event['max_attendees'],
@@ -832,6 +833,10 @@ class DemoSeeder extends Seeder
      * inscrito (vê o link) e prazo terminado sem ele (não vê). Coordenadas no centro de cada cidade.
      * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
      *
+     * Os presenciais têm o place_id da Google da morada (obtido uma vez com o GoogleGeocoder; os
+     * termos da Google permitem guardá-lo), para o mapa Google da página do evento. As coordenadas
+     * são nossas, não da Google, e ficam para o mapa antigo enquanto o frontend não usa o place_id.
+     *
      * @return list<array<string, mixed>>
      */
     private function events(): array
@@ -850,6 +855,7 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'venue' => 'Hotel Tivoli Oriente',
                 'address' => 'Avenida D. João II 27, 1990-083 Lisboa',
+                'place_id' => 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k',
                 'latitude' => 38.7676, 'longitude' => -9.0973,
                 'registrants' => [$demoMember, ...$this->demoMembers(1, 6)],
             ],
@@ -858,6 +864,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 12, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
+                'place_id' => 'Ei1Bdi4gZG9zIEFsaWFkb3MgMTIwLCA0MDAwLTA2NyBQb3J0bywgUG9ydHVnYWwiMBIuChQKEgkLQ3Be42QkDREzxCX1feNMXxB4KhQKEgmP_UBZ42QkDREQ0m1U5syNcw',
                 'latitude' => 41.1486, 'longitude' => -8.6110,
                 'registrants' => $this->demoMembers(7, 9),
             ],
@@ -866,6 +873,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 12,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
+                'place_id' => 'ChIJz2iE28H-JA0R2oEkaaewzME',
                 'latitude' => 41.5512, 'longitude' => -8.4229,
                 'registrants' => $this->demoMembers(1, 11),
             ],
@@ -874,6 +882,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 9, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 80,
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
+                'place_id' => 'ChIJr7Xg63EzGQ0Rm8LgeMFJfpQ',
                 'latitude' => 38.7290, 'longitude' => -9.1560,
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, ...$this->demoMembers(2, 8)],
@@ -883,6 +892,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 23, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
+                'place_id' => 'EixSdWEgZGEgU29maWEgMTIwLCAzMDAwLTM5MCBDb2ltYnJhLCBQb3J0dWdhbCIwEi4KFAoSCQffjZ8F-SINEbdWcj5j3bFVEHgqFAoSCQtDsAoF-SINEY0Z8kdZQA8q',
                 'latitude' => 40.2115, 'longitude' => -8.4290,
                 'notes' => $dinnerNotes,
                 'registrants' => $this->demoMembers(4, 5),
@@ -892,6 +902,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 37, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
                 'description' => $dinnerDescription,
                 'address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro',
+                'place_id' => 'ChIJ9y1z1sZSBQ0RS0zUXIu14FA',
                 'latitude' => 37.0153, 'longitude' => -7.9352,
             ],
             [
@@ -899,6 +910,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 33, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 40,
                 'description' => 'Almoço entre empresários da região, com uma breve apresentação de cada participante e tempo para conversar e criar parcerias.',
                 'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
+                'place_id' => 'ChIJ-VK4d1I2Iw0RBstTicF8-28',
                 'latitude' => 40.6566, 'longitude' => -7.9125,
                 'notes' => 'Custo de participação: 18 € (pago no local).',
                 'registrants' => $this->demoMembers(10, 11),
@@ -909,6 +921,7 @@ class DemoSeeder extends Seeder
                 'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
                 'venue' => 'Centro de Congressos de Aveiro',
                 'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
+                'place_id' => 'Ei1DYWlzIGRhIEZvbnRlIE5vdmEsIDM4MTAtMjAwIEF2ZWlybywgUG9ydHVnYWwiLiosChQKEgm_8TFeCZgjDREuH0xpIAU3QxIUChIJxdSxZAmYIw0R6bcGCHI5Zj8',
                 'latitude' => 40.6380, 'longitude' => -8.6440,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
             ],
@@ -917,6 +930,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 29, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
                 'description' => 'Como usar as redes sociais e o Google para atrair clientes da sua zona, com um plano simples para aplicar no dia seguinte.',
                 'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
+                'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
                 'latitude' => 39.7445, 'longitude' => -8.8070,
                 'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
             ],
@@ -926,6 +940,7 @@ class DemoSeeder extends Seeder
                 'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
                 'venue' => 'Fórum Municipal Luísa Todi',
                 'address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal',
+                'place_id' => 'ChIJv0-wxQdDGQ0RypZhgbJrUks',
                 'latitude' => 38.5225, 'longitude' => -8.8920,
                 'registrants' => $this->demoMembers(6, 6),
             ],
@@ -934,6 +949,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => 26, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 10,
                 'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno para todos treinarem.',
                 'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
+                'place_id' => 'EjFSdWEgZGUgSsO6bGlvIERpbmlzIDc1MCwgNDA1MC0wMTIgUG9ydG8sIFBvcnR1Z2FsIjESLwoUChIJJ9OqgQhlJA0Rd8tz-E9VUKEQ7gUqFAoSCT-ZVf4FZSQNEQM0UeGusGGV',
                 'latitude' => 41.1580, 'longitude' => -8.6290,
                 'registrants' => $this->demoMembers(1, 10),
             ],
@@ -964,6 +980,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => -14, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria',
+                'place_id' => 'ChIJ0aliKvRzIg0R30hY7E0CvTE',
                 'latitude' => 39.7436, 'longitude' => -8.8071,
                 'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
             ],
@@ -972,6 +989,7 @@ class DemoSeeder extends Seeder
                 'days_from_now' => -30, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro',
+                'place_id' => 'ChIJNbMUggOYIw0RZ_7oCGcXLLo',
                 'latitude' => 40.6412, 'longitude' => -8.6537,
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
