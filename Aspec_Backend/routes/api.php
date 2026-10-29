@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Lists\SocialPlatformController;
 use App\Http\Controllers\Api\Lists\WeekDayController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
+use App\Http\Controllers\Api\Member\MemberReviewController;
 use App\Http\Controllers\Api\Member\PortfolioController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
@@ -129,6 +130,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/member-profile/logo', [MemberLogoController::class, 'store'])->middleware('throttle:logo-upload');
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:portfolio-upload');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
+    Route::post('/members/{member}/reviews', [MemberReviewController::class, 'store'])
+        ->whereUuid('member');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
     Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
     Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])

@@ -69,6 +69,16 @@ class MemberProfile extends Model
         return $this->hasMany(Portfolio::class, 'profile_id');
     }
 
+    public function reviewsWritten(): HasMany
+    {
+        return $this->hasMany(Review::class, 'reviewer_profile_id');
+    }
+
+    public function reviewsReceived(): HasMany
+    {
+        return $this->hasMany(Review::class, 'reviewed_profile_id');
+    }
+
     /**
      * Perfis que aparecem no diretório público: conta Active e perfil não apagado, seja qual for o papel.
      * Perfis ou utilizadores soft deleted (incluindo anonimizados) ficam de fora pelo SoftDeletes de cada modelo.
