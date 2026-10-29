@@ -26,7 +26,7 @@ class RateLimitConfigurationTest extends TestCase
     private const IP = '203.0.113.7';
 
     /**
-     * As 8 ações do membro com 120/min e 2000/hora, cada uma a contar à parte (cancelar/retomar tem o seu).
+     * As 9 ações do membro com 120/min e 2000/hora, cada uma a contar à parte (cancelar/retomar tem o seu).
      *
      * @return array<string, array{string}>
      */
@@ -41,6 +41,7 @@ class RateLimitConfigurationTest extends TestCase
             'billing-portal' => ['billing-portal'],
             'invoice-download' => ['invoice-download'],
             'notification-preferences' => ['notification-preferences'],
+            'review-submit' => ['review-submit'],
         ];
     }
 

@@ -70,6 +70,7 @@ class MemberReviewController extends Controller
             $page = $validated['page'] ?? 1;
 
             $reviewsQuery = (clone $visibleReviews)
+                ->with('reviewerProfile')
                 ->when(
                     $rating !== null,
                     fn (Builder $query) => $query->where('rating', $rating)
@@ -134,9 +135,9 @@ class MemberReviewController extends Controller
     ): JsonResponse {
         $user = $request->user();
 
-        if ($user->role?->name !== 'Member') {
+        if (! in_array($user->role?->name, ['Member', 'Admin'], true)) {
             return $this->errorResponse(
-                'Só membros podem avaliar outros membros.',
+                'Só membros e administradores podem avaliar outros membros.',
                 Response::HTTP_FORBIDDEN
             );
         }
@@ -206,6 +207,7 @@ class MemberReviewController extends Controller
 
             return [$review, true];
         });
+        $review->load('reviewerProfile');
 
         return $this->successResponse(
             new ReviewResource($review),
