@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
 use App\Http\Controllers\Api\Account\NotificationPreferenceController;
+use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
@@ -118,6 +119,7 @@ Route::prefix('admin')
             ->whereUuid('eventInstance')
             ->middleware('throttle:event-attendees');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
+        Route::get('/dashboard', AdminDashboardController::class)->middleware('throttle:admin-dashboard');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
