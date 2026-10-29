@@ -8,6 +8,8 @@ use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\Location;
 use App\Models\MemberProfile;
+use App\Models\Review;
+use App\Models\ReviewStatus;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\SocialPlatform;
@@ -22,12 +24,12 @@ use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * eventos (presenciais, online e passados) e inscrições. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * avaliações entre perfis, eventos (presenciais, online e passados) e inscrições. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
  * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
- * pelo nome e distrito, e repõe os dados originais, incluindo as inscrições desses eventos
- * (útil para repetir a demonstração).
+ * pelo nome e distrito, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
+ * e as inscrições desses eventos (útil para repetir a demonstração).
  * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
  */
 class DemoSeeder extends Seeder
@@ -75,8 +77,11 @@ class DemoSeeder extends Seeder
             $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo e sem portefólio.');
         }
 
+        $profileIds = [];
+
         foreach ($this->activeMembers() as $index => $member) {
             $profile = $this->seedAccount($member);
+            $profileIds[$member['email']] = $profile->id;
 
             $this->syncBusinessHours($profile, $member['hours']);
             $this->syncSocialLinks($profile, $member['social']);
@@ -91,6 +96,7 @@ class DemoSeeder extends Seeder
             $this->seedAccount($applicant);
         }
 
+        $this->seedReviews($profileIds);
         $this->seedEvents();
 
         $this->printSummary();
@@ -101,7 +107,7 @@ class DemoSeeder extends Seeder
      */
     private function lookupsMissing(): bool
     {
-        $lookups = [Role::class, AccountStatus::class, Sector::class, Location::class, WeekDay::class, SocialPlatform::class, EventCategory::class];
+        $lookups = [Role::class, AccountStatus::class, ReviewStatus::class, Sector::class, Location::class, WeekDay::class, SocialPlatform::class, EventCategory::class];
 
         return collect($lookups)->contains(fn (string $model) => $model::query()->doesntExist());
     }
@@ -302,6 +308,30 @@ class DemoSeeder extends Seeder
 
         foreach ($userIds as $userId) {
             $event->registrations()->create(['user_id' => $userId]);
+        }
+    }
+
+    /**
+     * Repõe as avaliações entre perfis de demonstração: apaga as que existirem entre eles (incluindo
+     * as feitas ou moderadas à mão numa demonstração) e volta a criar as de reviews().
+     * Não toca em avaliações em que o autor ou o avaliado não seja um perfil de demonstração.
+     *
+     * @param  array<string, string>  $profileIds  Id do perfil por email da conta.
+     */
+    private function seedReviews(array $profileIds): void
+    {
+        Review::whereIn('reviewer_profile_id', $profileIds)
+            ->whereIn('reviewed_profile_id', $profileIds)
+            ->delete();
+
+        foreach ($this->reviews() as [$reviewer, $reviewed, $rating, $status, $comment]) {
+            Review::create([
+                'reviewer_profile_id' => $profileIds[$reviewer],
+                'reviewed_profile_id' => $profileIds[$reviewed],
+                'rating' => $rating,
+                'comment' => $comment,
+                'status_id' => $this->lookupId(ReviewStatus::class, $status),
+            ]);
         }
     }
 
@@ -994,6 +1024,44 @@ class DemoSeeder extends Seeder
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
             ],
+        ];
+    }
+
+    /**
+     * Avaliações de demonstração [autor, avaliado, estrelas, estado, comentário], sem autoavaliações nem pares repetidos.
+     * Os autores são sempre membros (role Member), como exige o POST de avaliações.
+     * Médias visíveis: Contas Certas 4,8 e Ferreira 4,7 (aparecem em "4,5+"), Sabores do Algarve 4,3 (só "4+"),
+     * Carvalho 3,5 e Clínica Bem Cuidar 3,3 (só "3+"). A Hidden e a Flagged não contam para a média.
+     *
+     * @return list<array{string, string, int, string, string}>
+     */
+    private function reviews(): array
+    {
+        $member = fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number);
+        $demoMember = 'demo.membro@aspec.test';
+
+        return [
+            [$member(2), $demoMember, 5, 'Visible', 'Projeto de remodelação do nosso escritório impecável, cumpriram prazos e orçamento.'],
+            [$member(5), $demoMember, 5, 'Visible', 'Muito profissionais, ouviram as nossas ideias e melhoraram-nas.'],
+            [$member(7), $demoMember, 4, 'Visible', 'Bom trabalho de interiores; a obra atrasou uma semana, mas avisaram com tempo.'],
+
+            [$demoMember, $member(2), 5, 'Visible', 'Contabilidade sempre em dia e respostas rápidas às dúvidas.'],
+            [$member(3), $member(2), 5, 'Visible', 'Ajudaram-nos a organizar as contas do restaurante desde o primeiro mês.'],
+            [$member(4), $member(2), 5, 'Visible', 'Recomendo: explicam tudo com clareza e sem termos técnicos.'],
+            [$member(8), $member(2), 4, 'Visible', 'Serviço fiável, por vezes demoram um pouco a responder por email.'],
+
+            [$demoMember, $member(3), 4, 'Visible', 'Excelente jantar de equipa, peixe muito fresco.'],
+            [$member(7), $member(3), 4, 'Visible', 'Boa comida e atendimento simpático; ao fim de semana convém reservar.'],
+            [$member(9), $member(3), 5, 'Visible', 'Cataplana memorável, voltaremos com clientes.'],
+
+            [$member(6), $member(1), 4, 'Visible', 'Obra bem executada e equipa organizada.'],
+            [$member(10), $member(1), 3, 'Visible', 'Trabalho correto, mas a comunicação durante a obra podia ser melhor.'],
+            [$member(11), $member(1), 1, 'Flagged', 'Nunca mais! Bando de aldrabões, fujam desta empresa!'],
+
+            [$member(1), $member(6), 3, 'Visible', 'Atendimento simpático, mas esperei bastante para a consulta.'],
+            [$member(4), $member(6), 4, 'Visible', 'Clínica limpa e profissionais atenciosos.'],
+            [$member(9), $member(6), 3, 'Visible', 'Razoável; a marcação por telefone é difícil.'],
+            [$member(11), $member(6), 1, 'Hidden', 'Péssimos, só querem dinheiro. Não percam tempo com esta gente.'],
         ];
     }
 

@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Review extends Model
 {
-    use HasUuids;
+    use HasFactory, HasUuids;
 
     protected $fillable = [
         'reviewer_profile_id',
@@ -31,5 +33,13 @@ class Review extends Model
     public function status(): BelongsTo
     {
         return $this->belongsTo(ReviewStatus::class, 'status_id');
+    }
+
+    /**
+     * Só avaliações publicadas (estado Visible); Hidden e Flagged nunca contam para a média nem aparecem.
+     */
+    public function scopeVisible(Builder $query): void
+    {
+        $query->whereRelation('status', 'name', 'Visible');
     }
 }
