@@ -57,6 +57,7 @@ Route::middleware('throttle:public-events')->group(function () {
 Route::middleware('throttle:member-directory')->group(function () {
     Route::get('/members', [MemberController::class, 'index']);
     Route::get('/members/{member}', [MemberController::class, 'show'])->whereUuid('member');
+    Route::get('/members/{member}/reviews', [MemberReviewController::class, 'index'])->whereUuid('member');
 });
 
 Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)->group(function () {
