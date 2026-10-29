@@ -167,4 +167,45 @@ class MemberReviewIndexTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['sort']);
     }
+
+    #[Test]
+    public function active_member_sees_reviewer_profile_id_and_business_name(): void
+    {
+        $reviewed = $this->profile();
+        $reviewer = $this->profile();
+
+        $this->createReview($reviewer, $reviewed, 5);
+
+        $viewer = User::query()->findOrFail($reviewer->user_id);
+        Sanctum::actingAs($viewer);
+
+        $this->getJson($this->url($reviewed))
+            ->assertOk()
+            ->assertJsonPath('data.items.0.reviewer.id', $reviewer->id)
+            ->assertJsonPath(
+                'data.items.0.reviewer.business_name',
+                $reviewer->business_name
+            );
+    }
+
+    #[Test]
+    public function soft_deleted_reviewer_is_returned_as_anonymized(): void
+    {
+        $reviewed = $this->profile();
+        $reviewer = $this->profile();
+
+        $this->createReview($reviewer, $reviewed, 5);
+
+        $reviewer->delete();
+
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->getJson($this->url($reviewed))
+            ->assertOk()
+            ->assertJsonPath('data.items.0.reviewer.id', null)
+            ->assertJsonPath(
+                'data.items.0.reviewer.business_name',
+                'Empresa anonimizada'
+            );
+    }
 }

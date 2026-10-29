@@ -56,15 +56,20 @@ class ReviewTablesTest extends TestCase
             $uniquePairIndex['columns']
         );
 
-        $reviewedStatusIndex = $indexes->get(
-            'reviews_reviewed_profile_id_status_id_index'
+        $reviewedStatusRatingIndex = $indexes->get(
+            'reviews_reviewed_profile_status_rating_index'
         );
 
-        $this->assertNotNull($reviewedStatusIndex);
-        $this->assertFalse($reviewedStatusIndex['unique']);
+        $this->assertNotNull($reviewedStatusRatingIndex);
+        $this->assertFalse($reviewedStatusRatingIndex['unique']);
         $this->assertSame(
-            ['reviewed_profile_id', 'status_id'],
-            $reviewedStatusIndex['columns']
+            ['reviewed_profile_id', 'status_id', 'rating'],
+            $reviewedStatusRatingIndex['columns']
+        );
+
+        $this->assertNull(
+            $indexes->get('reviews_reviewed_profile_id_status_id_index'),
+            'O índice antigo não deve existir depois da migração.'
         );
     }
 }

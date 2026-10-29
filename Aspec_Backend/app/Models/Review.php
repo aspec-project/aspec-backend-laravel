@@ -22,7 +22,7 @@ class Review extends Model
 
     public function reviewerProfile(): BelongsTo
     {
-        return $this->belongsTo(MemberProfile::class, 'reviewer_profile_id');
+        return $this->belongsTo(MemberProfile::class, 'reviewer_profile_id')->withTrashed();
     }
 
     public function reviewedProfile(): BelongsTo

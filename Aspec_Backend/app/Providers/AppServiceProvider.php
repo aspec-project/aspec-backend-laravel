@@ -136,6 +136,7 @@ class AppServiceProvider extends ServiceProvider
             'billing-portal',
             'invoice-download',
             'notification-preferences',
+            'review-submit',
         ];
 
         foreach ($actions as $action) {
