@@ -12,6 +12,8 @@ use App\Models\EventRegistration;
 use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
+use App\Models\Review;
+use App\Models\ReviewStatus;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
@@ -76,6 +78,22 @@ class AnonymizeAndDeleteTest extends TestCase
         ]);
 
         return $id;
+    }
+
+    private function createReview(
+        MemberProfile $reviewer,
+        MemberProfile $reviewed,
+        string $statusName
+    ): Review {
+        return Review::query()->create([
+            'reviewer_profile_id' => $reviewer->id,
+            'reviewed_profile_id' => $reviewed->id,
+            'rating' => 5,
+            'comment' => "Avaliação {$statusName}.",
+            'status_id' => ReviewStatus::query()
+                ->where('name', $statusName)
+                ->valueOrFail('id'),
+        ]);
     }
 
     #[Test]
@@ -986,5 +1004,68 @@ class AnonymizeAndDeleteTest extends TestCase
 
         $this->assertSame('cus_test_new', User::withTrashed()->find($user->id)->stripe_id);
         Queue::assertPushed(DeleteStripeCustomerJob::class, fn ($job) => $job->userId === $user->id);
+    }
+
+    #[Test]
+    public function anonymizing_user_deletes_all_reviews_received_in_every_status(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $reviewedProfile = $user->memberProfile;
+        $reviewIds = [];
+
+        foreach (['Visible', 'Hidden', 'Flagged'] as $statusName) {
+            $reviewer = $this->memberWithFullProfile();
+
+            $review = $this->createReview(
+                $reviewer->memberProfile,
+                $reviewedProfile,
+                $statusName
+            );
+
+            $reviewIds[] = $review->id;
+        }
+
+        $user->anonymizeAndDelete();
+
+        foreach ($reviewIds as $reviewId) {
+            $this->assertDatabaseMissing('reviews', [
+                'id' => $reviewId,
+            ]);
+        }
+    }
+
+    #[Test]
+    public function anonymizing_user_keeps_all_reviews_they_wrote_in_every_status(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $reviewerProfile = $user->memberProfile;
+        $expectedReviews = [];
+
+        foreach (['Visible', 'Hidden', 'Flagged'] as $statusName) {
+            $recipient = $this->memberWithFullProfile();
+
+            $review = $this->createReview(
+                $reviewerProfile,
+                $recipient->memberProfile,
+                $statusName
+            );
+
+            $expectedReviews[] = [
+                'id' => $review->id,
+                'reviewer_profile_id' => $reviewerProfile->id,
+                'reviewed_profile_id' => $recipient->memberProfile->id,
+                'status_id' => $review->status_id,
+            ];
+        }
+
+        $user->anonymizeAndDelete();
+
+        foreach ($expectedReviews as $expectedReview) {
+            $this->assertDatabaseHas('reviews', $expectedReview);
+        }
+
+        $this->assertSoftDeleted('member_profiles', [
+            'id' => $reviewerProfile->id,
+        ]);
     }
 }
