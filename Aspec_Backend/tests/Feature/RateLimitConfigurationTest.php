@@ -266,6 +266,27 @@ class RateLimitConfigurationTest extends TestCase
         $this->assertSame(3600, $limits[0]->decaySeconds);
     }
 
+    #[Test]
+    public function admin_dashboard_limit_is_sixty_per_minute_per_admin(): void
+    {
+        $user = $this->newUser();
+        $limits = $this->limitsFor('admin-dashboard', $this->requestFrom($user));
+
+        $this->assertCount(1, $limits);
+        $this->assertSame(60, $limits[0]->maxAttempts);
+        $this->assertSame(60, $limits[0]->decaySeconds);
+        $this->assertStringContainsString((string) $user->id, $limits[0]->key);
+    }
+
+    #[Test]
+    public function admin_dashboard_limit_without_a_user_is_keyed_by_ip(): void
+    {
+        $limits = $this->limitsFor('admin-dashboard', $this->requestFrom());
+
+        $this->assertCount(1, $limits);
+        $this->assertStringContainsString(self::IP, $limits[0]->key);
+    }
+
     // C5 — onde se aplica o limite geral
 
     #[Test]

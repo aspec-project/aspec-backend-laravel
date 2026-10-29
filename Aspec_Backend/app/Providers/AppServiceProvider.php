@@ -225,6 +225,12 @@ class AppServiceProvider extends ServiceProvider
             fn (Request $request) => Limit::perMinute(30)->by($request->user()?->id ?: $request->ip())
         );
 
+        // Painel do backoffice: 60/min por admin. Chega para recarregar depois de cada aprovação ou recusa e trava um script.
+        RateLimiter::for(
+            'admin-dashboard',
+            fn (Request $request) => Limit::perMinute(60)->by($this->requesterKey($request))
+        );
+
         // Anonimizar contas: 5/hora por admin. Ação irreversível e rara; trava uma sessão de admin roubada ou um script repetido.
         RateLimiter::for(
             'admin-anonymize',
