@@ -3,17 +3,131 @@
 namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IndexMemberReviewsRequest;
 use App\Http\Requests\StoreMemberReviewRequest;
 use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
 use App\Models\Review;
 use App\Models\ReviewStatus;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
 class MemberReviewController extends Controller
 {
+    public function index(
+        IndexMemberReviewsRequest $request,
+        string $member
+    ): JsonResponse {
+        $profile = MemberProfile::listedInDirectory()->find($member);
+
+        if ($profile === null) {
+            return $this->errorResponse(
+                'Membro não encontrado.',
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        $visibleStatus = ReviewStatus::query()
+            ->where('name', 'Visible')
+            ->firstOrFail();
+
+        $visibleReviews = Review::query()
+            ->where('reviewed_profile_id', $profile->getKey())
+            ->where('status_id', $visibleStatus->id);
+
+        $reviewsCount = (clone $visibleReviews)->count();
+        $averageRating = (clone $visibleReviews)->avg('rating');
+
+        $data = [
+            'average_rating' => $averageRating === null
+                ? null
+                : round((float) $averageRating, 1),
+            'reviews_count' => $reviewsCount,
+        ];
+
+        $viewer = $request->user('sanctum');
+        $canSeeReviews = $viewer?->accountStatus?->name === 'Active';
+
+        if ($canSeeReviews) {
+            $distributionCounts = (clone $visibleReviews)
+                ->selectRaw('rating, COUNT(*) as total')
+                ->groupBy('rating')
+                ->pluck('total', 'rating');
+
+            $ratingDistribution = array_map(
+                fn (int $rating): array => [
+                    'rating' => $rating,
+                    'count' => (int) ($distributionCounts[$rating] ?? 0),
+                ],
+                range(1, 5)
+            );
+
+            $validated = $request->validated();
+            $rating = $validated['rating'] ?? null;
+            $sort = $validated['sort'] ?? 'newest';
+            $page = $validated['page'] ?? 1;
+
+            $reviewsQuery = (clone $visibleReviews)
+                ->when(
+                    $rating !== null,
+                    fn (Builder $query) => $query->where('rating', $rating)
+                );
+
+            switch ($sort) {
+                case 'oldest':
+                    $reviewsQuery
+                        ->orderBy('created_at')
+                        ->orderBy('id');
+                    break;
+
+                case 'highest':
+                    $reviewsQuery
+                        ->orderByDesc('rating')
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id');
+                    break;
+
+                case 'lowest':
+                    $reviewsQuery
+                        ->orderBy('rating')
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id');
+                    break;
+
+                case 'newest':
+                default:
+                    $reviewsQuery
+                        ->orderByDesc('created_at')
+                        ->orderByDesc('id');
+                    break;
+            }
+
+            $reviews = $reviewsQuery->paginate(5, ['*'], 'page', $page);
+
+            $data += [
+                'items' => ReviewResource::collection(
+                    $reviews->getCollection()
+                )->resolve($request),
+                'pagination' => [
+                    'current_page' => $reviews->currentPage(),
+                    'per_page' => $reviews->perPage(),
+                    'total' => $reviews->total(),
+                    'last_page' => $reviews->lastPage(),
+                ],
+                'rating_distribution' => $ratingDistribution,
+            ];
+        }
+
+        return $this->successResponse(
+            $data,
+            'Avaliações obtidas com sucesso.'
+        )
+            ->header('Cache-Control', 'private, no-store')
+            ->header('Vary', 'Cookie, Authorization');
+    }
+
     public function store(
         StoreMemberReviewRequest $request,
         string $member
