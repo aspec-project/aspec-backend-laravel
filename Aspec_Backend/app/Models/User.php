@@ -379,9 +379,14 @@ class User extends Authenticatable
             $stripeCustomerDeleted = $stripeCustomerDeleted && $this->stripe_id === $handledStripeId;
             $checkoutSessionId = $this->stripe_checkout_session_id;
 
-            $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
+            $profile = MemberProfile::withTrashed()
+                ->where('user_id', $this->id)
+                ->lockForUpdate()
+                ->first();
 
             if ($profile) {
+                $profile->reviewsReceived()->delete();
+
                 $profile->update([
                     'name' => 'Utilizador Anónimo',
                     'business_name' => 'Empresa Removida',
