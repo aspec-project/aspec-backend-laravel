@@ -9,6 +9,7 @@ use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
+use App\Models\Review;
 use App\Models\User;
 use App\Rules\InternationalPhone;
 use App\Rules\PortuguesePostalCode;
@@ -567,6 +568,51 @@ class DemoSeederTest extends TestCase
         $this->getJson('/api/events')
             ->assertOk()
             ->assertJsonPath('data.pagination.total', 14);
+    }
+
+    /**
+     * A demonstração do filtro por avaliação precisa de perfis em "4,5+", outros só em "4+" ou abaixo,
+     * e de uma avaliação Hidden e outra Flagged para a moderação.
+     */
+    #[Test]
+    public function creates_visible_hidden_and_flagged_reviews_that_feed_the_rating_filter(): void
+    {
+        $this->runDemoSeeder();
+
+        $statuses = Review::with('status')->get()->countBy(fn (Review $review) => $review->status->name);
+
+        $this->assertGreaterThanOrEqual(10, $statuses['Visible'] ?? 0);
+        $this->assertSame(1, $statuses['Hidden'] ?? 0);
+        $this->assertSame(1, $statuses['Flagged'] ?? 0);
+        $this->assertSame(0, Review::whereColumn('reviewer_profile_id', 'reviewed_profile_id')->count());
+
+        $highest = $this->getJson('/api/members?min_rating=4.5&per_page=50')->assertOk()->json('data.items');
+        $fourPlus = $this->getJson('/api/members?min_rating=4&per_page=50')->assertOk()->json('data.items');
+
+        $this->assertNotEmpty($highest);
+        $this->assertGreaterThan(count($highest), count($fourPlus));
+        $this->assertTrue(collect($highest)->every(fn (array $item) => $item['average_rating'] >= 4.5));
+    }
+
+    /**
+     * Avaliações moderadas à mão durante uma demonstração voltam ao estado original;
+     * avaliações que não são entre perfis de demonstração ficam como estão.
+     */
+    #[Test]
+    public function running_again_resets_demo_reviews_without_touching_other_reviews(): void
+    {
+        $this->runDemoSeeder();
+
+        $demoCount = Review::count();
+        $demoMemberProfileId = $this->demoUser('demo.membro@aspec.test')->memberProfile->id;
+        Review::where('reviewed_profile_id', $demoMemberProfileId)->delete();
+        $other = Review::factory()->create(['reviewed_profile_id' => $demoMemberProfileId]);
+
+        $this->runDemoSeeder();
+
+        $this->assertSame($demoCount + 1, Review::count());
+        $this->assertModelExists($other);
+        $this->assertSame(4, Review::where('reviewed_profile_id', $demoMemberProfileId)->count());
     }
 
     #[Test]
