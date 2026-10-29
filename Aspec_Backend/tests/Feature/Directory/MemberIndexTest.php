@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsDirectoryMembers;
+use Tests\Concerns\BuildsReviews;
 use Tests\TestCase;
 
 /**
@@ -18,7 +19,7 @@ use Tests\TestCase;
  */
 class MemberIndexTest extends TestCase
 {
-    use BuildsDirectoryMembers, RefreshDatabase;
+    use BuildsDirectoryMembers, BuildsReviews, RefreshDatabase;
 
     protected function setUp(): void
     {
@@ -263,32 +264,43 @@ class MemberIndexTest extends TestCase
     }
 
     #[Test]
-    public function min_rating_returns_an_empty_list_while_there_are_no_reviews(): void
+    public function min_rating_excludes_members_without_reviews(): void
     {
-        $this->listedMember();
-        $this->listedMember();
+        $this->listedMember(['business_name' => 'Sem Avaliacoes']);
+        $this->listedMember(['business_name' => 'Outra Sem Avaliacoes']);
 
         $this->listMembers(['min_rating' => 4])
             ->assertOk()
             ->assertJsonPath('data.items', [])
             ->assertJsonPath('data.pagination.total', 0)
             ->assertJsonPath('data.pagination.last_page', 1);
+
+        $rated = $this->listedMember(['business_name' => 'Avaliada']);
+        $this->reviewsFor($rated, [4]);
+
+        $this->assertSame([$rated->id], $this->listedIds($this->listMembers(['min_rating' => 4])->assertOk()));
     }
 
     #[Test]
-    public function every_item_has_null_average_rating_and_zero_reviews_while_there_are_no_reviews(): void
+    public function members_without_reviews_are_listed_with_null_average_and_zero_count_when_min_rating_is_absent(): void
     {
+        $withoutReviews = [];
         for ($i = 1; $i <= 3; $i++) {
-            $this->listedMember(['business_name' => "Empresa {$i}"]);
+            $withoutReviews[] = $this->listedMember(['business_name' => "Empresa {$i}"]);
         }
+        $rated = $this->listedMember(['business_name' => 'Avaliada']);
+        $this->reviewsFor($rated, [5]);
 
-        $items = $this->listMembers()->assertOk()->json('data.items');
+        $response = $this->listMembers(['per_page' => 50])->assertOk();
 
-        $this->assertCount(3, $items);
-        foreach ($items as $item) {
+        foreach ($withoutReviews as $profile) {
+            $item = $this->listedItem($response, $profile->id);
+            $this->assertNotNull($item);
             $this->assertNull($item['average_rating']);
             $this->assertSame(0, $item['reviews_count']);
         }
+        $this->assertEquals(5.0, $this->listedItem($response, $rated->id)['average_rating']);
+        $this->assertSame(1, $this->listedItem($response, $rated->id)['reviews_count']);
     }
 
     #[Test]

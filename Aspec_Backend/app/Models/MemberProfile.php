@@ -90,11 +90,28 @@ class MemberProfile extends Model
     }
 
     /**
-     * Perfis com média de avaliações visíveis igual ou superior a $min.
-     * Ainda não existem avaliações, por isso nenhum perfil atinge a média mínima e a lista fica vazia.
+     * Acrescenta average_rating (média das avaliações Visible, null se não houver) e reviews_count (nº de Visible).
+     * Calculados em subconsultas no select, sem queries extra por perfil.
+     */
+    public function scopeWithRatingSummary(Builder $query): void
+    {
+        $query->withAvg(['reviewsReceived as average_rating' => fn (Builder $review) => $review->visible()], 'rating')
+            ->withCount(['reviewsReceived as reviews_count' => fn (Builder $review) => $review->visible()]);
+    }
+
+    /**
+     * Perfis cuja média das avaliações Visible, arredondada a 1 casa decimal como no cartão, é igual ou superior a $min.
+     * Perfis sem avaliações Visible ficam de fora. Subconsulta no where (não having) para o total da paginação estar certo.
+     * O CAST dá tipo numérico à média: sem ele, o SQLite compara-a com o parâmetro como texto e a condição nunca é verdadeira.
      */
     public function scopeWithMinAverageRating(Builder $query, float $min): void
     {
-        $query->whereRaw('0 = 1');
+        $query->where(
+            Review::query()->visible()
+                ->selectRaw('CAST(ROUND(AVG(rating), 1) AS DECIMAL(3, 1))')
+                ->whereColumn('reviews.reviewed_profile_id', 'member_profiles.id'),
+            '>=',
+            $min
+        );
     }
 }
