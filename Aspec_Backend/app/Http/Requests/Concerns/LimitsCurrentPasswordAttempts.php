@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests\Concerns;
 
+use App\Traits\ApiResponse;
 use Illuminate\Contracts\Validation\Validator;
-use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Limite de falhas do current_password (5 falhas em 15 minutos, por utilizador),
@@ -13,15 +15,19 @@ use Illuminate\Validation\ValidationException;
  */
 trait LimitsCurrentPasswordAttempts
 {
+    use ApiResponse;
+
     private const MAX_CURRENT_PASSWORD_FAILURES = 5;
 
     private const CURRENT_PASSWORD_DECAY_SECONDS = 900;
 
     /**
      * Antes da validação: se o pedido traz current_password e o utilizador está bloqueado,
-     * responde 429 mesmo com a password certa (sem contar como nova falha).
+     * responde 429 mesmo com a password certa (sem contar como nova falha). A mensagem diz o motivo
+     * e os minutos que faltam (arredondados para cima), porque a genérica do 429 não explica ao
+     * membro que só as ações com a password atual estão bloqueadas.
      *
-     * @throws ThrottleRequestsException
+     * @throws HttpResponseException
      */
     protected function prepareForValidation(): void
     {
@@ -32,9 +38,14 @@ trait LimitsCurrentPasswordAttempts
         $key = $this->currentPasswordThrottleKey();
 
         if (RateLimiter::tooManyAttempts($key, self::MAX_CURRENT_PASSWORD_FAILURES)) {
-            throw new ThrottleRequestsException(headers: [
-                'Retry-After' => RateLimiter::availableIn($key),
-            ]);
+            $seconds = RateLimiter::availableIn($key);
+            $minutes = max(1, (int) ceil($seconds / 60));
+
+            throw new HttpResponseException($this->errorResponse(
+                'Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de '
+                    .$minutes.($minutes === 1 ? ' minuto.' : ' minutos.'),
+                Response::HTTP_TOO_MANY_REQUESTS
+            )->withHeaders(['Retry-After' => $seconds]));
         }
     }
 

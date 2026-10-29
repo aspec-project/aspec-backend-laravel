@@ -746,7 +746,10 @@ class MemberProfileUpdateTest extends TestCase
         $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
             ->assertTooManyRequests()
             ->assertHeader('Retry-After')
-            ->assertExactJson(['success' => false, 'message' => 'Demasiados pedidos. Tente novamente mais tarde.']);
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 15 minutos.',
+            ]);
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
     }

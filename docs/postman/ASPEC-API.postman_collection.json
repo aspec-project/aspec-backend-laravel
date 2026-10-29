@@ -2337,7 +2337,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 15 minutos.\"\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -3562,7 +3562,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 15 minutos.\"\n}"
             },
             {
               "name": "401 Não autenticado",
