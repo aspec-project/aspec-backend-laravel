@@ -360,9 +360,40 @@ class UpdatePasswordTest extends TestCase
         $this->putJson(self::URL, $this->validPayload())
             ->assertTooManyRequests()
             ->assertHeader('Retry-After')
-            ->assertExactJson(['success' => false, 'message' => 'Demasiados pedidos. Tente novamente mais tarde.']);
+            ->assertHeader('Retry-After', '900')
+            ->assertExactJson([
+                'success' => false,
+                'message' => 'Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 15 minutos.',
+            ]);
 
         $this->assertSame($hashBefore, $this->storedHash($user));
+    }
+
+    #[Test]
+    public function block_message_shows_the_remaining_minutes_rounded_up(): void
+    {
+        Sanctum::actingAs($this->makeUser());
+
+        $this->failCurrentPassword(5);
+        $this->travel(10 * 60 + 30)->seconds();
+
+        $this->putJson(self::URL, $this->validPayload())
+            ->assertTooManyRequests()
+            ->assertHeader('Retry-After', '270')
+            ->assertJsonPath('message', 'Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 5 minutos.');
+    }
+
+    #[Test]
+    public function block_message_uses_singular_for_the_last_minute(): void
+    {
+        Sanctum::actingAs($this->makeUser());
+
+        $this->failCurrentPassword(5);
+        $this->travel(14 * 60 + 30)->seconds();
+
+        $this->putJson(self::URL, $this->validPayload())
+            ->assertTooManyRequests()
+            ->assertJsonPath('message', 'Demasiadas tentativas com a palavra-passe atual. Tente novamente dentro de 1 minuto.');
     }
 
     #[Test]
