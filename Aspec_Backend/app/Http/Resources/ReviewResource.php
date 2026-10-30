@@ -14,6 +14,7 @@ class ReviewResource extends JsonResource
     {
         $reviewer = $this->reviewerProfile;
         $reviewerIsAnonymized = $reviewer?->trashed() ?? false;
+        $viewerProfileId = $request->user('sanctum')?->memberProfile?->getKey();
 
         return [
             'id' => $this->id,
@@ -27,6 +28,8 @@ class ReviewResource extends JsonResource
                     ? 'Empresa anonimizada'
                     : $reviewer?->business_name,
             ],
+            'is_mine' => $viewerProfileId !== null
+                && (string) $this->reviewer_profile_id === (string) $viewerProfileId,
         ];
     }
 }
