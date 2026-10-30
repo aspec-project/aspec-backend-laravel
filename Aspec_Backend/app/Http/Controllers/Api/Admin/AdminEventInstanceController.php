@@ -27,6 +27,19 @@ class AdminEventInstanceController extends Controller
 {
     private const PAST_EVENT_MESSAGE = 'Não é possível alterar um evento que já decorreu.';
 
+    private const PRAYER_CARDS_LOCK_MESSAGE = 'Não é possível alterar os cartões de oração, a data ou a hora depois de existirem cartões preenchidos.';
+
+    /**
+     * Campos que ficam bloqueados depois do 1.º cartão de oração: o que o autor viu (versículo, prazo)
+     * é o que o destinatário vê.
+     */
+    private const PRAYER_CARDS_LOCKED_FIELDS = [
+        'prayer_cards_enabled',
+        'prayer_verse',
+        'event_date',
+        'event_start_time',
+    ];
+
     private const ATTENDEE_RELEVANT_FIELDS = [
         'name',
         'category_id',
@@ -100,7 +113,7 @@ class AdminEventInstanceController extends Controller
 
         $eventsQuery = (clone $filteredEvents)
             ->with(['category', 'location'])
-            ->withCount('registrations');
+            ->withCount(['registrations', 'prayerCards']);
 
         if ($period === 'past') {
             $eventsQuery
@@ -155,6 +168,38 @@ class AdminEventInstanceController extends Controller
                 $this->normalizeAttendeeRelevantValue($field, $original)
                 !== $this->normalizeAttendeeRelevantValue($field, $updated)
             ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Indica se o pedido muda a ativação, o versículo, a data ou a hora de início de um evento que já
+     * tem cartões de oração (os retirados e os expirados não contam).
+     *
+     * @param  array<string, mixed>  $validated
+     */
+    private function changesLockedPrayerCardFields(EventInstance $event, array $validated): bool
+    {
+        if (! $event->prayerCards()->exists()) {
+            return false;
+        }
+
+        foreach (self::PRAYER_CARDS_LOCKED_FIELDS as $field) {
+            if (! array_key_exists($field, $validated)) {
+                continue;
+            }
+
+            $original = $field === 'prayer_cards_enabled'
+                ? (bool) $event->getRawOriginal($field)
+                : $this->normalizeAttendeeRelevantValue($field, $event->getRawOriginal($field));
+            $updated = $field === 'prayer_cards_enabled'
+                ? (bool) $validated[$field]
+                : $this->normalizeAttendeeRelevantValue($field, $validated[$field]);
+
+            if ($original !== $updated) {
                 return true;
             }
         }
@@ -323,6 +368,7 @@ class AdminEventInstanceController extends Controller
     public function show(EventInstance $eventInstance): JsonResponse
     {
         $eventInstance->load(['category', 'location']);
+        $eventInstance->loadCount(['registrations', 'prayerCards']);
 
         return $this->successResponse(
             new EventInstanceResource($eventInstance),
@@ -378,6 +424,12 @@ class AdminEventInstanceController extends Controller
                 ]);
             }
 
+            if ($this->changesLockedPrayerCardFields($event, $validated)) {
+                throw ValidationException::withMessages([
+                    'prayer_verse' => self::PRAYER_CARDS_LOCK_MESSAGE,
+                ]);
+            }
+
             $validated['event_start_time'] .= ':00';
             $validated['event_end_time'] .= ':00';
 
@@ -429,6 +481,7 @@ class AdminEventInstanceController extends Controller
             }
 
             $event->load(['category', 'location']);
+            $event->loadCount(['registrations', 'prayerCards']);
 
             return $this->successResponse(
                 new EventInstanceResource($event),

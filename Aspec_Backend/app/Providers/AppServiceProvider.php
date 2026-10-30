@@ -138,6 +138,7 @@ class AppServiceProvider extends ServiceProvider
             'notification-preferences',
             'review-submit',
             'review-delete',
+            'prayer-cards',
         ];
 
         foreach ($actions as $action) {
@@ -237,6 +238,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for(
             'admin-anonymize',
             fn (Request $request) => Limit::perHour(5)->by($request->user()?->id ?: $request->ip())
+        );
+
+        // Distribuir cartões de oração pelo backoffice: 10/min por admin. A ação só corre uma vez por evento;
+        // o limite só trava um script ou cliques repetidos.
+        RateLimiter::for(
+            'admin-prayer-distribute',
+            fn (Request $request) => Limit::perMinute(10)->by($request->user()?->id ?: $request->ip())
         );
 
         // Criação de eventos pelo admin: 20/hora por admin.

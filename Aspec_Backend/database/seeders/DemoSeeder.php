@@ -8,6 +8,7 @@ use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\Location;
 use App\Models\MemberProfile;
+use App\Models\PrayerCard;
 use App\Models\Review;
 use App\Models\ReviewStatus;
 use App\Models\Role;
@@ -24,12 +25,13 @@ use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * avaliações entre perfis, eventos (presenciais, online e passados) e inscrições. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * avaliações entre perfis, eventos (presenciais, online e passados), inscrições e cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
  * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
  * pelo nome e distrito, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
- * e as inscrições desses eventos (útil para repetir a demonstração).
+ * e as inscrições e os cartões de oração desses eventos (útil para repetir a demonstração).
+ * Os cartões de oração ficam encriptados com a APP_KEY de quem corre o seeder.
  * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
  */
 class DemoSeeder extends Seeder
@@ -278,10 +280,13 @@ class DemoSeeder extends Seeder
                     'max_attendees' => $event['max_attendees'],
                     'registration_deadline' => $today->copy()->addDays($deadlineDays)->setTime(23, 59)->format('Y-m-d H:i:s'),
                     'organizer_notes' => $event['notes'] ?? null,
+                    'prayer_cards_enabled' => isset($event['prayer_verse']),
+                    'prayer_verse' => $event['prayer_verse'] ?? null,
                 ]
             );
 
             $this->syncRegistrations($instance, $event['registrants'] ?? []);
+            $this->syncPrayerCards($instance, $event['prayer_cards'] ?? null);
         }
     }
 
@@ -309,6 +314,84 @@ class DemoSeeder extends Seeder
         foreach ($userIds as $userId) {
             $event->registrations()->create(['user_id' => $userId]);
         }
+    }
+
+    /**
+     * Repõe os cartões de oração do evento de demonstração: apaga os que existirem (incluindo os
+     * enviados à mão numa demonstração) e volta a criar os da lista, cada um com pedidos de exemplo.
+     * Num evento distribuído, a cadeia segue a ordem da lista: o autor na posição i recebe o cartão
+     * do autor na posição i+1 e o último recebe o do primeiro; a distribuição fica às 00:05 do dia
+     * seguinte ao evento, como a do comando de hora a hora. Não envia emails.
+     *
+     * @param  array{authors: list<string>, distributed?: bool}|null  $cards
+     *
+     * @throws RuntimeException Se algum autor não estiver inscrito no evento.
+     */
+    private function syncPrayerCards(EventInstance $event, ?array $cards): void
+    {
+        PrayerCard::withTrashed()->where('event_instance_id', $event->id)->forceDelete();
+        $event->forceFill(['prayer_cards_distributed_at' => null])->save();
+
+        if ($cards === null) {
+            return;
+        }
+
+        $authorIds = User::whereIn('email', $cards['authors'])
+            ->whereHas('eventRegistrations', fn ($query) => $query->where('event_instance_id', $event->id))
+            ->pluck('id', 'email');
+
+        if ($authorIds->count() !== count($cards['authors'])) {
+            throw new RuntimeException("Cartões de oração de demonstração inválidos no evento \"{$event->name}\".");
+        }
+
+        $distributed = $cards['distributed'] ?? false;
+        $requests = $this->prayerRequests();
+        $created = [];
+
+        foreach ($cards['authors'] as $position => $email) {
+            [$personal, $work, $salvation] = $requests[$position % count($requests)];
+            $submittedAt = $distributed ? $event->startsAt()->addMinutes(15 * ($position + 1))->utc() : now();
+
+            $card = new PrayerCard([
+                'event_instance_id' => $event->id,
+                'author_user_id' => $authorIds[$email],
+                'personal_request' => $personal,
+                'work_request' => $work,
+                'salvation_request' => $salvation,
+                'consent_given_at' => $submittedAt,
+            ]);
+            $card->forceFill(['created_at' => $submittedAt, 'updated_at' => $submittedAt])->save();
+            $created[] = $card;
+        }
+
+        if (! $distributed) {
+            return;
+        }
+
+        $distributedAt = $event->prayerCardsWindowClosesAt()->addMinutes(5)->startOfMinute()->utc();
+
+        foreach ($created as $position => $receiverCard) {
+            $created[($position + 1) % count($created)]
+                ->forceFill(['recipient_user_id' => $receiverCard->author_user_id, 'received_at' => $distributedAt])
+                ->save();
+        }
+
+        $event->forceFill(['prayer_cards_distributed_at' => $distributedAt])->save();
+    }
+
+    /**
+     * Pedidos de exemplo dos cartões de oração [Pessoal, Emprego, Salvação]; null = parte não preenchida.
+     *
+     * @return list<array{?string, ?string, ?string}>
+     */
+    private function prayerRequests(): array
+    {
+        return [
+            ['Pela saúde da minha mãe, que vai ser operada no próximo mês.', 'Sabedoria para decidir a contratação de dois novos colaboradores.', null],
+            ['Pela recuperação do meu pai, internado desde a semana passada.', 'Que a obra em Guimarães termine dentro do prazo e sem acidentes.', 'Pelo meu sócio, para que encontre a paz.'],
+            [null, 'Discernimento para a abertura do novo escritório em Aveiro.', 'Pelo meu irmão, que se afastou da fé.'],
+            ['Pela minha família, para termos mais tempo juntos.', null, 'Pelos meus vizinhos, para que conheçam Jesus.'],
+        ];
     }
 
     /**
@@ -863,6 +946,11 @@ class DemoSeeder extends Seeder
      * inscrito (vê o link) e prazo terminado sem ele (não vê). Coordenadas no centro de cada cidade.
      * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
      *
+     * Cartões de oração em dois eventos: a formação de Aveiro é hoje (já começou, por isso não aparece
+     * na agenda pública), com o prazo do cartão aberto, o demo.membro inscrito sem cartão e dois
+     * cartões já enviados; o pequeno-almoço de Leiria (passado)
+     * já foi distribuído e o demo.membro recebeu o cartão do demo.membro02.
+     *
      * Os presenciais têm o place_id da Google da morada (obtido uma vez com o GoogleGeocoder; os
      * termos da Google permitem guardá-lo), para o mapa Google da página do evento. As coordenadas
      * são nossas, não da Google, e ficam para o mapa antigo enquanto o frontend não usa o place_id.
@@ -877,6 +965,7 @@ class DemoSeeder extends Seeder
         $dinnerDescription = 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.';
         $dinnerNotes = 'Custo de participação: 25 € (pago no local).';
         $demoMember = 'demo.membro@aspec.test';
+        [$todayStart, $todayEnd] = $this->todayEventTimes();
 
         return [
             [
@@ -947,13 +1036,15 @@ class DemoSeeder extends Seeder
             ],
             [
                 'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Aveiro',
-                'days_from_now' => 15, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 30,
+                'days_from_now' => 0, 'start' => $todayStart, 'end' => $todayEnd, 'max_attendees' => 30,
                 'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
                 'venue' => 'Centro de Congressos de Aveiro',
                 'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
                 'place_id' => 'Ei1DYWlzIGRhIEZvbnRlIE5vdmEsIDM4MTAtMjAwIEF2ZWlybywgUG9ydHVnYWwiLiosChQKEgm_8TFeCZgjDREuH0xpIAU3QxIUChIJxdSxZAmYIw0R6bcGCHI5Zj8',
                 'latitude' => 40.6380, 'longitude' => -8.6440,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
+                'prayer_verse' => 'Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)',
+                'prayer_cards' => ['authors' => ['demo.membro01@aspec.test', 'demo.membro03@aspec.test']],
             ],
             [
                 'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'location' => 'Leiria',
@@ -1013,6 +1104,11 @@ class DemoSeeder extends Seeder
                 'place_id' => 'ChIJ0aliKvRzIg0R30hY7E0CvTE',
                 'latitude' => 39.7436, 'longitude' => -8.8071,
                 'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
+                'prayer_verse' => 'Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)',
+                'prayer_cards' => [
+                    'authors' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test'],
+                    'distributed' => true,
+                ],
             ],
             [
                 'name' => $dinner, 'category' => 'Jantar', 'location' => 'Aveiro',
@@ -1063,6 +1159,27 @@ class DemoSeeder extends Seeder
             [$member(9), $member(6), 3, 'Visible', 'Razoável; a marcação por telefone é difícil.'],
             [$member(11), $member(6), 1, 'Hidden', 'Péssimos, só querem dinheiro. Não percam tempo com esta gente.'],
         ];
+    }
+
+    /**
+     * Horas da formação de hoje com cartões de oração: começa na hora certa anterior a "agora − 1 hora"
+     * (Lisboa), para o prazo do cartão já estar aberto quando o seeder corre, e dura 2 horas sem
+     * passar das 23:59. Antes da 01:00 começa às 00:00.
+     *
+     * @return array{string, string}
+     */
+    private function todayEventTimes(): array
+    {
+        $now = now(config('app.event_timezone', 'Europe/Lisbon'));
+        $start = $now->copy()->subHour()->startOfHour();
+
+        if (! $start->isSameDay($now)) {
+            $start = $now->copy()->startOfDay();
+        }
+
+        $end = $start->copy()->addHours(2);
+
+        return [$start->format('H:i'), $end->isSameDay($start) ? $end->format('H:i') : '23:59'];
     }
 
     /**

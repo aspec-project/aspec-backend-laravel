@@ -53,6 +53,8 @@ class EventInstanceRequest extends FormRequest
                     : ['required', 'date_format:Y-m-d'])
                 : ['required', 'date_format:Y-m-d'],
             'organizer_notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'prayer_cards_enabled' => ['sometimes', 'boolean'],
+            'prayer_verse' => ['required_if_accepted:prayer_cards_enabled', 'nullable', 'string', 'max:500'],
             'justification' => $this->isMethod('put')
                 ? ['sometimes', 'nullable', 'string', 'max:2000']
                 : ['prohibited'],
@@ -214,6 +216,8 @@ class EventInstanceRequest extends FormRequest
             'is_online' => 'evento online',
             'online_url' => 'link do evento online',
             'organizer_notes' => 'notas do organizador',
+            'prayer_cards_enabled' => 'cartões de oração',
+            'prayer_verse' => 'versículo',
             'justification' => 'justificação',
             'recurrence.frequency' => 'frequência da série',
             'recurrence.ends_on' => 'data final da série',
@@ -239,15 +243,25 @@ class EventInstanceRequest extends FormRequest
             'latitude.prohibited' => 'Eventos online não devem ter coordenadas.',
             'longitude.prohibited' => 'Eventos online não devem ter coordenadas.',
             'venue_name' => ['nullable', 'string', 'max:255'],
+            'prayer_verse.required_if_accepted' => 'Indique o versículo da semana para ativar os cartões de oração.',
         ];
     }
 
     /**
+     * Dados validados prontos a gravar. Com os cartões de oração desligados o versículo fica null;
+     * sem prayer_cards_enabled no pedido, o versículo também não muda.
+     *
      * @return array<string, mixed>
      */
     public function validatedEventData(): array
     {
         $data = $this->validated();
+
+        if (array_key_exists('prayer_cards_enabled', $data)) {
+            $data['prayer_verse'] = $data['prayer_cards_enabled'] ? ($data['prayer_verse'] ?? null) : null;
+        } else {
+            unset($data['prayer_verse']);
+        }
 
         if (isset($data['recurrence'])) {
             return $data;

@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -567,7 +568,15 @@ class DemoSeederTest extends TestCase
 
         $this->getJson('/api/events')
             ->assertOk()
-            ->assertJsonPath('data.pagination.total', 14);
+            ->assertJsonPath('data.pagination.total', 13);
+
+        $today = EventInstance::where('name', 'Formação: Finanças para Pequenas Empresas')->sole();
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+
+        $this->getJson("/api/events/{$today->id}/prayer-card")
+            ->assertOk()
+            ->assertJsonPath('data.window.status', 'open')
+            ->assertJsonPath('data.card', null);
     }
 
     /**

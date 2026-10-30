@@ -34,6 +34,8 @@ class EventInstance extends Model
         'is_online',
         'online_url',
         'series_id',
+        'prayer_cards_enabled',
+        'prayer_verse',
     ];
 
     protected function casts(): array
@@ -44,6 +46,8 @@ class EventInstance extends Model
             'max_attendees' => 'integer',
             'is_online' => 'boolean',
             'announced_at' => 'datetime',
+            'prayer_cards_enabled' => 'boolean',
+            'prayer_cards_distributed_at' => 'datetime',
         ];
     }
 
@@ -70,6 +74,42 @@ class EventInstance extends Model
         return now($timezone)->greaterThan(Carbon::parse($this->getRawOriginal('registration_deadline'), $timezone));
     }
 
+    /**
+     * Abertura do prazo do cartão de oração: o início do evento (hora de Lisboa).
+     */
+    public function prayerCardsWindowOpensAt(): Carbon
+    {
+        return $this->startsAt();
+    }
+
+    /**
+     * Fim do prazo do cartão de oração: 23:59:59 do dia do evento (hora de Lisboa), mesmo que o
+     * evento passe da meia-noite.
+     */
+    public function prayerCardsWindowClosesAt(): Carbon
+    {
+        return $this->startsAt()->endOfDay();
+    }
+
+    /**
+     * Estado do prazo do cartão: not_open antes do início do evento, open até às 23:59 desse dia e
+     * closed depois disso ou assim que os cartões são distribuídos.
+     */
+    public function prayerCardsWindowStatus(): string
+    {
+        if ($this->prayer_cards_distributed_at !== null) {
+            return 'closed';
+        }
+
+        $now = now();
+
+        if ($now->lessThan($this->prayerCardsWindowOpensAt())) {
+            return 'not_open';
+        }
+
+        return $now->greaterThan($this->prayerCardsWindowClosesAt()) ? 'closed' : 'open';
+    }
+
     public function category(): BelongsTo
     {
         return $this->belongsTo(EventCategory::class, 'category_id');
@@ -83,6 +123,11 @@ class EventInstance extends Model
     public function registrations(): HasMany
     {
         return $this->hasMany(EventRegistration::class);
+    }
+
+    public function prayerCards(): HasMany
+    {
+        return $this->hasMany(PrayerCard::class);
     }
 
     public function series(): BelongsTo

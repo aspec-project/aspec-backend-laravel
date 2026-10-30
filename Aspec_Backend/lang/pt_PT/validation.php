@@ -231,6 +231,11 @@ return [
         'terms_accepted' => 'aceitação dos termos',
         'notify_new_events' => 'anúncio de novos eventos',
         'notify_weekly_agenda' => 'agenda semanal',
+        'personal_request' => 'pedido pessoal',
+        'work_request' => 'pedido de emprego',
+        'salvation_request' => 'pedido de salvação',
+        'consent' => 'consentimento',
+        'period' => 'período',
     ],
 
 ];

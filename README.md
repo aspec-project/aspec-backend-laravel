@@ -81,11 +81,18 @@ Na pasta `Aspec_Backend/`:
 
 Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
 
-- 11 presenciais futuros, alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 11 presenciais futuros (um deles hoje), alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
 - 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
 - 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
 
-Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados. Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados.
+
+Cartões de oração em dois eventos:
+
+- a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
+- o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
+
+ Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
 
 Password de todas as contas: `Demo#2026`
 
@@ -128,6 +135,18 @@ Vão para as contas **Active com perfil de membro** (membros e admins com perfil
 Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local, o agendamento só corre com `php artisan schedule:work` (em produção, um cron com `php artisan schedule:run` a cada minuto).
 
 **Demo:** correr à mão `php artisan events:send-weekly-agenda` (com o `queue:work` a correr). Fora do sábado, a agenda vai de agora até ao sábado seguinte às 23:59. Para a enviar outra vez na mesma semana às contas demo, voltar a correr `php artisan db:seed --class=DemoSeeder` (limpa a marca da agenda dessas contas).
+
+## Cartões de oração
+
+O admin ativa os cartões num evento e define o versículo da semana (`prayer_cards_enabled`, `prayer_verse` em criar/editar evento). Os membros **Active, com perfil e inscritos** preenchem um cartão (Pessoal, Emprego, Salvação; pelo menos um, até 500 caracteres cada) do **início do evento às 23:59 desse dia** (hora de Lisboa). Depois do 1.º cartão, o admin já não pode mudar a ativação, o versículo, a data nem a hora de início (`prayer_cards_locked`).
+
+- **Distribuição em cadeia:** os cartões são baralhados e cada autor recebe o cartão do seguinte (ninguém recebe o seu). Comando `prayer-cards:distribute`, agendado **de hora a hora**: distribui os eventos cujo dia já passou. O botão do backoffice (`POST /api/admin/events/{id}/prayer-cards/distribute`) distribui mais cedo, a partir do início do evento. Cada evento é distribuído uma só vez. Com um só cartão, fica sem destinatário. Cada destinatário recebe um email sem o conteúdo nem o nome do autor (precisa de `php artisan queue:work`).
+- **Expiração:** comando `prayer-cards:expire`, agendado **todos os dias às 03:00 (hora de Lisboa)**: os cartões de eventos com mais de 6 meses ficam sem conteúdo e com soft delete (a linha fica só como presença).
+- **Privacidade:** os pedidos são dados de crenças religiosas (RGPD art. 9.º). O admin vê só contagens e quem entregou; nunca o conteúdo nem quem recebeu de quem. Só o destinatário vê o nome, email e telefone **pessoais** do autor, lidos da conta no momento.
+
+Em local, o agendamento só corre com `php artisan schedule:work`; para a demonstração podem correr-se os dois comandos à mão. Valores (dias de oração, meses de retenção, máximo de caracteres) em `config/prayer_cards.php`.
+
+**Atenção à `APP_KEY`:** os pedidos ficam **encriptados** na base de dados com a `APP_KEY`. Cada máquina tem a sua, por isso os cartões criados noutra máquina (ou antes de um `key:generate`) ficam ilegíveis: voltar a correr o `DemoSeeder`. Em produção, para trocar a chave sem perder os cartões, pôr a chave antiga em `APP_PREVIOUS_KEYS` (lista separada por vírgulas) antes de mudar a `APP_KEY`; nunca correr `php artisan key:generate` num servidor com dados.
 
 ## Pagamentos (Stripe, modo de teste)
 
@@ -271,7 +290,7 @@ Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite
 | Limite | Valor | Porquê |
 |---|---|---|
 | Geral (`api`, todas as rotas `api/*` exceto o webhook) | 300/min por utilizador ou IP | Cobre as rotas sem limite próprio, incluindo as futuras; mais largo que os específicos, para estes continuarem a ser o limite efetivo |
-| Ações do membro (perfil, logótipo, portefólio, password, preferências, portal de faturação, PDF da fatura) | 120/min e 2000/hora por utilizador, cada ação à parte | 2000/hora sugerido pelos professores; 120/min trava scripts sem afetar o uso normal (guardar a montra são ~12 pedidos) |
+| Ações do membro (perfil, logótipo, portefólio, password, preferências, portal de faturação, PDF da fatura, cartões de oração) | 120/min e 2000/hora por utilizador, cada ação à parte | 2000/hora sugerido pelos professores; 120/min trava scripts sem afetar o uso normal (guardar a montra são ~12 pedidos) |
 | Cancelar / retomar a subscrição | 120/min e 10/dia por utilizador (partilhado pelas duas) | Ação rara que chama o Stripe e envia um email: sem limite diário, alternar as duas esgotava a quota de email da plataforma (o Gmail de demonstração tem ~500 destinatários/dia; um serviço de email de produção tem mais, mas o envio em massa continuaria a ser abuso) |
 | Diretório e eventos públicos | 120/min por utilizador ou IP | Visitantes por IP travam a recolha automática; membros pelo seu id não se bloqueiam atrás do mesmo IP (escritório, evento) |
 | Registo | 20/min por IP | Um grupo pode inscrever-se da mesma rede num evento; bots continuam travados |
@@ -279,7 +298,7 @@ Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite
 | Falhas da password atual | 5 em 15 min por utilizador | NIST SP 800-63B e OWASP (limitar tentativas falhadas) |
 | Recuperar / redefinir password | 5/min (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
 | Ativação; reenvio do link | 20/min por IP; 3 em 15 min por email + IP, 10/hora por IP, 5/dia por email | Cada pedido chama o Stripe ou envia um email |
-| Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
+| Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação, distribuir cartões de oração | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min; 10/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
 | Webhook do Stripe | sem limite | Autenticado pela assinatura; o Stripe envia em rajada e repete após erro |
 
 Em produção atrás de um proxy ou balanceador é preciso configurar os proxies de confiança (`$middleware->trustProxies(at: [...])` com os IPs do proxy), senão todos os visitantes contam com o IP do proxy. Nunca usar `at: '*'` com a API exposta diretamente: o header `X-Forwarded-For` passaria a ser falsificável e cada pedido teria um contador novo, também no login.

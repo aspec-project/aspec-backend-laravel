@@ -131,6 +131,15 @@ class User extends Authenticatable
     }
 
     /**
+     * Participantes dos cartões de oração: conta Active com perfil de membro (Member ou Admin).
+     * As contas anonimizadas ficam de fora (soft delete do utilizador e do perfil).
+     */
+    public function scopeActiveWithProfile(Builder $query): void
+    {
+        $this->whereAccountStatus($query, 'Active')->whereHas('memberProfile');
+    }
+
+    /**
      * Destinatários dos emails de eventos: conta Active, com perfil de membro (Member ou Admin) e
      * com a preferência indicada ligada. É a regra do diretório; o admin técnico (sem perfil) fica
      * de fora e as contas anonimizadas também (soft delete).
@@ -350,6 +359,8 @@ class User extends Authenticatable
      * ficar vazio); os ficheiros só depois do commit, para não se perderem num rollback.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
+     * Cartões de oração escritos pela conta: conteúdo apagado e soft delete (dados religiosos de quem
+     * pediu o apagamento); os recebidos são dados dos autores e expiram normalmente.
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
      * Grava a prova da anonimização (conta, admin, data) na mesma transação: nunca uma sem a outra.
      * A conta é relida com lockForUpdate: dois pedidos em simultâneo anonimizam e registam uma só vez.
@@ -430,6 +441,11 @@ class User extends Authenticatable
                 ->where('user_id', $this->id)
                 ->whereIn('event_instance_id', $futureEventIds)
                 ->delete();
+
+            PrayerCard::query()
+                ->where('author_user_id', $this->id)
+                ->get()
+                ->each(fn (PrayerCard $card) => $card->erase());
 
             // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
             $this->deletePasswordResetTokens();

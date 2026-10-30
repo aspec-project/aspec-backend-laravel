@@ -36,6 +36,9 @@ class EventInstanceResource extends JsonResource
             && $deadline !== null
             && $now->lessThanOrEqualTo($deadline);
 
+        $hasPrayerCardsCount = array_key_exists('prayer_cards_count', $attributes);
+        $prayerCardsCount = $hasPrayerCardsCount ? (int) $attributes['prayer_cards_count'] : null;
+
         $hasIsRegistered = array_key_exists('is_registered', $attributes);
         $isRegistered = $hasIsRegistered && (bool) $attributes['is_registered'];
 
@@ -92,6 +95,10 @@ class EventInstanceResource extends JsonResource
             'is_registered' => $this->when($hasIsRegistered, $isRegistered),
             'online_url' => $this->when($canSeeOnlineUrl, $this->online_url),
             'is_online' => $this->is_online,
+            'prayer_cards_enabled' => (bool) $this->prayer_cards_enabled,
+            'prayer_verse' => $this->prayer_verse,
+            'prayer_cards_count' => $this->when($hasPrayerCardsCount, $prayerCardsCount),
+            'prayer_cards_locked' => $this->when($hasPrayerCardsCount, $prayerCardsCount > 0),
         ];
     }
 }

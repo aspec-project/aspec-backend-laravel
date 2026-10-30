@@ -4897,6 +4897,22 @@
       "item": [
         {
           "name": "Agenda de eventos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Guarda em event_id o primeiro evento com cartões de oração (ou o primeiro da lista), para a pasta \"Cartões de oração\"",
+                  "if (pm.response.code === 200) {",
+                  "  const items = pm.response.json().data.items;",
+                  "  const item = items.find(i => i.prayer_cards_enabled) || items[0];",
+                  "  if (item) pm.environment.set('event_id', item.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [],
@@ -4928,7 +4944,7 @@
                 }
               ]
             },
-            "description": "Agenda pública de eventos futuros, ordenados por data e hora de início. Filtros opcionais e combináveis:\n\n- `category_id`: UUID da categoria.\n- `location_id`: UUID da localização.\n- `search`: pesquisa até 100 caracteres no nome ou descrição do evento, na categoria ou na localização.\n- `per_page`: resultados por página, entre 1 e 100 (predefinição: 9).\n- `page`: número da página, entre 1 e 10000.\n\nCada evento devolve `series_id`: UUID da série, ou `null` se for um evento avulso.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só o recebe depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
+            "description": "Agenda pública de eventos futuros, ordenados por data e hora de início. Filtros opcionais e combináveis:\n\n- `category_id`: UUID da categoria.\n- `location_id`: UUID da localização.\n- `search`: pesquisa até 100 caracteres no nome ou descrição do evento, na categoria ou na localização.\n- `per_page`: resultados por página, entre 1 e 100 (predefinição: 9).\n- `page`: número da página, entre 1 e 10000.\n\nCada evento devolve `series_id`: UUID da série, ou `null` se for um evento avulso.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só o recebe depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.\n\n`prayer_cards_enabled` indica se o evento tem cartões de oração e `prayer_verse` é o versículo da semana (`null` se os cartões estiverem desligados).",
             "auth": {
               "type": "noauth"
             }
@@ -4983,7 +4999,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Agenda de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_registered\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": false,\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 9,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Agenda de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_registered\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"is_registered\": false,\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 9,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
             }
           ]
         },
@@ -5009,7 +5025,7 @@
                 }
               ]
             },
-            "description": "Devolve o detalhe do evento, incluindo categoria, localização, data, horários, morada ou link, lotação, prazo e estado das inscrições.\n\nO campo `series_id` devolve o UUID da série ou `null` se o evento for avulso. Os campos `is_online` e `venue_name` identificam se o evento é online e o nome do local presencial. Para eventos online, `address`, `venue_name`, `latitude` e `longitude` são `null`.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só recebe o link depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.",
+            "description": "Devolve o detalhe do evento, incluindo categoria, localização, data, horários, morada ou link, lotação, prazo e estado das inscrições.\n\nO campo `series_id` devolve o UUID da série ou `null` se o evento for avulso. Os campos `is_online` e `venue_name` identificam se o evento é online e o nome do local presencial. Para eventos online, `address`, `venue_name`, `latitude` e `longitude` são `null`.\n\n`online_url` não é devolvido a visitantes nem a membros não inscritos. Um membro inscrito só recebe o link depois de o prazo de inscrição passar. A lotação estar esgotada, por si só, não revela o link.\n\n`prayer_cards_enabled` indica se o evento tem cartões de oração e `prayer_verse` é o versículo da semana (`null` se os cartões estiverem desligados).",
             "auth": {
               "type": "noauth"
             }
@@ -5047,7 +5063,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_registered\": false,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_registered\": false,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n  }\n}"
             },
             {
               "name": "200 Evento online — membro inscrito após o prazo",
@@ -5081,7 +5097,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n    \"series_id\": null,\n    \"name\": \"Jantar online — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-20\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"description\": \"Encontro online para partilha de experiências entre membros.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n    \"organizer_notes\": null,\n    \"registrations_count\": 40,\n    \"available_spots\": 0,\n    \"registration_open\": false,\n    \"is_registered\": true,\n    \"online_url\": \"https://meet.example.com/jantar-aspec\",\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n    \"series_id\": null,\n    \"name\": \"Jantar online — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-20\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"description\": \"Encontro online para partilha de experiências entre membros.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n    \"organizer_notes\": null,\n    \"registrations_count\": 40,\n    \"available_spots\": 0,\n    \"registration_open\": false,\n    \"is_registered\": true,\n    \"online_url\": \"https://meet.example.com/jantar-aspec\",\n    \"is_online\": true,\n    \"prayer_cards_enabled\": false,\n    \"prayer_verse\": null\n  }\n}"
             },
             {
               "name": "200 Evento online — inscrito antes do prazo (sem link)",
@@ -5115,7 +5131,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-8888-4c88-8888-888888888888\",\n    \"series_id\": null,\n    \"name\": \"Webinar: Faturação Eletrónica sem Complicações\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-25\",\n    \"event_start_time\": \"18:00\",\n    \"event_end_time\": \"19:30\",\n    \"description\": \"Sessão online sobre as regras da faturação eletrónica, com tempo para perguntas no fim.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 100,\n    \"registration_deadline\": \"2030-11-24T23:59:00Z\",\n    \"organizer_notes\": \"O link da sessão aparece na página do evento depois do fecho das inscrições.\",\n    \"registrations_count\": 2,\n    \"available_spots\": 98,\n    \"registration_open\": true,\n    \"is_registered\": true,\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-8888-4c88-8888-888888888888\",\n    \"series_id\": null,\n    \"name\": \"Webinar: Faturação Eletrónica sem Complicações\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-5555-4b55-8555-555555555555\",\n      \"name\": \"Formação\",\n      \"color\": \"#1565C0\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-11-25\",\n    \"event_start_time\": \"18:00\",\n    \"event_end_time\": \"19:30\",\n    \"description\": \"Sessão online sobre as regras da faturação eletrónica, com tempo para perguntas no fim.\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 100,\n    \"registration_deadline\": \"2030-11-24T23:59:00Z\",\n    \"organizer_notes\": \"O link da sessão aparece na página do evento depois do fecho das inscrições.\",\n    \"registrations_count\": 2,\n    \"available_spots\": 98,\n    \"registration_open\": true,\n    \"is_registered\": true,\n    \"is_online\": true,\n    \"prayer_cards_enabled\": false,\n    \"prayer_verse\": null\n  }\n}"
             },
             {
               "name": "404 Evento não encontrado",
@@ -6258,6 +6274,2119 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Cartões de oração",
+      "description": "Cartões de oração dos eventos (pedido do cliente). O admin ativa os cartões por evento e define o versículo da semana (`prayer_cards_enabled`, `prayer_verse` em \"Admin / Criar evento\"). No dia do evento, cada membro inscrito preenche um cartão (do início do evento às 23:59, hora de Lisboa). No fim do prazo, ou quando o admin carrega em \"Distribuir agora\", os cartões são distribuídos em cadeia: cada participante recebe o cartão de outro e ora por ele durante uma semana. O cartão fica visível 6 meses.\n\n**Privacidade (dados de crenças religiosas, RGPD art. 9.º):** consentimento explícito em cada envio; a mensagem fica encriptada; o autor nunca sabe quem recebeu o seu cartão; só o destinatário vê nome, email e telefone pessoais do autor; o admin vê contagens e quem entregou, nunca o conteúdo nem os pares; o email ao destinatário não leva conteúdo nem nome do autor.\n\nOs pedidos de membro usam `token`; os dois pedidos de admin usam `admin_token`. `{{event_id}}` é preenchido pelo pedido \"Eventos / Agenda de eventos\".",
+      "item": [
+        {
+          "name": "Ver o meu cartão de oração",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "{{event_id}}",
+                "prayer-card"
+              ]
+            },
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). `{{event_id}}` é preenchido pelo pedido \"Eventos / Agenda de eventos\" (primeiro evento com cartões de oração).\n\nEstado do cartão de oração do membro autenticado neste evento, para o bloco do cartão na página do evento. Só membros **inscritos** no evento e com perfil (os admins inscritos também).\n\n- `prayer_verse`: versículo da semana, definido pelo admin no evento; `event_date`: data do evento (é a data mostrada no cartão).\n- `window.status`: `not_open` (antes do início do evento), `open` (do início do evento às 23:59 desse dia, hora de Lisboa) ou `closed` (depois das 23:59 ou depois de o admin distribuir os cartões). `opens_at`/`closes_at` em ISO 8601.\n- `distribution_status`: `pending` (ainda não distribuído), `distributed` (o cartão foi entregue a outro participante) ou `unpaired` (o evento foi distribuído mas não houve outros cartões: o cartão fica sem destinatário; o frontend mostra \"Não houve outros cartões neste evento\").\n- `card`: o cartão que o membro enviou (`null` se ainda não enviou). `submitted_at` é a hora de entrega e não muda ao editar; `updated_at` é a última edição. **Nunca** indica quem recebeu o cartão.\n\n**Limite:** `prayer-cards`, 120 pedidos por minuto e 2000 por hora por utilizador.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 403 não inscrito no evento ou sem perfil · 404 o evento não tem cartões de oração ativos (ou não existe) · 429 demasiados pedidos."
+          },
+          "response": [
+            {
+              "name": "200 Prazo ainda não abriu",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Prazo ainda não abriu"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração obtido com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"not_open\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"pending\",\n    \"card\": null\n  }\n}"
+            },
+            {
+              "name": "200 Cartão enviado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cartão enviado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração obtido com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"open\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"pending\",\n    \"card\": {\n      \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n      \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n      \"salvation_request\": null,\n      \"submitted_at\": \"2026-11-14T20:05:12+00:00\",\n      \"updated_at\": \"2026-11-14T20:05:12+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Cartão distribuído",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cartão distribuído"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração obtido com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"closed\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"distributed\",\n    \"card\": {\n      \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n      \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n      \"salvation_request\": \"Pelo meu irmão, que se afastou da fé.\",\n      \"submitted_at\": \"2026-11-14T20:05:12+00:00\",\n      \"updated_at\": \"2026-11-14T21:40:03+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Cartão sem par",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cartão sem par"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração obtido com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"closed\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"unpaired\",\n    \"card\": {\n      \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n      \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n      \"salvation_request\": null,\n      \"submitted_at\": \"2026-11-14T20:05:12+00:00\",\n      \"updated_at\": \"2026-11-14T20:05:12+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "403 Não inscrito",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Não inscrito"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Só os membros inscritos neste evento podem preencher o cartão de oração.\"\n}"
+            },
+            {
+              "name": "404 Evento sem cartões",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento sem cartões"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Este evento não tem cartões de oração.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Enviar ou editar o meu cartão de oração",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "{{event_id}}",
+                "prayer-card"
+              ]
+            },
+            "description": "**Requer login e conta Active.** Cria o cartão de oração do membro neste evento (201) ou atualiza o que já enviou (200). Um só cartão por membro e por evento; o cartão enviado conta como presença no evento.\n\n- Só membros **inscritos** no evento e com perfil.\n- Prazo: do **início do evento** às **23:59 desse dia** (hora de Lisboa). Antes → 409; depois, ou depois de o admin distribuir os cartões → 409.\n- `personal_request` (Pessoal), `work_request` (Emprego), `salvation_request` (Salvação): texto até 500 caracteres cada; **pelo menos um** preenchido (vazio conta como `null`).\n- `consent`: obrigatório e `true` em cada envio (consentimento explícito: dados de crenças religiosas, RGPD art. 9.º). Texto a mostrar junto à caixa: \"Autorizo que o meu nome, email e telefone pessoais e os meus pedidos de oração sejam partilhados com outro membro participante neste evento, que ficará responsável por orar por mim durante uma semana. O cartão fica visível durante 6 meses. Posso retirar o cartão a qualquer momento.\"\n\nNome, email e telefone **pessoais** do autor não se enviam: são lidos da conta quando o destinatário abre o cartão. O versículo e a data vêm do evento. A mensagem é guardada encriptada e o admin nunca a lê.\n\nResposta: a mesma forma de \"Ver o meu cartão de oração\". Editar não muda `submitted_at`.\n\n**Limite:** `prayer-cards`, 120 pedidos por minuto e 2000 por hora por utilizador.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 403 não inscrito ou sem perfil · 404 evento sem cartões de oração · 409 prazo ainda não abriu · 409 prazo terminou (ou cartões já distribuídos) · 422 validação · 429 demasiados pedidos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "name": "201 Cartão enviado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "201 Cartão enviado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração enviado com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"open\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"pending\",\n    \"card\": {\n      \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n      \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n      \"salvation_request\": null,\n      \"submitted_at\": \"2026-11-14T20:05:12+00:00\",\n      \"updated_at\": \"2026-11-14T20:05:12+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Cartão atualizado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cartão atualizado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": \"Pelo meu irmão, que se afastou da fé.\",\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração atualizado com sucesso.\",\n  \"data\": {\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"event_date\": \"2026-11-14\",\n    \"window\": {\n      \"status\": \"open\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"distribution_status\": \"pending\",\n    \"card\": {\n      \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n      \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n      \"salvation_request\": \"Pelo meu irmão, que se afastou da fé.\",\n      \"submitted_at\": \"2026-11-14T20:05:12+00:00\",\n      \"updated_at\": \"2026-11-14T21:40:03+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "403 Não inscrito",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Não inscrito"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Só os membros inscritos neste evento podem preencher o cartão de oração.\"\n}"
+            },
+            {
+              "name": "404 Evento sem cartões",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento sem cartões"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Este evento não tem cartões de oração.\"\n}"
+            },
+            {
+              "name": "409 Prazo ainda não abriu",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Prazo ainda não abriu"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O preenchimento do cartão abre no início do evento.\"\n}"
+            },
+            {
+              "name": "409 Prazo terminado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Prazo terminado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo para preencher o cartão terminou.\"\n}"
+            },
+            {
+              "name": "422 Validação",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Validação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": null,\n  \"work_request\": \"\",\n  \"salvation_request\": null,\n  \"consent\": false\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"personal_request\": [\n      \"Preencha pelo menos um dos pedidos: Pessoal, Emprego ou Salvação.\"\n    ],\n    \"work_request\": [\n      \"Preencha pelo menos um dos pedidos: Pessoal, Emprego ou Salvação.\"\n    ],\n    \"salvation_request\": [\n      \"Preencha pelo menos um dos pedidos: Pessoal, Emprego ou Salvação.\"\n    ],\n    \"consent\": [\n      \"Tem de autorizar a partilha do cartão de oração para o enviar.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Pedido demasiado longo",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Pedido demasiado longo"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Lorem ipsum … (501 caracteres)\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"personal_request\": [\n      \"O campo pedido pessoal não pode ter mais de 500 caracteres.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"personal_request\": \"Pela saúde da minha mãe, que vai ser operada em dezembro.\",\n  \"work_request\": \"Sabedoria para decidir a contratação de dois novos colaboradores.\",\n  \"salvation_request\": null,\n  \"consent\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Retirar o meu cartão de oração",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "{{event_id}}",
+                "prayer-card"
+              ]
+            },
+            "description": "**Requer login e conta Active.** Retira o cartão de oração do membro neste evento, **em qualquer momento** (retirar o consentimento tem de ser tão fácil como dá-lo, RGPD art. 7.º, n.º 3).\n\n- Antes da distribuição: o cartão é apagado e deixa de contar como presença.\n- Depois da distribuição: o conteúdo é apagado e o cartão desaparece da lista de quem o recebeu.\n\n**Limite:** `prayer-cards`, 120 pedidos por minuto e 2000 por hora por utilizador.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem cartão neste evento · 429 demasiados pedidos."
+          },
+          "response": [
+            {
+              "name": "200 Cartão retirado",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Cartão retirado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartão de oração retirado.\",\n  \"data\": null\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Sem cartão",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Sem cartão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem cartão de oração neste evento.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/{{event_id}}/prayer-card",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-card"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Os meus cartões de oração (recebidos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "prayer-cards"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "current",
+                  "description": "Opcional. `current` (semana de oração em curso: `pray_until` ≥ agora) ou `previous` (as restantes). Omitido: todos."
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Opcional. Página pedida, de 1 a 10000 (1 por omissão)."
+                },
+                {
+                  "key": "per_page",
+                  "value": "5",
+                  "description": "Opcional. Cartões por página, de 1 a 50 (10 por omissão). A página do protótipo usa 5."
+                }
+              ]
+            },
+            "description": "**Requer login e conta Active.** Cartões de oração que o membro autenticado **recebeu** (é responsável por orar por quem os escreveu), para a página \"Os meus cartões de oração\". Mais recentes primeiro (`received_at`). Os cartões que o membro escreveu não aparecem aqui (ver \"Ver o meu cartão de oração\" em cada evento).\n\nParâmetros opcionais: `period` = `current` (secção \"Esta Semana\": `pray_until` ≥ agora) ou `previous` (secção \"Anteriores\"); sem `period` devolve todos. `page` (1 a 10000) e `per_page` (1 a 50, **10 por omissão**; o protótipo usa 5), ecoado em `pagination.per_page`.\n\n- `author`: nome, email e telefone (E.164) **pessoais** de quem escreveu, lidos da conta no momento do pedido (sempre os atuais). Só o destinatário os vê.\n- `event`: evento onde o cartão foi escrito; `event_date` é a data do cartão.\n- `personal_request` / `work_request` / `salvation_request`: Pessoal, Emprego e Salvação (`null` se o autor não preencheu).\n- `prayer_verse`: versículo da semana do evento.\n- `received_at`: quando o cartão foi distribuído; `pray_until`: fim da semana de oração (`received_at` + 7 dias); `visible_until`: último dia em que o cartão fica visível (data do evento + 6 meses, `YYYY-MM-DD`). Depois disso o conteúdo é apagado.\n\nUm cartão retirado pelo autor desaparece da lista. Cache: `private, no-store`.\n\n**Limite:** `prayer-cards`, 120 pedidos por minuto e 2000 por hora por utilizador.\n\nErros: 401 sem sessão/token · 403 conta não ativa · 422 `period`, `page` ou `per_page` inválidos · 429 demasiados pedidos."
+          },
+          "response": [
+            {
+              "name": "200 Esta semana",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Esta semana"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "current"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartões de oração obtidos com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"c4d5e6f7-1111-4a11-8111-111111111111\",\n        \"author\": {\n          \"name\": \"João Carvalho\",\n          \"email\": \"demo.membro01@aspec.test\",\n          \"phone\": \"+351913000003\"\n        },\n        \"event\": {\n          \"id\": \"e5a6b7c8-9999-4c99-8999-999999999999\",\n          \"name\": \"Pequeno-almoço de negócios — Braga\",\n          \"event_date\": \"2026-10-31\"\n        },\n        \"personal_request\": \"Pela recuperação do meu pai, internado desde a semana passada.\",\n        \"work_request\": \"Que a obra em Guimarães termine dentro do prazo e sem acidentes.\",\n        \"salvation_request\": \"Pelo meu sócio, para que encontre a paz.\",\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"received_at\": \"2026-11-01T00:05:14+00:00\",\n        \"pray_until\": \"2026-11-08T00:05:14+00:00\",\n        \"visible_until\": \"2027-04-30\"\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 5,\n      \"total\": 1,\n      \"last_page\": 1\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Anteriores",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Anteriores"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=previous&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "previous"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartões de oração obtidos com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"c4d5e6f7-2222-4a22-8222-222222222222\",\n        \"author\": {\n          \"name\": \"Marta Sousa\",\n          \"email\": \"demo.membro02@aspec.test\",\n          \"phone\": \"+351916000004\"\n        },\n        \"event\": {\n          \"id\": \"e5a6b7c8-aaaa-4caa-8aaa-aaaaaaaaaaaa\",\n          \"name\": \"Jantar de networking — Coimbra\",\n          \"event_date\": \"2026-10-17\"\n        },\n        \"personal_request\": null,\n        \"work_request\": \"Discernimento para a abertura do novo escritório em Aveiro.\",\n        \"salvation_request\": null,\n        \"prayer_verse\": \"Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)\",\n        \"received_at\": \"2026-10-17T21:30:00+01:00\",\n        \"pray_until\": \"2026-10-24T21:30:00+01:00\",\n        \"visible_until\": \"2027-04-17\"\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 5,\n      \"total\": 1,\n      \"last_page\": 1\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Todos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Todos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?page=1&per_page=10",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "10"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartões de oração obtidos com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"c4d5e6f7-1111-4a11-8111-111111111111\",\n        \"author\": {\n          \"name\": \"João Carvalho\",\n          \"email\": \"demo.membro01@aspec.test\",\n          \"phone\": \"+351913000003\"\n        },\n        \"event\": {\n          \"id\": \"e5a6b7c8-9999-4c99-8999-999999999999\",\n          \"name\": \"Pequeno-almoço de negócios — Braga\",\n          \"event_date\": \"2026-10-31\"\n        },\n        \"personal_request\": \"Pela recuperação do meu pai, internado desde a semana passada.\",\n        \"work_request\": \"Que a obra em Guimarães termine dentro do prazo e sem acidentes.\",\n        \"salvation_request\": \"Pelo meu sócio, para que encontre a paz.\",\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"received_at\": \"2026-11-01T00:05:14+00:00\",\n        \"pray_until\": \"2026-11-08T00:05:14+00:00\",\n        \"visible_until\": \"2027-04-30\"\n      },\n      {\n        \"id\": \"c4d5e6f7-2222-4a22-8222-222222222222\",\n        \"author\": {\n          \"name\": \"Marta Sousa\",\n          \"email\": \"demo.membro02@aspec.test\",\n          \"phone\": \"+351916000004\"\n        },\n        \"event\": {\n          \"id\": \"e5a6b7c8-aaaa-4caa-8aaa-aaaaaaaaaaaa\",\n          \"name\": \"Jantar de networking — Coimbra\",\n          \"event_date\": \"2026-10-17\"\n        },\n        \"personal_request\": null,\n        \"work_request\": \"Discernimento para a abertura do novo escritório em Aveiro.\",\n        \"salvation_request\": null,\n        \"prayer_verse\": \"Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)\",\n        \"received_at\": \"2026-10-17T21:30:00+01:00\",\n        \"pray_until\": \"2026-10-24T21:30:00+01:00\",\n        \"visible_until\": \"2027-04-17\"\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 10,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Sem cartões",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Sem cartões"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "current"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartões de oração obtidos com sucesso.\",\n  \"data\": {\n    \"items\": [],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 5,\n      \"total\": 0,\n      \"last_page\": 1\n    }\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "current"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "current"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "422 Período inválido",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Período inválido"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=semana&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "semana"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"period\": [\n      \"O valor selecionado para período é inválido.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/me/prayer-cards?period=current&page=1&per_page=5",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "prayer-cards"
+                  ],
+                  "query": [
+                    {
+                      "key": "period",
+                      "value": "current"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "per_page",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Estado dos cartões de oração (admin)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "events",
+                "{{event_id}}",
+                "prayer-cards"
+              ]
+            },
+            "description": "**Requer autenticação, conta Active e perfil Admin** (`admin_token`).\n\nEstado dos cartões de oração de um evento, para o bloco do detalhe do evento no backoffice. **Nunca** devolve o conteúdo dos cartões nem quem recebeu o cartão de quem (dados de crenças religiosas, RGPD art. 9.º).\n\n- `enabled`, `prayer_verse`: opções do evento; `window`: como em \"Ver o meu cartão de oração\".\n- `registrations_count`: inscritos; `cards_count`: cartões entregues; `distributed_count`: cartões entregues a um destinatário; `unpaired_count`: cartões sem destinatário (único cartão do evento, ou autor que deixou de estar ativo); `distributed_at`: quando foi feita a distribuição (`null` se ainda não foi).\n- `participants`: lista \"Entregaram o cartão\" (nome, empresa e hora de entrega), por `submitted_at` ascendente. Serve de lista de presenças: cartão entregue = presença.\n\nErros: 401 sem sessão/token · 403 sem permissão · 403 conta não ativa · 404 o evento não tem cartões de oração ativos (ou não existe).",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Antes da distribuição",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Antes da distribuição"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Estado dos cartões de oração obtido com sucesso.\",\n  \"data\": {\n    \"enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"window\": {\n      \"status\": \"open\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"registrations_count\": 9,\n    \"cards_count\": 4,\n    \"distributed_count\": 0,\n    \"unpaired_count\": 0,\n    \"distributed_at\": null,\n    \"participants\": [\n      {\n        \"name\": \"João Carvalho\",\n        \"business_name\": \"Carvalho & Filhos Construções\",\n        \"submitted_at\": \"2026-11-14T19:48:02+00:00\"\n      },\n      {\n        \"name\": \"Marta Sousa\",\n        \"business_name\": \"Contas Certas Contabilidade\",\n        \"submitted_at\": \"2026-11-14T19:55:40+00:00\"\n      },\n      {\n        \"name\": \"Ana Ferreira\",\n        \"business_name\": \"Ferreira Arquitetura e Interiores\",\n        \"submitted_at\": \"2026-11-14T20:05:12+00:00\"\n      },\n      {\n        \"name\": \"Pedro Almeida\",\n        \"business_name\": \"Sabores do Algarve Restaurante\",\n        \"submitted_at\": \"2026-11-14T20:31:27+00:00\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 Distribuído",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Distribuído"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Estado dos cartões de oração obtido com sucesso.\",\n  \"data\": {\n    \"enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"window\": {\n      \"status\": \"closed\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"registrations_count\": 9,\n    \"cards_count\": 4,\n    \"distributed_count\": 4,\n    \"unpaired_count\": 0,\n    \"distributed_at\": \"2026-11-15T00:05:14+00:00\",\n    \"participants\": [\n      {\n        \"name\": \"João Carvalho\",\n        \"business_name\": \"Carvalho & Filhos Construções\",\n        \"submitted_at\": \"2026-11-14T19:48:02+00:00\"\n      },\n      {\n        \"name\": \"Marta Sousa\",\n        \"business_name\": \"Contas Certas Contabilidade\",\n        \"submitted_at\": \"2026-11-14T19:55:40+00:00\"\n      },\n      {\n        \"name\": \"Ana Ferreira\",\n        \"business_name\": \"Ferreira Arquitetura e Interiores\",\n        \"submitted_at\": \"2026-11-14T20:05:12+00:00\"\n      },\n      {\n        \"name\": \"Pedro Almeida\",\n        \"business_name\": \"Sabores do Algarve Restaurante\",\n        \"submitted_at\": \"2026-11-14T20:31:27+00:00\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 Sem par",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Sem par"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Estado dos cartões de oração obtido com sucesso.\",\n  \"data\": {\n    \"enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"window\": {\n      \"status\": \"closed\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"registrations_count\": 9,\n    \"cards_count\": 1,\n    \"distributed_count\": 0,\n    \"unpaired_count\": 1,\n    \"distributed_at\": \"2026-11-15T00:05:14+00:00\",\n    \"participants\": [\n      {\n        \"name\": \"João Carvalho\",\n        \"business_name\": \"Carvalho & Filhos Construções\",\n        \"submitted_at\": \"2026-11-14T19:48:02+00:00\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Evento sem cartões",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento sem cartões"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Este evento não tem cartões de oração.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Distribuir cartões de oração agora (admin)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "events",
+                "{{event_id}}",
+                "prayer-cards",
+                "distribute"
+              ]
+            },
+            "description": "**Requer autenticação, conta Active e perfil Admin** (`admin_token`).\n\nBotão \"Distribuir agora\": distribui os cartões do evento antes do fim do prazo. Sem este botão, a distribuição é automática depois das 23:59 do dia do evento (comando de hora a hora).\n\n- Distribuição em **cadeia**: os cartões são baralhados e cada participante recebe o cartão de outro (nunca o seu). Com 2 cartões há troca; com 1 o cartão fica sem destinatário (`unpaired_count`); com 0 o evento fica só marcado como distribuído.\n- Só entram cartões de autores ativos com perfil.\n- Só a partir do **início do evento** (antes → 409). Depois de distribuir, o prazo fecha para todos e um segundo pedido devolve 409 (nunca redistribui).\n- Cada destinatário recebe um email \"Recebeu um cartão de oração\" com o link para a plataforma, **sem** o conteúdo nem o nome do autor.\n\nResposta: o estado, como em \"Estado dos cartões de oração (admin)\".\n\n**Limite:** `admin-prayer-distribute`, 10 pedidos por minuto por admin.\n\nErros: 401 sem sessão/token · 403 sem permissão · 403 conta não ativa · 404 evento sem cartões de oração · 409 o evento ainda não começou · 409 já distribuído · 429 demasiados pedidos.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Distribuído",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Distribuído"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cartões de oração distribuídos.\",\n  \"data\": {\n    \"enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"window\": {\n      \"status\": \"closed\",\n      \"opens_at\": \"2026-11-14T19:30:00+00:00\",\n      \"closes_at\": \"2026-11-14T23:59:59+00:00\"\n    },\n    \"registrations_count\": 9,\n    \"cards_count\": 4,\n    \"distributed_count\": 4,\n    \"unpaired_count\": 0,\n    \"distributed_at\": \"2026-11-14T22:10:00+00:00\",\n    \"participants\": [\n      {\n        \"name\": \"João Carvalho\",\n        \"business_name\": \"Carvalho & Filhos Construções\",\n        \"submitted_at\": \"2026-11-14T19:48:02+00:00\"\n      },\n      {\n        \"name\": \"Marta Sousa\",\n        \"business_name\": \"Contas Certas Contabilidade\",\n        \"submitted_at\": \"2026-11-14T19:55:40+00:00\"\n      },\n      {\n        \"name\": \"Ana Ferreira\",\n        \"business_name\": \"Ferreira Arquitetura e Interiores\",\n        \"submitted_at\": \"2026-11-14T20:05:12+00:00\"\n      },\n      {\n        \"name\": \"Pedro Almeida\",\n        \"business_name\": \"Sabores do Algarve Restaurante\",\n        \"submitted_at\": \"2026-11-14T20:31:27+00:00\"\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
+            },
+            {
+              "name": "403 Conta não ativa",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Conta não ativa"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"A conta não está ativa e não pode editar dados.\"\n}"
+            },
+            {
+              "name": "404 Evento sem cartões",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento sem cartões"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Este evento não tem cartões de oração.\"\n}"
+            },
+            {
+              "name": "409 Evento ainda não começou",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Evento ainda não começou"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Ainda não é possível distribuir: o evento ainda não começou.\"\n}"
+            },
+            {
+              "name": "409 Já distribuído",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "409 Já distribuído"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Conflict",
+              "code": 409,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os cartões deste evento já foram distribuídos.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/{{event_id}}/prayer-cards/distribute",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "{{event_id}}",
+                    "prayer-cards",
+                    "distribute"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             }
           ]
         }
@@ -13897,7 +16026,7 @@
                 }
               ]
             },
-            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422."
+            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início)."
           },
           "response": [
             {
@@ -13946,7 +16075,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Passados",
@@ -13994,7 +16123,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"series_id\": null,\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#C62828\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"series_id\": null,\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#B84A00\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"series_id\": null,\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#C62828\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"series_id\": null,\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#B84A00\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Eventos filtrados",
@@ -14058,7 +16187,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
             },
             {
               "name": "422 Filtros inválidos",
@@ -14223,10 +16352,10 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento avulso, presencial ou online. Este pedido não cria uma série; na resposta, `series_id` é `null`.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, `latitude` e `longitude` devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara criar uma série, usar o pedido **Criar série de eventos**. Para localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento avulso, presencial ou online. Este pedido não cria uma série; na resposta, `series_id` é `null`.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, `latitude` e `longitude` devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara criar uma série, usar o pedido **Criar série de eventos**. Para localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14267,7 +16396,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n  }\n}"
             },
             {
               "name": "422 Validação",
@@ -14428,10 +16557,10 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`. Numa série, as duas opções são copiadas para todas as sessões.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar recorrente — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-11-05\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"ends_on\": \"2030-11-12\",\n    \"registration_deadline_days_before\": 3\n  }\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar recorrente — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-11-05\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"ends_on\": \"2030-11-12\",\n    \"registration_deadline_days_before\": 3\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14472,7 +16601,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Série de eventos criada com sucesso.\",\n  \"data\": {\n    \"series\": {\n      \"id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n      \"frequency\": \"weekly\",\n      \"ends_on\": \"2030-11-12\",\n      \"registration_deadline_days_before\": 3\n    },\n    \"sessions\": [\n      {\n        \"id\": \"e5a6b7c8-1111-4c11-8111-111111111111\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-05\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-02T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-2222-4c22-8222-222222222222\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false\n      }\n    ]\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Série de eventos criada com sucesso.\",\n  \"data\": {\n    \"series\": {\n      \"id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n      \"frequency\": \"weekly\",\n      \"ends_on\": \"2030-11-12\",\n      \"registration_deadline_days_before\": 3\n    },\n    \"sessions\": [\n      {\n        \"id\": \"e5a6b7c8-1111-4c11-8111-111111111111\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-05\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-02T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      },\n      {\n        \"id\": \"e5a6b7c8-2222-4c22-8222-222222222222\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#6A1B9A\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      }\n    ]\n  }\n}"
             },
             {
               "name": "422 Validação — série",
@@ -14636,7 +16765,7 @@
             "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento online avulso; a resposta inclui `series_id: null`. `category_id`, `location_id`, nome, descrição, data, horas, lotação e prazo seguem as mesmas regras do pedido presencial.\n\n- `is_online`: obrigatório e `true`.\n- `online_url`: obrigatório e tem de ser um URL válido.\n- Não enviar `address`, `latitude` ou `longitude`; esses campos não são permitidos para eventos online.\n- `venue_name`: opcional.\n- `registration_deadline`: formato `YYYY-MM-DD`; o servidor define o prazo para as 23:59 em `Europe/Lisbon` e este tem de ser anterior ou igual ao início do evento.\n- `event_end_time` tem de ser posterior a `event_start_time`.\n\nNa resposta administrativa, o link online é devolvido. Nos endpoints públicos, só é visível para membros inscritos depois de o prazo de inscrição passar. Para criar uma série, usar o pedido **Criar série de eventos**.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Workshop online — Lisboa\",\n  \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"21:00\",\n  \"is_online\": true,\n  \"online_url\": \"https://meet.example.com/workshop-aspec\",\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\"\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Workshop online — Lisboa\",\n  \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"21:00\",\n  \"is_online\": true,\n  \"online_url\": \"https://meet.example.com/workshop-aspec\",\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n  \"prayer_cards_enabled\": false,\n  \"prayer_verse\": null\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14677,7 +16806,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"series_id\": null,\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"series_id\": null,\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#C62828\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true,\n    \"prayer_cards_enabled\": false,\n    \"prayer_verse\": null\n  }\n}"
             },
             {
               "name": "422 Validação — link obrigatório",
@@ -14806,7 +16935,7 @@
                 }
               ]
             },
-            "description": "Detalhe do evento, incluindo inscrições. `series_id` devolve o UUID da série ou `null` se o evento for avulso."
+            "description": "Detalhe do evento, incluindo inscrições. `series_id` devolve o UUID da série ou `null` se o evento for avulso.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início)."
           },
           "response": [
             {
@@ -14842,7 +16971,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": null,\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"registration_open\": true,\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": null,\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -14979,10 +17108,10 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, enviar `address`; latitude e longitude devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, enviar `address`; latitude e longitude devem ser enviadas juntas ou ambas omitidas. Se forem omitidas, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n- Depois de existir o primeiro cartão preenchido, não é possível alterar `prayer_cards_enabled`, `prayer_verse`, `event_date` nem `event_start_time` (422): todos os cartões do evento ficam com o mesmo versículo e o mesmo prazo. Ver `prayer_cards_locked` em \"Ver evento (admin)\".",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa atualizado\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Estacionamento gratuito no local.\",\n  \"justification\": \"A lotação foi ajustada a pedido do espaço.\"\n}",
+              "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa atualizado\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Estacionamento gratuito no local.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"justification\": \"A lotação foi ajustada a pedido do espaço.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -15024,7 +17153,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"online_url\": null,\n    \"is_online\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#6A1B9A\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 22,\n    \"registration_open\": true,\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
             },
             {
               "name": "422 Lotação inferior aos inscritos",
@@ -15060,6 +17189,50 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"max_attendees\": [\n      \"A lotação máxima não pode ser inferior ao número de inscrições existentes.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Cartões de oração bloqueados",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Cartões de oração bloqueados"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Alegrai-vos sempre no Senhor. (Filipenses 4:4)\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"prayer_verse\": [\n      \"Não é possível alterar os cartões de oração, a data ou a hora depois de existirem cartões preenchidos.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
