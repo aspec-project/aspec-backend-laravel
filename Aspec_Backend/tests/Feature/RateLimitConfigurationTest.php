@@ -42,6 +42,7 @@ class RateLimitConfigurationTest extends TestCase
             'invoice-download' => ['invoice-download'],
             'notification-preferences' => ['notification-preferences'],
             'review-submit' => ['review-submit'],
+            'review-delete' => ['review-delete'],
         ];
     }
 

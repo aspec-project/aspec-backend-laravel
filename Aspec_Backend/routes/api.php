@@ -135,6 +135,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
     Route::post('/members/{member}/reviews', [MemberReviewController::class, 'store'])
         ->whereUuid('member')->middleware('throttle:review-submit');
+    Route::delete('/members/{member}/reviews', [MemberReviewController::class, 'destroy'])
+        ->whereUuid('member')->middleware('throttle:review-delete');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
     Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
     Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])
