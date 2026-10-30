@@ -11,6 +11,7 @@ use App\Models\Review;
 use App\Models\ReviewStatus;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -216,5 +217,70 @@ class MemberReviewController extends Controller
                 : 'Avaliação atualizada com sucesso.',
             $created ? Response::HTTP_CREATED : Response::HTTP_OK
         );
+    }
+
+    public function destroy(Request $request, string $member): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! in_array($user->role?->name, ['Member', 'Admin'], true)) {
+            return $this->errorResponse(
+                'Só membros e administradores podem apagar avaliações.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $reviewerProfile = $user->memberProfile;
+
+        if ($reviewerProfile === null) {
+            return $this->errorResponse(
+                'Perfil de membro não encontrado.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $reviewedProfile = MemberProfile::listedInDirectory()->find($member);
+
+        if ($reviewedProfile === null) {
+            return $this->errorResponse(
+                'Membro não encontrado.',
+                Response::HTTP_NOT_FOUND
+            );
+        }
+
+        return DB::transaction(function () use ($reviewerProfile, $reviewedProfile): JsonResponse {
+            $lockedProfile = MemberProfile::listedInDirectory()
+                ->whereKey($reviewedProfile->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($lockedProfile === null) {
+                return $this->errorResponse(
+                    'Membro não encontrado.',
+                    Response::HTTP_NOT_FOUND
+                );
+            }
+
+            $review = Review::query()
+                ->where('reviewer_profile_id', $reviewerProfile->getKey())
+                ->where('reviewed_profile_id', $lockedProfile->getKey())
+                ->lockForUpdate()
+                ->first();
+
+            if ($review === null) {
+                return $this->errorResponse(
+                    'Avaliação não encontrada.',
+                    Response::HTTP_NOT_FOUND
+                );
+            }
+
+            $review->delete();
+
+            return $this->successResponse(
+                null,
+                'Avaliação apagada com sucesso.',
+                Response::HTTP_OK
+            );
+        });
     }
 }
