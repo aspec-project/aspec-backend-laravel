@@ -9,6 +9,7 @@ use App\Models\ReviewStatus;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\FillsRateLimits;
@@ -44,6 +45,26 @@ class MemberReviewStoreTest extends TestCase
             'rating' => 5,
             'comment' => 'Excelente serviço e comunicação.',
         ];
+    }
+
+    private function configureModerationTerms(): void
+    {
+        Config::set('review_moderation.terms', [
+            'pt-PT' => [
+                'words' => ['moderationtestterm'],
+                'phrases' => ['moderation test phrase'],
+            ],
+        ]);
+    }
+
+    private function flaggedWordComment(): string
+    {
+        return 'Comentário com moderationtestterm.';
+    }
+
+    private function flaggedPhraseComment(): string
+    {
+        return 'Comentário com moderation test phrase.';
     }
 
     #[Test]
@@ -232,5 +253,139 @@ class MemberReviewStoreTest extends TestCase
         }
 
         $this->assertDatabaseCount('reviews', 0);
+    }
+
+    #[Test]
+    public function new_review_with_flagged_language_is_created_as_flagged(): void
+    {
+        $this->configureModerationTerms();
+
+        [$reviewer, $reviewerProfile] = $this->memberWithProfile();
+        [, $reviewedProfile] = $this->memberWithProfile();
+
+        Sanctum::actingAs($reviewer);
+
+        $comment = $this->flaggedPhraseComment();
+
+        $this->postJson($this->url($reviewedProfile), [
+            'rating' => 5,
+            'comment' => $comment,
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.comment', $comment);
+
+        $this->assertDatabaseHas('reviews', [
+            'reviewer_profile_id' => $reviewerProfile->id,
+            'reviewed_profile_id' => $reviewedProfile->id,
+            'rating' => 5,
+            'comment' => $comment,
+            'status_id' => ReviewStatus::query()
+                ->where('name', 'Flagged')
+                ->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function new_review_without_flagged_language_is_created_as_visible(): void
+    {
+        $this->configureModerationTerms();
+
+        [$reviewer, $reviewerProfile] = $this->memberWithProfile();
+        [, $reviewedProfile] = $this->memberWithProfile();
+
+        Sanctum::actingAs($reviewer);
+
+        $payload = $this->validPayload();
+
+        $this->postJson($this->url($reviewedProfile), $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.comment', $payload['comment']);
+
+        $this->assertDatabaseHas('reviews', [
+            'reviewer_profile_id' => $reviewerProfile->id,
+            'reviewed_profile_id' => $reviewedProfile->id,
+            'rating' => $payload['rating'],
+            'comment' => $payload['comment'],
+            'status_id' => ReviewStatus::query()
+                ->where('name', 'Visible')
+                ->value('id'),
+        ]);
+    }
+
+    #[Test]
+    public function updating_a_visible_review_with_flagged_language_changes_it_to_flagged(): void
+    {
+        $this->configureModerationTerms();
+
+        [$reviewer, $reviewerProfile] = $this->memberWithProfile();
+        [, $reviewedProfile] = $this->memberWithProfile();
+
+        Sanctum::actingAs($reviewer);
+
+        $this->postJson($this->url($reviewedProfile), $this->validPayload())
+            ->assertCreated();
+
+        $comment = $this->flaggedWordComment();
+
+        $this->postJson($this->url($reviewedProfile), [
+            'rating' => 4,
+            'comment' => $comment,
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.comment', $comment);
+
+        $this->assertDatabaseHas('reviews', [
+            'reviewer_profile_id' => $reviewerProfile->id,
+            'reviewed_profile_id' => $reviewedProfile->id,
+            'rating' => 4,
+            'comment' => $comment,
+            'status_id' => ReviewStatus::query()
+                ->where('name', 'Flagged')
+                ->value('id'),
+        ]);
+
+        $this->assertDatabaseCount('reviews', 1);
+    }
+
+    #[Test]
+    public function updating_a_hidden_or_flagged_review_with_flagged_language_preserves_its_status(): void
+    {
+        $this->configureModerationTerms();
+
+        foreach (['Hidden', 'Flagged'] as $statusName) {
+            [$reviewer, $reviewerProfile] = $this->memberWithProfile();
+            [, $reviewedProfile] = $this->memberWithProfile();
+
+            $statusId = ReviewStatus::query()
+                ->where('name', $statusName)
+                ->value('id');
+
+            Review::query()->create([
+                'reviewer_profile_id' => $reviewerProfile->id,
+                'reviewed_profile_id' => $reviewedProfile->id,
+                'rating' => 2,
+                'comment' => 'Comentário original.',
+                'status_id' => $statusId,
+            ]);
+
+            Sanctum::actingAs($reviewer);
+
+            $comment = $this->flaggedPhraseComment();
+
+            $this->postJson($this->url($reviewedProfile), [
+                'rating' => 4,
+                'comment' => $comment,
+            ])
+                ->assertOk()
+                ->assertJsonPath('data.comment', $comment);
+
+            $this->assertDatabaseHas('reviews', [
+                'reviewer_profile_id' => $reviewerProfile->id,
+                'reviewed_profile_id' => $reviewedProfile->id,
+                'rating' => 4,
+                'comment' => $comment,
+                'status_id' => $statusId,
+            ]);
+        }
     }
 }

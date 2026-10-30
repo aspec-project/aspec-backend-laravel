@@ -9,6 +9,7 @@ use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
 use App\Models\Review;
 use App\Models\ReviewStatus;
+use App\Services\Reviews\ReviewContentModerator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 class MemberReviewController extends Controller
 {
+    public function __construct(
+        private readonly ReviewContentModerator $reviewContentModerator
+    ) {}
+
     public function index(
         IndexMemberReviewsRequest $request,
         string $member
@@ -189,10 +194,14 @@ class MemberReviewController extends Controller
 
         $validated = $request->validated();
 
+        $shouldFlag = $this->reviewContentModerator
+            ->containsFlaggedLanguage($validated['comment']);
+
         [$review, $created] = DB::transaction(function () use (
             $reviewerProfile,
             $reviewedProfile,
-            $validated
+            $validated,
+            $shouldFlag,
         ): array {
             // Serializa as submissões para este perfil; a unique key da BD continua
             // a ser a proteção final contra avaliações duplicadas.
@@ -207,26 +216,43 @@ class MemberReviewController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            if ($review !== null) {
-                $review->update($validated);
-
-                return [$review, false];
-            }
-
             $visibleStatus = ReviewStatus::query()
                 ->where('name', 'Visible')
                 ->firstOrFail();
+
+            $flaggedStatus = ReviewStatus::query()
+                ->where('name', 'Flagged')
+                ->firstOrFail();
+
+            if ($review !== null) {
+                $statusId = $review->status_id;
+
+                if ($shouldFlag && $review->status_id === $visibleStatus->id) {
+                    $statusId = $flaggedStatus->id;
+                }
+
+                $review->update([
+                    'rating' => $validated['rating'],
+                    'comment' => $validated['comment'],
+                    'status_id' => $statusId,
+                ]);
+
+                return [$review, false];
+            }
 
             $review = Review::query()->create([
                 'reviewer_profile_id' => $reviewerProfile->getKey(),
                 'reviewed_profile_id' => $lockedProfile->getKey(),
                 'rating' => $validated['rating'],
                 'comment' => $validated['comment'],
-                'status_id' => $visibleStatus->id,
+                'status_id' => $shouldFlag
+                    ? $flaggedStatus->id
+                    : $visibleStatus->id,
             ]);
 
             return [$review, true];
         });
+
         $review->load('reviewerProfile');
 
         return $this->successResponse(
