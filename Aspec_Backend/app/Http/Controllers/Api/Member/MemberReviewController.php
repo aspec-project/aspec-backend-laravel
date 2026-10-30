@@ -51,6 +51,10 @@ class MemberReviewController extends Controller
         $viewer = $request->user('sanctum');
         $canSeeReviews = $viewer?->accountStatus?->name === 'Active';
 
+        $viewerProfileId = $canSeeReviews
+            ? $viewer?->memberProfile?->getKey()
+            : null;
+
         if ($canSeeReviews) {
             $distributionCounts = (clone $visibleReviews)
                 ->selectRaw('rating, COUNT(*) as total')
@@ -74,8 +78,23 @@ class MemberReviewController extends Controller
                 ->with('reviewerProfile')
                 ->when(
                     $rating !== null,
-                    fn (Builder $query) => $query->where('rating', $rating)
+                    function (Builder $query) use ($rating, $viewerProfileId): void {
+                        $query->where(function (Builder $ratingQuery) use ($rating, $viewerProfileId): void {
+                            $ratingQuery->where('rating', $rating);
+
+                            if ($viewerProfileId !== null) {
+                                $ratingQuery->orWhere('reviewer_profile_id', $viewerProfileId);
+                            }
+                        });
+                    }
                 );
+
+            if ($viewerProfileId !== null) {
+                $reviewsQuery->orderByRaw(
+                    'CASE WHEN reviewer_profile_id = ? THEN 0 ELSE 1 END',
+                    [$viewerProfileId]
+                );
+            }
 
             switch ($sort) {
                 case 'oldest':

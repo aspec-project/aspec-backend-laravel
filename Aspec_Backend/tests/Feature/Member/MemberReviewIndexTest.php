@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Member;
 
+use App\Models\AccountStatus;
 use App\Models\MemberProfile;
 use App\Models\Review;
 use App\Models\ReviewStatus;
@@ -55,6 +56,40 @@ class MemberReviewIndexTest extends TestCase
     private function url(MemberProfile $profile): string
     {
         return "/api/members/{$profile->id}/reviews";
+    }
+
+    private function assertOwnReviewIsFirst(
+        User $viewer,
+        MemberProfile $ownProfile
+    ): void {
+        $reviewed = $this->profile();
+        $otherReviewer = $this->profile();
+        $start = Carbon::parse('2030-01-01T10:00:00+00:00');
+
+        $ownReview = $this->createReview(
+            $ownProfile,
+            $reviewed,
+            3,
+            'Visible',
+            $start
+        );
+
+        $otherReview = $this->createReview(
+            $otherReviewer,
+            $reviewed,
+            5,
+            'Visible',
+            $start->copy()->addDay()
+        );
+
+        Sanctum::actingAs($viewer);
+
+        $this->getJson($this->url($reviewed).'?sort=highest')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', $ownReview->id)
+            ->assertJsonPath('data.items.0.is_mine', true)
+            ->assertJsonPath('data.items.1.id', $otherReview->id)
+            ->assertJsonPath('data.items.1.is_mine', false);
     }
 
     #[Test]
@@ -207,5 +242,85 @@ class MemberReviewIndexTest extends TestCase
                 'data.items.0.reviewer.business_name',
                 'Empresa anonimizada'
             );
+    }
+
+    #[Test]
+    public function active_member_sees_their_own_review_first(): void
+    {
+        $ownProfile = $this->profile();
+        $viewer = User::query()->findOrFail($ownProfile->user_id);
+
+        $this->assertOwnReviewIsFirst($viewer, $ownProfile);
+    }
+
+    #[Test]
+    public function active_admin_with_profile_sees_their_own_review_first(): void
+    {
+        $admin = User::factory()->admin()->create([
+            'account_status_id' => AccountStatus::query()
+                ->where('name', 'Active')
+                ->value('id'),
+        ]);
+
+        $adminProfile = MemberProfile::factory()->create([
+            'user_id' => $admin->id,
+        ]);
+
+        $this->assertOwnReviewIsFirst($admin, $adminProfile);
+    }
+
+    #[Test]
+    public function own_hidden_and_flagged_reviews_remain_hidden(): void
+    {
+        $ownProfile = $this->profile();
+        $viewer = User::query()->findOrFail($ownProfile->user_id);
+
+        foreach (['Hidden', 'Flagged'] as $statusName) {
+            $reviewed = $this->profile();
+            $otherReviewer = $this->profile();
+
+            $this->createReview($ownProfile, $reviewed, 5, $statusName);
+            $visibleReview = $this->createReview($otherReviewer, $reviewed, 4);
+
+            Sanctum::actingAs($viewer);
+
+            $this->getJson($this->url($reviewed))
+                ->assertOk()
+                ->assertJsonCount(1, 'data.items')
+                ->assertJsonPath('data.items.0.id', $visibleReview->id)
+                ->assertJsonPath('data.items.0.is_mine', false);
+        }
+    }
+
+    #[Test]
+    public function own_review_is_included_first_even_when_the_rating_filter_excludes_it(): void
+    {
+        $reviewed = $this->profile();
+        $ownProfile = $this->profile();
+        $otherReviewer = $this->profile();
+        $excludedReviewer = $this->profile();
+
+        $ownReview = $this->createReview($ownProfile, $reviewed, 3);
+        $matchingReview = $this->createReview($otherReviewer, $reviewed, 5);
+        $excludedReview = $this->createReview($excludedReviewer, $reviewed, 4);
+
+        $viewer = User::query()->findOrFail($ownProfile->user_id);
+        Sanctum::actingAs($viewer);
+
+        $this->getJson($this->url($reviewed).'?rating=5&sort=highest')
+            ->assertOk()
+            ->assertJsonPath('data.items.0.id', $ownReview->id)
+            ->assertJsonPath('data.items.0.rating', 3)
+            ->assertJsonPath('data.items.0.is_mine', true)
+            ->assertJsonPath('data.items.1.id', $matchingReview->id)
+            ->assertJsonPath('data.items.1.rating', 5)
+            ->assertJsonPath('data.items.1.is_mine', false)
+            ->assertJsonMissingPath('data.items.2')
+            ->assertJsonPath('data.reviews_count', 3)
+            ->assertJsonPath('data.pagination.total', 2);
+
+        $this->assertDatabaseHas('reviews', [
+            'id' => $excludedReview->id,
+        ]);
     }
 }
