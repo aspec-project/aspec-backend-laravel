@@ -6265,7 +6265,7 @@
     },
     {
       "name": "Subscrição",
-      "description": "Ativação da conta com pagamento (Stripe, modo de teste) e faturação (InvoiceExpress). Pedido do cliente, fase 1. Responsável: Mário.\n\n**Fluxo:** candidatura (**Pending**) → admin aprova (**Approved**, sem acesso, recebe email de ativação com link assinado) → o membro preenche os dados de faturação e insere o cartão no Stripe Checkout → webhook do Stripe → **Active** em período experimental → cobrança mensal automática. Pagamento falhado → período de carência de 7 dias com acesso total e email para atualizar o cartão. Sem pagamento no fim da carência → **Inactive** (sem login, fora do diretório) + email de reativação → novo pagamento, sem novo período experimental → **Active**. O membro pode cancelar a subscrição no fim do período pago (e retomá-la até lá); no fim, a conta fica **Inactive** e recebe o mesmo email de reativação.\n\nValores (preço, período experimental, carência, validade dos links) são configuráveis no backend e ainda por confirmar com o cliente.\n\nOs links de ativação/reativação não precisam de login: a segurança vem da assinatura e do prazo no URL. Os dados do cartão nunca passam pelo backend nem pelo frontend. Erros do Stripe → 502.",
+      "description": "Ativação da conta com pagamento (Stripe, modo de teste) e faturação (InvoiceExpress). Pedido do cliente, fase 1. Responsável: Mário.\n\n**Fluxo:** candidatura (**Pending**) → admin aprova (**Approved**, sem acesso, recebe email de ativação com link assinado) → o membro preenche os dados de faturação e insere o cartão no Stripe Checkout → webhook do Stripe → **Active** em período experimental → cobrança anual automática. Pagamento falhado → período de carência de 7 dias com acesso total e email para atualizar o cartão. Sem pagamento no fim da carência → **Inactive** (sem login, fora do diretório) + email de reativação → novo pagamento, sem novo período experimental → **Active**. O membro pode cancelar a subscrição no fim do período pago (e retomá-la até lá); no fim, a conta fica **Inactive** e recebe o mesmo email de reativação.\n\nValores (preço, período experimental, carência, validade dos links) são configuráveis no backend e ainda por confirmar com o cliente.\n\nOs links de ativação/reativação não precisam de login: a segurança vem da assinatura e do prazo no URL. Os dados do cartão nunca passam pelo backend nem pelo frontend. Erros do Stripe → 502.",
       "item": [
         {
           "name": "Validar link de ativação",
@@ -6347,7 +6347,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Link válido.\",\n  \"data\": {\n    \"type\": \"activation\",\n    \"email\": \"joao.silva@silvaconsultoria.pt\",\n    \"name\": \"João Silva\",\n    \"trial_days\": 30,\n    \"price\": {\n      \"amount\": 60,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Link válido.\",\n  \"data\": {\n    \"type\": \"activation\",\n    \"email\": \"joao.silva@silvaconsultoria.pt\",\n    \"name\": \"João Silva\",\n    \"trial_days\": 30,\n    \"price\": {\n      \"amount\": 30,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    }\n  }\n}"
             },
             {
               "name": "200 Link de reativação",
@@ -6391,7 +6391,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Link válido.\",\n  \"data\": {\n    \"type\": \"reactivation\",\n    \"email\": \"joao.silva@silvaconsultoria.pt\",\n    \"name\": \"João Silva\",\n    \"trial_days\": 0,\n    \"price\": {\n      \"amount\": 60,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Link válido.\",\n  \"data\": {\n    \"type\": \"reactivation\",\n    \"email\": \"joao.silva@silvaconsultoria.pt\",\n    \"name\": \"João Silva\",\n    \"trial_days\": 0,\n    \"price\": {\n      \"amount\": 30,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    }\n  }\n}"
             },
             {
               "name": "403 Link inválido ou expirado",
@@ -7427,7 +7427,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"trialing\",\n    \"trial_starts_at\": \"2026-10-10T10:15:00+00:00\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"trial_days\": 30,\n    \"next_payment_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"trialing\",\n    \"trial_starts_at\": \"2026-10-10T10:15:00+00:00\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"trial_days\": 30,\n    \"next_payment_at\": \"2026-11-09T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "200 Em período de carência",
@@ -7460,7 +7460,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"past_due\",\n    \"trial_starts_at\": \"2026-10-10T10:15:00+00:00\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"trial_days\": 30,\n    \"next_payment_at\": null,\n    \"grace_ends_at\": \"2026-11-16T10:20:00+00:00\",\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"past_due\",\n    \"trial_starts_at\": \"2026-10-10T10:15:00+00:00\",\n    \"trial_ends_at\": \"2026-11-09T10:15:00+00:00\",\n    \"trial_days\": 30,\n    \"next_payment_at\": null,\n    \"grace_ends_at\": \"2026-11-16T10:20:00+00:00\",\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "200 Reativada (sem trial)",
@@ -7493,7 +7493,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2026-11-18T09:30:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2026-11-18T09:30:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "200 Subscrição anual",
@@ -7526,7 +7526,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2027-10-28T10:00:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 20.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Subscrição obtida com sucesso.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2027-10-28T10:00:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -7909,7 +7909,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Cancelamento agendado. Mantém o acesso até 20/11/2026.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": null,\n    \"grace_ends_at\": null,\n    \"ends_at\": \"2026-11-20T10:15:00+00:00\",\n    \"cancel_at_period_end\": true,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Cancelamento agendado. Mantém o acesso até 20/11/2026.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": null,\n    \"grace_ends_at\": null,\n    \"ends_at\": \"2026-11-20T10:15:00+00:00\",\n    \"cancel_at_period_end\": true,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -8274,7 +8274,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"A subscrição foi retomada.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2026-11-20T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 60.0,\n      \"currency\": \"eur\",\n      \"interval\": \"month\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"A subscrição foi retomada.\",\n  \"data\": {\n    \"status\": \"active\",\n    \"trial_starts_at\": null,\n    \"trial_ends_at\": null,\n    \"trial_days\": null,\n    \"next_payment_at\": \"2026-11-20T10:15:00+00:00\",\n    \"grace_ends_at\": null,\n    \"ends_at\": null,\n    \"cancel_at_period_end\": false,\n    \"price\": {\n      \"amount\": 30.0,\n      \"currency\": \"eur\",\n      \"interval\": \"year\"\n    },\n    \"billing\": {\n      \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n      \"nif\": \"509123457\",\n      \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n      \"billing_postal_code\": \"1250-146\",\n      \"billing_city\": \"Lisboa\"\n    }\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -8889,7 +8889,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Faturas obtidas com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"019a0b7c-3d2e-7f10-9a4b-5c6d7e8f9a02\",\n        \"number\": null,\n        \"amount\": 60,\n        \"currency\": \"eur\",\n        \"status\": \"processing\",\n        \"paid_at\": \"2026-12-09T10:15:03+00:00\",\n        \"issued_at\": null,\n        \"pdf_available\": false,\n        \"period_start\": \"2026-12-09\",\n        \"period_end\": \"2027-01-08\"\n      },\n      {\n        \"id\": \"019a0b7c-3d2e-7f10-9a4b-5c6d7e8f9a01\",\n        \"number\": \"DEMO-2026-3F9A1C2B\",\n        \"amount\": 60,\n        \"currency\": \"eur\",\n        \"status\": \"issued\",\n        \"paid_at\": \"2026-11-09T10:15:02+00:00\",\n        \"issued_at\": \"2026-11-09T10:15:40+00:00\",\n        \"pdf_available\": true,\n        \"period_start\": \"2026-11-09\",\n        \"period_end\": \"2026-12-08\"\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 5,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Faturas obtidas com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"019a0b7c-3d2e-7f10-9a4b-5c6d7e8f9a02\",\n        \"number\": null,\n        \"amount\": 30,\n        \"currency\": \"eur\",\n        \"status\": \"processing\",\n        \"paid_at\": \"2026-12-09T10:15:03+00:00\",\n        \"issued_at\": null,\n        \"pdf_available\": false,\n        \"period_start\": \"2026-12-09\",\n        \"period_end\": \"2027-01-08\"\n      },\n      {\n        \"id\": \"019a0b7c-3d2e-7f10-9a4b-5c6d7e8f9a01\",\n        \"number\": \"DEMO-2026-3F9A1C2B\",\n        \"amount\": 30,\n        \"currency\": \"eur\",\n        \"status\": \"issued\",\n        \"paid_at\": \"2026-11-09T10:15:02+00:00\",\n        \"issued_at\": \"2026-11-09T10:15:40+00:00\",\n        \"pdf_available\": true,\n        \"period_start\": \"2026-11-09\",\n        \"period_end\": \"2026-12-08\"\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 5,\n      \"total\": 2,\n      \"last_page\": 1\n    }\n  }\n}"
             },
             {
               "name": "200 Sem faturas",
