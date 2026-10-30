@@ -13,9 +13,10 @@ final readonly class InvoiceData
     /**
      * Rejeita valores que nunca deviam chegar a uma fatura.
      *
-     * @param  int  $amount  Valor cobrado em cêntimos, com IVA incluído.
+     * @param  int  $amount  Valor total cobrado pelo Stripe, em cêntimos (base + IVA; com isenção, igual à base).
      * @param  string  $currency  Código da moeda em minúsculas, como o Stripe o envia (ex. "eur").
      * @param  DateTimeImmutable  $date  Data do pagamento.
+     * @param  InvoiceTax  $tax  Imposto aplicado (taxa de IVA e, se isenta, o motivo).
      *
      * @throws InvalidArgumentException Se o valor não for positivo ou a moeda não tiver 3 letras.
      */
@@ -25,6 +26,7 @@ final readonly class InvoiceData
         public string $currency,
         public string $description,
         public DateTimeImmutable $date,
+        public InvoiceTax $tax,
     ) {
         if ($amount <= 0) {
             throw new InvalidArgumentException('O valor da fatura tem de ser positivo.');

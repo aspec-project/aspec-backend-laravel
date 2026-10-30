@@ -36,9 +36,13 @@ return [
     ],
 
     // Faturação dos pagamentos: 'log' (sem serviço externo), 'demo' (PDF local sem validade fiscal,
-    // enviado por email) ou 'invoiceexpress'.
+    // enviado por email) ou 'invoiceexpress'. O IVA é comum a todos os drivers: a quota é isenta
+    // (taxa 0) e o motivo legal é decidido pelo contabilista da ASPEC (até lá, texto provisório).
     'invoicing' => [
         'driver' => env('INVOICING_DRIVER', 'log'),
+        'vat_rate' => (int) env('INVOICE_VAT_RATE', 0),
+        'vat_exemption_code' => env('INVOICE_VAT_EXEMPTION_CODE'),
+        'vat_exemption_reason' => env('INVOICE_VAT_EXEMPTION_REASON', 'Isento de IVA: motivo legal a definir (texto provisório)'),
     ],
 
     'invoiceexpress' => [
@@ -46,10 +50,8 @@ return [
         'api_key' => env('INVOICEEXPRESS_API_KEY'),
         'document_type' => env('INVOICEEXPRESS_DOCUMENT_TYPE', 'invoice_receipts'),
         'sequence_id' => env('INVOICEEXPRESS_SEQUENCE_ID'),
-        'item_name' => env('INVOICEEXPRESS_ITEM_NAME', 'Quota ASPEC'),
-        'tax_name' => env('INVOICEEXPRESS_TAX_NAME', 'IVA23'),
-        'vat_rate' => (int) env('INVOICEEXPRESS_VAT_RATE', 23),
-        'tax_exemption' => env('INVOICEEXPRESS_TAX_EXEMPTION'),
+        'item_name' => env('INVOICEEXPRESS_ITEM_NAME', 'Quota Anual ASPEC'),
+        'tax_name' => env('INVOICEEXPRESS_TAX_NAME', 'IVA0'),
         'timeout' => (int) env('INVOICEEXPRESS_TIMEOUT', 10),
         'retry_times' => (int) env('INVOICEEXPRESS_RETRY_TIMES', 3),
         'retry_sleep_ms' => (int) env('INVOICEEXPRESS_RETRY_SLEEP_MS', 500),

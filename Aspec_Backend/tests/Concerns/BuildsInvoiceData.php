@@ -4,6 +4,7 @@ namespace Tests\Concerns;
 
 use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
+use App\Services\Invoicing\Data\InvoiceTax;
 use DateTimeImmutable;
 
 /**
@@ -26,6 +27,8 @@ trait BuildsInvoiceData
 
     protected const API_KEY = 'secret-key-123';
 
+    protected const EXEMPTION_REASON = 'Isento de IVA — motivo de teste';
+
     protected function customer(): InvoiceCustomerData
     {
         return new InvoiceCustomerData(
@@ -39,10 +42,14 @@ trait BuildsInvoiceData
         );
     }
 
+    /**
+     * Pagamento a faturar; sem $tax usa IVA a 23 % (o caminho com IVA continua suportado).
+     */
     protected function invoice(
         string $stripeInvoiceId = 'in_test_123',
         int $amount = 6000,
         string $currency = 'eur',
+        ?InvoiceTax $tax = null,
     ): InvoiceData {
         return new InvoiceData(
             stripeInvoiceId: $stripeInvoiceId,
@@ -50,6 +57,17 @@ trait BuildsInvoiceData
             currency: $currency,
             description: 'Quota ASPEC — período de 07/10/2026 a 06/10/2027',
             date: new DateTimeImmutable('2026-10-07 14:30:00'),
+            tax: $tax ?? $this->taxedAt(23),
         );
+    }
+
+    protected function taxedAt(int $rate): InvoiceTax
+    {
+        return new InvoiceTax(rate: $rate, exemptionCode: null, exemptionReason: null);
+    }
+
+    protected function exemptTax(?string $code = 'M07', string $reason = self::EXEMPTION_REASON): InvoiceTax
+    {
+        return new InvoiceTax(rate: 0, exemptionCode: $code, exemptionReason: $reason);
     }
 }

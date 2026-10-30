@@ -216,6 +216,132 @@ class DemoInvoiceServiceTest extends TestCase
         $this->assertStringContainsString('&lt;b&gt;X&lt;/b&gt;', $html);
     }
 
+    // --- D4b: IVA no PDF ---
+
+    /**
+     * Texto visível da vista, sem etiquetas e com os espaços juntos: os valores podem estar em
+     * células ou linhas diferentes do HTML.
+     */
+    private function renderedInvoiceText(?array $captured): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', html_entity_decode(strip_tags($this->renderedInvoiceView($captured)))));
+    }
+
+    #[Test]
+    public function exempt_invoice_shows_the_base_zero_vat_and_the_total(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax(code: null)));
+        $text = $this->renderedInvoiceText($captured);
+
+        foreach (['Base', 'Taxa IVA', 'Total'] as $expected) {
+            $this->assertStringContainsString($expected, $text);
+        }
+        $this->assertGreaterThanOrEqual(2, substr_count($text, '30,00 €'), 'Base e total devem ser ambos 30,00 €.');
+        $this->assertMatchesRegularExpression('/(?<![\d,.])0 %/u', $text);
+        $this->assertMatchesRegularExpression('/(?<![\d,.])0,00 €/u', $text);
+    }
+
+    #[Test]
+    public function exempt_invoice_shows_the_exemption_reason(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax(code: null)));
+        $text = $this->renderedInvoiceText($captured);
+
+        $this->assertStringContainsString('Motivo de isenção de IVA: '.self::EXEMPTION_REASON, $text);
+        $this->assertStringNotContainsString('(M', $text);
+    }
+
+    #[Test]
+    public function exempt_invoice_shows_the_exemption_code_when_configured(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax(code: 'M07')));
+
+        $this->assertStringContainsString(
+            'Motivo de isenção de IVA: '.self::EXEMPTION_REASON.' (M07)',
+            $this->renderedInvoiceText($captured),
+        );
+    }
+
+    #[Test]
+    public function exempt_invoice_never_says_vat_is_included(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax()));
+
+        $this->assertStringNotContainsString('IVA incluído', $this->renderedInvoiceText($captured));
+    }
+
+    #[Test]
+    public function taxed_invoice_shows_base_vat_and_total_that_add_up_to_the_charge(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->taxedAt(23)));
+        $text = $this->renderedInvoiceText($captured);
+
+        foreach (['24,39 €', '23 %', '5,61 €', '30,00 €', 'IVA incluído'] as $expected) {
+            $this->assertStringContainsString($expected, $text);
+        }
+    }
+
+    #[Test]
+    public function taxed_invoice_has_no_exemption_reason(): void
+    {
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->taxedAt(23)));
+
+        $this->assertStringNotContainsString('Motivo de isenção', $this->renderedInvoiceText($captured));
+    }
+
+    #[Test]
+    public function exemption_reason_is_escaped(): void
+    {
+        // O texto vem do .env, mas escapa-se na mesma, como os dados do cliente.
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax(reason: 'Isento <b>X</b>')));
+        $html = $this->renderedInvoiceView($captured);
+
+        $this->assertStringNotContainsString('<b>X</b>', $html);
+        $this->assertStringContainsString('&lt;b&gt;X&lt;/b&gt;', $html);
+    }
+
+    #[Test]
+    public function job_with_the_demo_driver_shows_the_configured_exemption_reason(): void
+    {
+        config([
+            'services.invoicing.driver' => 'demo',
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => '',
+            'services.invoicing.vat_exemption_reason' => 'Isento de IVA — motivo legal a definir (texto provisório)',
+        ]);
+        Mail::fake();
+        $this->captureInvoiceView($captured);
+        $invoice = Invoice::factory()->create(['amount' => 3000]);
+
+        $this->runJob($invoice->id);
+        $text = $this->renderedInvoiceText($captured);
+
+        $this->assertStringContainsString('Motivo de isenção de IVA: Isento de IVA — motivo legal a definir (texto provisório)', $text);
+        $this->assertMatchesRegularExpression('/(?<![\d,.])0,00 €/u', $text);
+        $this->assertSame(InvoiceStatus::Issued, $invoice->fresh()->status);
+    }
+
     // --- D5: email com o PDF ---
 
     #[Test]

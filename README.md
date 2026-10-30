@@ -134,7 +134,7 @@ Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
 
 - **Chaves:** criar uma conta Stripe e, em **modo de teste**, copiar a `pk_test_…` para `STRIPE_KEY` e a `sk_test_…` para `STRIPE_SECRET` no `.env`. Nunca usar chaves `live` e nunca commitar o `.env`. Depois de mudar o `.env`: `php artisan config:clear` (não usar `config:cache` em desenvolvimento).
-- **Preço:** no dashboard, criar o Product "Quota ASPEC" com um Price recorrente (ver "Quota mensal ou anual" abaixo) e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor, a moeda e a periodicidade mostrados ao membro (`SUBSCRIPTION_PRICE_AMOUNT`, `CASHIER_CURRENCY`, `SUBSCRIPTION_INTERVAL`) têm de bater certo com esse Price: confirmar com `php artisan subscriptions:check-price`.
+- **Preço:** no dashboard, criar o Product "Quota Anual ASPEC" com um Price recorrente de 30 € por ano (ver "Quota anual" abaixo) e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor, a moeda e a periodicidade mostrados ao membro (`SUBSCRIPTION_PRICE_AMOUNT`, `CASHIER_CURRENCY`, `SUBSCRIPTION_INTERVAL`) têm de bater certo com esse Price: confirmar com `php artisan subscriptions:check-price`.
 - **Webhooks locais:** instalar a Stripe CLI, `stripe login` e depois
   ```
   stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed,invoice.upcoming
@@ -172,16 +172,16 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 - **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e o scheduler (fim da carência, de hora a hora): `php artisan schedule:work` em local; no servidor, um cron `* * * * * php artisan schedule:run`. Para a demo, `php artisan subscriptions:end-grace` corre o fim da carência à mão.
 - **Depois de `git pull`:** `composer install` e `php artisan migrate`.
 
-### Quota mensal ou anual
+### Quota anual
 
-O mesmo código serve as duas periodicidades: muda-se só o `.env` e o Price no Stripe.
+Quota definida pelo cliente (30/10/2026): **30 € por ano**, sem IVA, com 30 dias de período experimental. O código também suporta quota mensal (muda-se só o `.env` e o Price no Stripe), mas a configuração do projeto é anual.
 
-- **Prices no Stripe (modo de teste):** no Product "Quota ASPEC", criar dois Prices recorrentes em EUR: 20 € **mensal** e 20 € **anual** (intervalo "a cada 1 mês" / "a cada 1 ano"; nunca "a cada 3 anos").
+- **Price no Stripe (modo de teste):** no Product "Quota Anual ASPEC", criar um Price recorrente de 30 € em EUR, com intervalo "a cada 1 ano" (nunca "a cada 3 anos"). No `.env`: `STRIPE_PRICE_ID` com esse Price, `SUBSCRIPTION_INTERVAL=year`, `SUBSCRIPTION_PRICE_AMOUNT=30.00` e `SUBSCRIPTION_INVOICE_DESCRIPTION` / `INVOICEEXPRESS_ITEM_NAME` = "Quota Anual ASPEC".
 - **Mudar de periodicidade:** no `.env`, `STRIPE_PRICE_ID` (o Price da nova periodicidade) + `SUBSCRIPTION_INTERVAL` (`month` ou `year`, igual ao intervalo do Price) + `SUBSCRIPTION_PRICE_AMOUNT`; depois `php artisan config:clear` e `php artisan subscriptions:check-price`.
 - **`php artisan subscriptions:check-price`:** lê o Price no Stripe e compara-o com o `.env` (ativo, moeda, valor em cêntimos, intervalo e `interval_count` = 1). Sai com 0 se bater certo; senão mostra cada diferença com a variável a corrigir e sai com 1. Correr sempre que mudar o Price ou estes valores: quem cobra é o Stripe, mas os emails, a página da subscrição e as faturas usam o `.env`, e um erro só aparecia num email errado a um membro.
 - **Subscrições existentes não mudam:** só as novas ativações usam o novo Price. Converter subscrições já ativas (`swap()` do Cashier) está fora da Fase 1; sem membros reais não é preciso.
-- **Faturas:** a descrição indica o período pago, do Stripe (ex. "Quota ASPEC — período de 28/10/2026 a 27/10/2027"), guardado em `invoices.period_start` / `period_end`; `GET /api/invoices` devolve-o em `period_start` / `period_end` (datas de Lisboa, fim inclusivo). O `next_payment_at` de `GET /api/subscription` é o fim desse período.
-- **Aviso de renovação (só quota anual):** o webhook `invoice.upcoming` envia ao membro Active, sem cancelamento agendado, o email "A sua quota anual de 20,00 € renova a dd/mm/aaaa". No dashboard: Settings → Billing → Subscriptions and emails → **Upcoming renewal events**, 7 dias antes; e acrescentar `invoice.upcoming` aos eventos do endpoint (e ao `stripe listen`, como acima). Com quota mensal o evento é ignorado (seriam 12 emails por ano).
+- **Faturas:** a descrição indica o período pago, do Stripe (ex. "Quota Anual ASPEC — período de 28/10/2026 a 27/10/2027"), guardado em `invoices.period_start` / `period_end`; `GET /api/invoices` devolve-o em `period_start` / `period_end` (datas de Lisboa, fim inclusivo). O `next_payment_at` de `GET /api/subscription` é o fim desse período.
+- **Aviso de renovação (só quota anual):** o webhook `invoice.upcoming` envia ao membro Active, sem cancelamento agendado, o email "A sua quota anual de 30,00 € renova a dd/mm/aaaa". No dashboard: Settings → Billing → Subscriptions and emails → **Upcoming renewal events**, 7 dias antes; e acrescentar `invoice.upcoming` aos eventos do endpoint (e ao `stripe listen`, como acima). Com quota mensal o evento é ignorado (seriam 12 emails por ano).
 
 ### Ativação da conta (demo ponta a ponta)
 
@@ -242,6 +242,12 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 - **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 120 por minuto e 2000 por hora). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
 - **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
 - **InvoiceExpress:** o trial gratuito de 30 dias serve de sandbox (sem comunicação à AT). Criá-lo perto da apresentação (~2/11, para cobrir a semana de 30/11), copiar o nome da conta e a chave da API para `INVOICEEXPRESS_ACCOUNT_NAME` / `INVOICEEXPRESS_API_KEY` e mudar para `INVOICING_DRIVER=invoiceexpress`. "Limpar Conta" (definições da InvoiceExpress) apaga os documentos de teste. As faturas já emitidas com `demo` continuam a descarregar-se pelo driver que as emitiu.
+- **IVA (quota isenta):** a quota não tem IVA (decisão do cliente: associação sem fins lucrativos). A configuração é comum a todos os drivers:
+  - `INVOICE_VAT_RATE` (por omissão `0`; com IVA, ex. `23`, e código vazio);
+  - `INVOICE_VAT_EXEMPTION_CODE`: código do motivo de isenção da AT, vazio por omissão. Quem decide é o contabilista da ASPEC; candidatos: `M07` (art. 9.º, n.º 19, do CIVA, organismos sem fins lucrativos com quota estatutária), `M10` (art. 53.º, regime de isenção) ou `M99` (não sujeito). Ser associação sem fins lucrativos não é, por si, motivo de isenção;
+  - `INVOICE_VAT_EXEMPTION_REASON`: texto do motivo, mostrado no PDF `demo` e no log. Por omissão é um texto provisório até o motivo legal ser definido.
+  - O PDF `demo` mostra base, taxa, IVA e total e, se isenta, "Motivo de isenção de IVA: …". Cada fatura guarda em `invoices` a taxa, o código e o motivo usados na emissão (`vat_rate`, `vat_exemption_code`, `vat_exemption_reason`; `null` nas faturas anteriores).
+  - **InvoiceExpress:** recusa emitir uma fatura isenta sem código (a menção legal na fatura sai do código, o texto livre não é enviado) e só finaliza o rascunho se o total calculado pela InvoiceExpress for o valor cobrado no Stripe. `INVOICEEXPRESS_TAX_NAME` (por omissão `IVA0`) tem de ser o nome de uma taxa que exista na conta: confirmar no trial com `GET /taxes.json`. Para o trial, pôr `INVOICE_VAT_EXEMPTION_CODE=M07` **só no `.env` local** (provisório, até o contabilista decidir).
 
 ## Diretório
 

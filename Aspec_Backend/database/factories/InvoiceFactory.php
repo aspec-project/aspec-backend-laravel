@@ -48,13 +48,16 @@ class InvoiceFactory extends Factory
     }
 
     /**
-     * Fatura emitida e enviada, com o número no formato do driver que a emitiu.
+     * Fatura emitida e enviada, com o número no formato do driver que a emitiu e isenta de IVA
+     * (taxa 0 % e o motivo configurado), como as faturas da quota.
      */
     public function issued(): static
     {
         return $this->state(fn () => [
             'status' => InvoiceStatus::Issued,
             'issued_at' => now(),
+            'vat_rate' => 0,
+            'vat_exemption_reason' => config('services.invoicing.vat_exemption_reason'),
             'number' => fn (array $attributes) => self::numberFor($attributes),
         ]);
     }

@@ -34,6 +34,10 @@
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:5173"/>
         <!-- Faturação sempre com o driver log nos testes: nenhum teste depende de uma conta InvoiceExpress. -->
         <env name="INVOICING_DRIVER" value="log"/>
+        <!-- IVA fixo nos testes (quota isenta, sem código): o .env local pode ter outro código (ex. M07 no trial). -->
+        <env name="INVOICE_VAT_RATE" value="0" force="true"/>
+        <env name="INVOICE_VAT_EXEMPTION_CODE" value="" force="true"/>
+        <env name="INVOICE_VAT_EXEMPTION_REASON" value="Isento de IVA: motivo legal a definir (texto provisório)" force="true"/>
         <!-- Chaves falsas: os testes nunca usam as chaves do .env nem chamam o Stripe. -->
         <env name="STRIPE_KEY" value="pk_test_fake"/>
         <env name="STRIPE_SECRET" value="sk_test_fake"/>
@@ -41,8 +45,8 @@
         <env name="STRIPE_PRICE_ID" value="price_test"/>
         <env name="CASHIER_CURRENCY" value="eur"/>
         <!-- Valores fixos nos testes: o .env local pode ter outra quota (ex. 20 € anual). -->
-        <env name="SUBSCRIPTION_PRICE_AMOUNT" value="60.00"/>
-        <env name="SUBSCRIPTION_INTERVAL" value="month"/>
+        <env name="SUBSCRIPTION_PRICE_AMOUNT" value="30.00"/>
+        <env name="SUBSCRIPTION_INTERVAL" value="year"/>
         <!-- Nominatim numa porta local fechada: um teste sem Http::fake falha logo em vez de sair para a Internet. -->
         <env name="NOMINATIM_BASE_URL" value="http://127.0.0.1:9"/>
         <!-- Os testes nunca usam a chave real do Google, mesmo que o .env local a tenha. -->

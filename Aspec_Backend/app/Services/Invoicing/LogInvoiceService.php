@@ -6,6 +6,7 @@ use App\Contracts\InvoiceService;
 use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
+use Closure;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -17,11 +18,11 @@ class LogInvoiceService implements InvoiceService
     /**
      * Regista a fatura no log e devolve um número fictício.
      *
-     * O log tem só o id da fatura do Stripe, o valor, a moeda e o número: nunca nome, NIF,
-     * morada nem email, porque os logs não são sítio para dados pessoais.
-     * Ignora o $draftId: sem serviço externo não há rascunhos, e o número já é sempre o mesmo.
+     * O log tem só o id da fatura do Stripe, o valor, a moeda, a taxa de IVA, o código de isenção e
+     * o número: nunca nome, NIF, morada nem email, porque os logs não são sítio para dados pessoais.
+     * Ignora o $draftId e o $onDraftCreated: sem serviço externo não há rascunhos, e o número já é sempre o mesmo.
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
     {
         $number = $this->numberFor($invoice);
 
@@ -29,6 +30,8 @@ class LogInvoiceService implements InvoiceService
             'stripe_invoice_id' => $invoice->stripeInvoiceId,
             'amount' => $invoice->amount,
             'currency' => $invoice->currency,
+            'vat_rate' => $invoice->tax->rate,
+            'vat_exemption_code' => $invoice->tax->exemptionCode,
             'number' => $number,
         ]);
 
