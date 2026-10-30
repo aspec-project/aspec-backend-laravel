@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
+use App\Http\Controllers\Api\Admin\AdminPrayerCardController;
 use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
@@ -14,6 +15,8 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
 use App\Http\Controllers\Api\Events\EventRegistrationController;
+use App\Http\Controllers\Api\Events\PrayerCardController;
+use App\Http\Controllers\Api\Events\ReceivedPrayerCardController;
 use App\Http\Controllers\Api\Lists\EventCategoryController;
 use App\Http\Controllers\Api\Lists\LocationController;
 use App\Http\Controllers\Api\Lists\SectorController;
@@ -118,6 +121,11 @@ Route::prefix('admin')
         Route::get('/events/{eventInstance}/attendees.csv', [AdminEventAttendeeController::class, 'export'])
             ->whereUuid('eventInstance')
             ->middleware('throttle:event-attendees');
+        Route::get('/events/{eventInstance}/prayer-cards', [AdminPrayerCardController::class, 'show'])
+            ->whereUuid('eventInstance');
+        Route::post('/events/{eventInstance}/prayer-cards/distribute', [AdminPrayerCardController::class, 'distribute'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:admin-prayer-distribute');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
         Route::get('/dashboard', AdminDashboardController::class)->middleware('throttle:admin-dashboard');
     });
@@ -155,4 +163,10 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
         ->whereUuid('eventInstance');
     Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
+    Route::middleware('throttle:prayer-cards')->group(function () {
+        Route::get('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'show'])->whereUuid('eventInstance');
+        Route::put('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'update'])->whereUuid('eventInstance');
+        Route::delete('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'destroy'])->whereUuid('eventInstance');
+        Route::get('/me/prayer-cards', [ReceivedPrayerCardController::class, 'index']);
+    });
 });
