@@ -41,8 +41,8 @@
         <env name="STRIPE_PRICE_ID" value="price_test"/>
         <env name="CASHIER_CURRENCY" value="eur"/>
         <!-- Valores fixos nos testes: o .env local pode ter outra quota (ex. 20 € anual). -->
-        <env name="SUBSCRIPTION_PRICE_AMOUNT" value="60.00"/>
-        <env name="SUBSCRIPTION_INTERVAL" value="month"/>
+        <env name="SUBSCRIPTION_PRICE_AMOUNT" value="30.00"/>
+        <env name="SUBSCRIPTION_INTERVAL" value="year"/>
         <!-- Nominatim numa porta local fechada: um teste sem Http::fake falha logo em vez de sair para a Internet. -->
         <env name="NOMINATIM_BASE_URL" value="http://127.0.0.1:9"/>
         <!-- Os testes nunca usam a chave real do Google, mesmo que o .env local a tenha. -->

@@ -46,7 +46,7 @@ return [
         'api_key' => env('INVOICEEXPRESS_API_KEY'),
         'document_type' => env('INVOICEEXPRESS_DOCUMENT_TYPE', 'invoice_receipts'),
         'sequence_id' => env('INVOICEEXPRESS_SEQUENCE_ID'),
-        'item_name' => env('INVOICEEXPRESS_ITEM_NAME', 'Quota ASPEC'),
+        'item_name' => env('INVOICEEXPRESS_ITEM_NAME', 'Quota Anual ASPEC'),
         'tax_name' => env('INVOICEEXPRESS_TAX_NAME', 'IVA23'),
         'vat_rate' => (int) env('INVOICEEXPRESS_VAT_RATE', 23),
         'tax_exemption' => env('INVOICEEXPRESS_TAX_EXEMPTION'),
