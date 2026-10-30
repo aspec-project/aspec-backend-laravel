@@ -8,6 +8,7 @@ use App\Exceptions\InvoicePdfUnavailable;
 use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -42,8 +43,7 @@ class InvoiceExpressInvoiceService implements InvoiceService
     /**
      * @param  string  $documentType  Tipo de documento na API (por omissão invoice_receipts).
      * @param  string|null  $sequenceId  Série; null usa a série por omissão da conta.
-     * @param  int  $vatRate  Taxa de IVA em percentagem (23, ou 0 se isento).
-     * @param  string|null  $taxExemption  Código do motivo de isenção (ex. M07), só quando isento.
+     * @param  string  $taxName  Nome da taxa de IVA na conta InvoiceExpress (ex. IVA0); tem de existir lá.
      * @param  int  $timeout  Tempo máximo de cada pedido, em segundos.
      */
     public function __construct(
@@ -53,8 +53,6 @@ class InvoiceExpressInvoiceService implements InvoiceService
         private ?string $sequenceId,
         private string $itemName,
         private string $taxName,
-        private int $vatRate,
-        private ?string $taxExemption,
         private int $timeout,
         private int $retryTimes,
         private int $retrySleepMs,
@@ -64,25 +62,37 @@ class InvoiceExpressInvoiceService implements InvoiceService
      * Emite a fatura-recibo na InvoiceExpress e envia-a por email ao cliente.
      *
      * Só EUR: a conta InvoiceExpress fatura em euros e noutra moeda o valor sairia errado.
+     * Uma fatura isenta precisa do código de isenção (a menção legal sai dele): sem código, falha antes
+     * de qualquer pedido. O rascunho só é finalizado se o total calculado pela InvoiceExpress for o valor
+     * cobrado (até 1 cêntimo de diferença com IVA, por arredondamento; exato quando isenta).
      * Sem número fiscal depois de finalizar falha antes do email (não há fatura para enviar nem gravar).
      * Depois de finalizada nunca lança exceção: se o email falhar devolve ISSUED_NOT_SENT.
-     * Com $draftId não cria rascunho: finaliza o da tentativa anterior (se já estiver finalizado,
-     * a finalização confirma-o e segue para o email).
+     * Com $draftId não cria rascunho: lê o da tentativa anterior, confirma o total e finaliza-o (se já
+     * estiver finalizado, segue para o email).
      *
      * @param  string|null  $draftId  Id do rascunho de uma tentativa anterior que falhou a finalizar.
+     * @param  (Closure(string): void)|null  $onDraftCreated  Recebe o id do rascunho logo que é criado, antes
+     *                                                        de confirmar o total e de finalizar, para o job o
+     *                                                        guardar: uma nova tentativa retoma sempre este
+     *                                                        rascunho e nunca emite uma segunda fatura fiscal.
      *
-     * @throws InvoiceIssuingFailed Se a moeda não for EUR ou se a criação ou a finalização falharem.
+     * @throws InvoiceIssuingFailed Se a moeda não for EUR, faltar o código de isenção, o total não
+     *                              corresponder ao valor cobrado ou a criação ou a finalização falharem.
      *                              Nas falhas a finalizar, a exceção traz o id do rascunho
      *                              (providerInvoiceId) para a nova tentativa não criar outro.
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
     {
         if ($invoice->currency !== 'eur') {
             throw InvoiceIssuingFailed::unsupportedCurrency($invoice->currency);
         }
 
-        $documentId = $draftId ?? $this->createDraft($customer, $invoice);
-        $document = $this->finalize($documentId);
+        if ($invoice->tax->isExempt() && $invoice->tax->exemptionCode === null) {
+            throw InvoiceIssuingFailed::missingExemptionCode();
+        }
+
+        $documentId = $draftId ?? $this->createDraft($customer, $invoice, $onDraftCreated);
+        $document = $draftId === null ? $this->finalize($documentId) : $this->resumeDraft($documentId, $invoice);
 
         $number = $document['sequence_number'] ?? null;
 
@@ -203,10 +213,13 @@ class InvoiceExpressInvoiceService implements InvoiceService
 
     /**
      * Cria a fatura em rascunho e devolve o id do documento.
-     * Sem série ou sem isenção configuradas a chave não é enviada: a InvoiceExpress usa a série por
-     * omissão da conta e só aceita motivo de isenção em faturas sem IVA.
+     * Sem série ou sem isenção a chave não é enviada: a InvoiceExpress usa a série por omissão da
+     * conta e só aceita motivo de isenção em faturas sem IVA. O texto livre do motivo nunca é enviado:
+     * na fatura fiscal a menção legal sai do código e um texto ao lado podia contradizê-la.
+     * O id é entregue ao $onDraftCreated antes de confirmar o total: com um total errado, as novas
+     * tentativas voltam a este rascunho e falham da mesma forma (nunca o finalizam), sem criar outros.
      */
-    private function createDraft(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice): string
+    private function createDraft(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?Closure $onDraftCreated): string
     {
         $date = $invoice->date->format('d/m/Y');
 
@@ -215,7 +228,7 @@ class InvoiceExpressInvoiceService implements InvoiceService
             'due_date' => $date,
             'reference' => $invoice->stripeInvoiceId,
             'sequence_id' => $this->sequenceId,
-            'tax_exemption' => $this->taxExemption,
+            'tax_exemption' => $invoice->tax->exemptionCode,
             'client' => [
                 'name' => $customer->name,
                 'code' => $customer->code,
@@ -229,7 +242,7 @@ class InvoiceExpressInvoiceService implements InvoiceService
             'items' => [[
                 'name' => $this->itemName,
                 'description' => $invoice->description,
-                'unit_price' => $this->netUnitPrice($invoice->amount),
+                'unit_price' => $this->netUnitPrice($invoice),
                 'quantity' => '1',
                 'tax' => ['name' => $this->taxName],
             ]],
@@ -237,13 +250,60 @@ class InvoiceExpressInvoiceService implements InvoiceService
 
         $response = $this->send('create', null, fn () => $this->client()->post("/{$this->documentType}.json", ['invoice' => $payload]));
 
-        $documentId = $this->documentFrom($response)['id'] ?? null;
+        $document = $this->documentFrom($response);
+        $documentId = $document['id'] ?? null;
 
         if ($response->failed() || blank($documentId)) {
             throw InvoiceIssuingFailed::rejected('create', $response->status());
         }
 
+        if ($onDraftCreated) {
+            $onDraftCreated((string) $documentId);
+        }
+
+        $this->ensureTotalMatches($document, $invoice);
+
         return (string) $documentId;
+    }
+
+    /**
+     * Retoma o rascunho de uma tentativa anterior: lê-o, confirma o total e finaliza-o.
+     * Um documento já finalizado é devolvido como está: já tem número fiscal e falhar aqui levava a
+     * nova tentativa a emitir uma segunda fatura.
+     */
+    private function resumeDraft(string $documentId, InvoiceData $invoice): array
+    {
+        $document = $this->fetchDocument($documentId);
+
+        if (in_array($document['status'] ?? null, self::FINAL_STATUSES, true)) {
+            return $document;
+        }
+
+        $this->ensureTotalMatches($document, $invoice);
+
+        return $this->finalize($documentId);
+    }
+
+    /**
+     * Confirma que o total do documento (base + IVA, calculado pela InvoiceExpress) é o valor cobrado.
+     * Com IVA aceita 1 cêntimo de diferença (a InvoiceExpress arredonda base × taxa); isenta, tem de ser
+     * igual. Protege contra uma taxa errada na conta (ex. IVA23 numa quota isenta: 36,90 € por 30 €).
+     *
+     * @throws InvoiceIssuingFailed Se o total for diferente ou não vier na resposta.
+     */
+    private function ensureTotalMatches(array $document, InvoiceData $invoice): void
+    {
+        $total = $document['total'] ?? null;
+
+        if (! is_numeric($total)) {
+            throw InvoiceIssuingFailed::totalMismatch();
+        }
+
+        $tolerance = $invoice->tax->isExempt() ? 0 : 1;
+
+        if (abs((int) round((float) $total * 100) - $invoice->amount) > $tolerance) {
+            throw InvoiceIssuingFailed::totalMismatch();
+        }
     }
 
     /**
@@ -274,7 +334,8 @@ class InvoiceExpressInvoiceService implements InvoiceService
     }
 
     /**
-     * Lê o documento para confirmar o estado depois de uma finalização recusada.
+     * Lê o documento: para confirmar o estado depois de uma finalização recusada ou para retomar um
+     * rascunho. Uma falha mantém o id do rascunho, como as falhas a finalizar.
      */
     private function fetchDocument(string $documentId): array
     {
@@ -332,11 +393,9 @@ class InvoiceExpressInvoiceService implements InvoiceService
     /**
      * Preço unitário sem IVA, para o total da fatura (com IVA) bater certo com o valor cobrado.
      */
-    private function netUnitPrice(int $amount): string
+    private function netUnitPrice(InvoiceData $invoice): string
     {
-        $net = (int) round($amount / (1 + $this->vatRate / 100));
-
-        return number_format($net / 100, 2, '.', '');
+        return number_format($invoice->tax->netAmount($invoice->amount) / 100, 2, '.', '');
     }
 
     /**

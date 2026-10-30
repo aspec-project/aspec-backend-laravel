@@ -34,6 +34,10 @@
         <env name="SANCTUM_STATEFUL_DOMAINS" value="localhost:5173"/>
         <!-- Faturação sempre com o driver log nos testes: nenhum teste depende de uma conta InvoiceExpress. -->
         <env name="INVOICING_DRIVER" value="log"/>
+        <!-- IVA fixo nos testes (quota isenta, sem código): o .env local pode ter outro código (ex. M07 no trial). -->
+        <env name="INVOICE_VAT_RATE" value="0" force="true"/>
+        <env name="INVOICE_VAT_EXEMPTION_CODE" value="" force="true"/>
+        <env name="INVOICE_VAT_EXEMPTION_REASON" value="Isento de IVA: motivo legal a definir (texto provisório)" force="true"/>
         <!-- Chaves falsas: os testes nunca usam as chaves do .env nem chamam o Stripe. -->
         <env name="STRIPE_KEY" value="pk_test_fake"/>
         <env name="STRIPE_SECRET" value="sk_test_fake"/>

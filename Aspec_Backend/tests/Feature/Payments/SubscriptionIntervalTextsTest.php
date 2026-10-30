@@ -15,6 +15,7 @@ use App\Notifications\SubscriptionCancelledNotification;
 use App\Notifications\SubscriptionResumedNotification;
 use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
+use App\Services\Invoicing\Data\InvoiceTax;
 use DateTimeImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -165,14 +166,14 @@ class SubscriptionIntervalTextsTest extends TestCase
             'services.invoiceexpress.document_type' => 'invoice_receipts',
             'services.invoiceexpress.sequence_id' => null,
             'services.invoiceexpress.item_name' => 'Quota ASPEC',
-            'services.invoiceexpress.tax_name' => 'IVA23',
-            'services.invoiceexpress.vat_rate' => 23,
-            'services.invoiceexpress.tax_exemption' => null,
+            'services.invoiceexpress.tax_name' => 'IVA0',
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => 'M07',
             'services.invoiceexpress.retry_times' => 1,
             'services.invoiceexpress.retry_sleep_ms' => 0,
         ]);
         Http::fake([
-            '*aspec-test.app.invoicexpress.com/invoice_receipts.json*' => Http::response(['invoice_receipt' => ['id' => 987, 'status' => 'draft']], 201),
+            '*aspec-test.app.invoicexpress.com/invoice_receipts.json*' => Http::response(['invoice_receipt' => ['id' => 987, 'status' => 'draft', 'total' => 20.0]], 201),
             '*aspec-test.app.invoicexpress.com/invoice_receipts/987/change-state.json*' => Http::response(['invoice_receipt' => [
                 'id' => 987,
                 'status' => 'settled',
@@ -198,6 +199,7 @@ class SubscriptionIntervalTextsTest extends TestCase
                 currency: 'eur',
                 description: 'Quota ASPEC — período de 28/10/2026 a 27/10/2027',
                 date: new DateTimeImmutable('2026-10-28 10:00:00'),
+                tax: new InvoiceTax(rate: 0, exemptionCode: 'M07', exemptionReason: 'Isento de IVA — motivo de teste'),
             ),
         );
 

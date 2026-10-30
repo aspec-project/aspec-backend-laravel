@@ -32,6 +32,31 @@ class InvoiceModelTest extends TestCase
     }
 
     #[Test]
+    public function invoices_table_has_the_tax_columns(): void
+    {
+        $this->assertTrue(Schema::hasColumns('invoices', ['vat_rate', 'vat_exemption_code', 'vat_exemption_reason']));
+    }
+
+    #[Test]
+    public function pending_invoice_has_no_tax_until_it_is_issued(): void
+    {
+        $invoice = Invoice::factory()->create()->fresh();
+
+        $this->assertNull($invoice->vat_rate);
+        $this->assertNull($invoice->vat_exemption_code);
+        $this->assertNull($invoice->vat_exemption_reason);
+    }
+
+    #[Test]
+    public function vat_rate_is_cast_to_an_integer(): void
+    {
+        $invoice = Invoice::factory()->create();
+        $invoice->forceFill(['vat_rate' => '23'])->save();
+
+        $this->assertSame(23, $invoice->fresh()->vat_rate);
+    }
+
+    #[Test]
     public function processed_webhook_events_table_has_the_erd_columns(): void
     {
         $this->assertTrue(Schema::hasColumns('processed_webhook_events', [

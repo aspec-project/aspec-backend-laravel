@@ -13,7 +13,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * Fatura de um pagamento recebido pelo Stripe. Guardada por obrigação fiscal: nunca é apagada,
  * nem quando a conta do membro é anonimizada. period_start/period_end são o período pago, do
- * Stripe (fim exclusivo); null em faturas antigas.
+ * Stripe (fim exclusivo); null em faturas antigas. vat_rate, vat_exemption_code e vat_exemption_reason
+ * são o imposto usado na emissão; null antes de emitida e nas faturas anteriores a estas colunas.
  */
 class Invoice extends Model
 {
@@ -30,6 +31,9 @@ class Invoice extends Model
         'number',
         'amount',
         'currency',
+        'vat_rate',
+        'vat_exemption_code',
+        'vat_exemption_reason',
         'period_start',
         'period_end',
         'status',
@@ -53,6 +57,7 @@ class Invoice extends Model
     {
         return [
             'amount' => 'integer',
+            'vat_rate' => 'integer',
             'status' => InvoiceStatus::class,
             'period_start' => 'datetime',
             'period_end' => 'datetime',

@@ -54,8 +54,9 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             'services.invoiceexpress.sequence_id' => null,
             'services.invoiceexpress.item_name' => 'Quota ASPEC',
             'services.invoiceexpress.tax_name' => 'IVA23',
-            'services.invoiceexpress.vat_rate' => 23,
-            'services.invoiceexpress.tax_exemption' => null,
+            'services.invoicing.vat_rate' => 23,
+            'services.invoicing.vat_exemption_code' => null,
+            'services.invoicing.vat_exemption_reason' => null,
             'services.invoiceexpress.timeout' => 10,
             'services.invoiceexpress.retry_times' => 3,
             'services.invoiceexpress.retry_sleep_ms' => 0,
@@ -70,20 +71,47 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
         return $service;
     }
 
-    /** Documento como a InvoiceExpress o devolve: a raiz tem o nome do tipo (aqui, invoice_receipt). */
-    private function document(string $status): array
+    /**
+     * Documento como a InvoiceExpress o devolve: a raiz tem o nome do tipo (aqui, invoice_receipt).
+     * O total (base + IVA) bate certo, por omissão, com o valor cobrado em invoice() (60,00 €).
+     */
+    private function document(string $status, float $total = 60.0): array
     {
         return ['invoice_receipt' => [
             'id' => self::DOCUMENT_ID,
             'status' => $status,
+            'total' => $total,
             'sequence_number' => self::NUMBER,
             'permalink' => self::PERMALINK,
         ]];
     }
 
-    private function createdResponse()
+    /**
+     * Rascunho criado, com o total (base + IVA) calculado pela InvoiceExpress.
+     * Por omissão bate certo com o valor cobrado em invoice() (60,00 €).
+     */
+    private function createdResponse(float $total = 60.0)
     {
-        return Http::response(['invoice_receipt' => ['id' => self::DOCUMENT_ID, 'status' => 'draft']], 201);
+        return Http::response(['invoice_receipt' => ['id' => self::DOCUMENT_ID, 'status' => 'draft', 'total' => $total]], 201);
+    }
+
+    private function useExemptConfig(): void
+    {
+        config([
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => 'M07',
+            'services.invoicing.vat_exemption_reason' => self::EXEMPTION_REASON,
+            'services.invoiceexpress.tax_name' => 'IVA0',
+        ]);
+    }
+
+    private function fakeIssuingWithTotal(float $createdTotal = 30.0): void
+    {
+        Http::fake([
+            self::CREATE_URL => $this->createdResponse(total: $createdTotal),
+            self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
     }
 
     private function fakeHappyPath(): void
@@ -250,23 +278,236 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
     #[Test]
     public function vat_exempt_invoice_uses_the_full_amount_and_sends_the_exemption_code(): void
     {
-        config([
-            'services.invoiceexpress.vat_rate' => 0,
-            'services.invoiceexpress.tax_name' => 'IVA0',
-            'services.invoiceexpress.tax_exemption' => 'M07',
-        ]);
-        $this->fakeHappyPath();
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal();
 
-        $this->service()->issue($this->customer(), $this->invoice(amount: 6000));
+        $issued = $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
 
         $payload = $this->sentCreatePayload();
-        $this->assertSame('60.00', data_get($payload, 'invoice.items.0.unit_price'));
+        $this->assertSame('30.00', data_get($payload, 'invoice.items.0.unit_price'));
         $this->assertSame('IVA0', data_get($payload, 'invoice.items.0.tax.name'));
         $this->assertSame('M07', data_get($payload, 'invoice.tax_exemption'));
+        $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
     }
 
     #[Test]
-    public function tax_exemption_is_omitted_when_not_configured(): void
+    public function exemption_code_comes_from_the_invoice_tax(): void
+    {
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal();
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M10')));
+
+        $this->assertSame('M10', data_get($this->sentCreatePayload(), 'invoice.tax_exemption'));
+    }
+
+    #[Test]
+    public function exemption_reason_text_is_never_sent(): void
+    {
+        // Na fatura fiscal a menção legal sai do código da AT; um texto livre ao lado podia contradizê-la.
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal();
+
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+
+        $payload = $this->sentCreatePayload();
+        $this->assertArrayNotHasKey('observations', $payload['invoice']);
+        $this->assertStringNotContainsString(self::EXEMPTION_REASON, json_encode($payload, JSON_UNESCAPED_UNICODE));
+    }
+
+    #[Test]
+    public function exempt_invoice_without_exemption_code_fails_before_any_request(): void
+    {
+        $this->useExemptConfig();
+        Http::fake();
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax(code: null)));
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('tax', $e->step);
+            $this->assertSame('Falta o código do motivo de isenção de IVA (INVOICE_VAT_EXEMPTION_CODE).', $e->getMessage());
+            $this->assertNull($e->httpStatus);
+            $this->assertNull($e->providerInvoiceId);
+            $this->assertNoSecretsOrPersonalData($e->getMessage());
+        }
+
+        Http::assertNothingSent();
+    }
+
+    // --- Total devolvido pela InvoiceExpress ---
+
+    #[Test]
+    public function draft_with_a_total_different_from_the_charge_is_not_finalized(): void
+    {
+        // Ex.: taxa IVA23 na conta com a quota isenta: fatura de 36,90 € para um débito de 30 €.
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal(createdTotal: 36.90);
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('create', $e->step);
+            $this->assertNoSecretsOrPersonalData($e->getMessage());
+            // Sem o id do rascunho, a nova tentativa do job não finaliza o documento com o total errado.
+            $this->assertNull($e->providerInvoiceId);
+        }
+
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+    }
+
+    #[Test]
+    public function draft_with_the_charged_total_is_finalized(): void
+    {
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal(createdTotal: 30.0);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(self::NUMBER, $issued->number);
+    }
+
+    #[Test]
+    public function draft_without_a_total_is_not_finalized(): void
+    {
+        // Sem total não há como confirmar o valor: falha fechado, como a falta do código de isenção.
+        Http::fake([
+            self::CREATE_URL => Http::response(['invoice_receipt' => ['id' => self::DOCUMENT_ID, 'status' => 'draft']], 201),
+            self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        $e = $this->issueExpectingFailure();
+
+        $this->assertSame('create', $e->step);
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+    }
+
+    public static function taxedTotalsWithinOneCent(): array
+    {
+        return [
+            'um cêntimo acima' => [30.01],
+            'um cêntimo abaixo' => [29.99],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('taxedTotalsWithinOneCent')]
+    public function taxed_draft_one_cent_off_is_finalized(float $total): void
+    {
+        // Com IVA, a InvoiceExpress arredonda base × taxa e pode ficar a 1 cêntimo do valor cobrado.
+        $this->fakeIssuingWithTotal(createdTotal: $total);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->taxedAt(23)));
+
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
+    }
+
+    public static function taxedTotalsTwoCentsOff(): array
+    {
+        return [
+            'dois cêntimos acima' => [30.02],
+            'dois cêntimos abaixo' => [29.98],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('taxedTotalsTwoCentsOff')]
+    public function taxed_draft_two_cents_off_is_not_finalized(float $total): void
+    {
+        $this->fakeIssuingWithTotal(createdTotal: $total);
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->taxedAt(23)));
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('create', $e->step);
+            $this->assertNull($e->providerInvoiceId);
+        }
+
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+    }
+
+    #[Test]
+    public function exempt_draft_one_cent_off_is_not_finalized(): void
+    {
+        // Sem IVA não há arredondamento: o total tem de ser exatamente o valor cobrado.
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal(createdTotal: 30.01);
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('create', $e->step);
+            $this->assertNull($e->providerInvoiceId);
+        }
+
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+    }
+
+    #[Test]
+    public function resumed_draft_with_the_charged_total_is_finalized(): void
+    {
+        $this->useExemptConfig();
+        Http::fake([
+            self::SHOW_URL => Http::response($this->document('draft', total: 30.0), 200),
+            self::CHANGE_STATE_URL => Http::response($this->document('settled', total: 30.0), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')), '987');
+
+        $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
+        $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(self::NUMBER, $issued->number);
+    }
+
+    #[Test]
+    public function resumed_draft_with_a_different_total_is_not_finalized(): void
+    {
+        // Rascunho de uma tentativa anterior com outro imposto: nunca vira documento fiscal.
+        $this->useExemptConfig();
+        Http::fake([
+            self::SHOW_URL => Http::response($this->document('draft', total: 36.90), 200),
+            self::CHANGE_STATE_URL => Http::response($this->document('settled', total: 36.90), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')), '987');
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            // Sem o id, a nova tentativa cria outro rascunho em vez de voltar a este.
+            $this->assertNull($e->providerInvoiceId);
+            $this->assertNoSecretsOrPersonalData($e->getMessage());
+        }
+
+        $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
+    }
+
+    #[Test]
+    public function taxed_draft_whose_total_matches_the_charge_is_finalized(): void
+    {
+        // 30,00 € com IVA 23 %: base 24,39 €, e a InvoiceExpress devolve o total de 30,00 €.
+        $this->fakeIssuingWithTotal(createdTotal: 30.0);
+
+        $issued = $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->taxedAt(23)));
+
+        $this->assertSame('24.39', data_get($this->sentCreatePayload(), 'invoice.items.0.unit_price'));
+        $this->assertSame('IVA23', data_get($this->sentCreatePayload(), 'invoice.items.0.tax.name'));
+        $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
+    }
+
+    #[Test]
+    public function tax_exemption_is_omitted_on_a_taxed_invoice(): void
     {
         $this->fakeHappyPath();
 
@@ -320,7 +561,7 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             self::CREATE_URL => Http::sequence()
                 ->push([], 503)
                 ->push([], 503)
-                ->push(['invoice_receipt' => ['id' => self::DOCUMENT_ID, 'status' => 'draft']], 201),
+                ->push(['invoice_receipt' => ['id' => self::DOCUMENT_ID, 'status' => 'draft', 'total' => 60.0]], 201),
             self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
             self::EMAIL_URL => Http::response([], 200),
         ]);
@@ -563,19 +804,75 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             ->atLeast()->once();
     }
 
+    // --- Rascunho guardado antes de finalizar ---
+
+    #[Test]
+    public function draft_id_is_handed_over_before_finalizing(): void
+    {
+        $this->fakeHappyPath();
+        $handedOver = null;
+        $changeStateRequestsAtThatTime = null;
+
+        $this->service()->issue($this->customer(), $this->invoice(), null, function (string $draftId) use (&$handedOver, &$changeStateRequestsAtThatTime) {
+            $handedOver = $draftId;
+            $changeStateRequestsAtThatTime = $this->countRequests('PUT', '/invoice_receipts/987/change-state.json');
+        });
+
+        $this->assertSame('987', $handedOver);
+        $this->assertSame(0, $changeStateRequestsAtThatTime);
+    }
+
+    #[Test]
+    public function draft_id_is_handed_over_even_when_the_total_does_not_match(): void
+    {
+        // As novas tentativas voltam a este rascunho (e falham da mesma forma) em vez de criar outros.
+        $this->useExemptConfig();
+        $this->fakeIssuingWithTotal(createdTotal: 36.90);
+        $handedOver = null;
+
+        try {
+            $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')), null, function (string $draftId) use (&$handedOver) {
+                $handedOver = $draftId;
+            });
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('create', $e->step);
+        }
+
+        $this->assertSame('987', $handedOver);
+        $this->assertSame(0, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
+    }
+
+    #[Test]
+    public function resumed_draft_is_not_handed_over_again(): void
+    {
+        Http::fake([
+            self::SHOW_URL => Http::response($this->document('draft'), 200),
+            self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
+            self::EMAIL_URL => Http::response([], 200),
+        ]);
+        $calls = 0;
+
+        $this->service()->issue($this->customer(), $this->invoice(), '987', function () use (&$calls) {
+            $calls++;
+        });
+
+        $this->assertSame(0, $calls);
+    }
+
     // --- Retoma a partir de um rascunho existente ---
 
     #[Test]
     public function resuming_from_a_draft_finalizes_and_emails_without_creating_another(): void
     {
         Http::fake([
+            self::SHOW_URL => Http::response($this->document('draft'), 200),
             self::CHANGE_STATE_URL => Http::response($this->document('settled'), 200),
             self::EMAIL_URL => Http::response([], 200),
         ]);
 
         $issued = $this->service()->issue($this->customer(), $this->invoice(), '987');
 
-        Http::assertSentCount(2);
         $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
         $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/change-state.json'));
         $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
@@ -596,16 +893,17 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
         $issued = $this->service()->issue($this->customer(), $this->invoice(), '987');
 
         $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));
-        $this->assertSame(1, $this->countRequests('GET', '/invoice_receipts/987.json'));
+        $this->assertGreaterThanOrEqual(1, $this->countRequests('GET', '/invoice_receipts/987.json'));
         $this->assertSame(1, $this->countRequests('PUT', '/invoice_receipts/987/email-document.json'));
         $this->assertSame(self::NUMBER, $issued->number);
         $this->assertSame(IssuedInvoice::ISSUED, $issued->status);
     }
 
     #[Test]
-    public function resuming_a_missing_draft_fails_at_finalize_and_keeps_the_draft_id(): void
+    public function resuming_a_missing_draft_fails_without_creating_or_emailing(): void
     {
         Http::fake([
+            self::SHOW_URL => Http::response([], 404),
             self::CHANGE_STATE_URL => Http::response([], 404),
             self::EMAIL_URL => Http::response([], 200),
         ]);
@@ -614,9 +912,8 @@ class InvoiceExpressInvoiceServiceTest extends TestCase
             $this->service()->issue($this->customer(), $this->invoice(), '987');
             $this->fail('Era esperada uma InvoiceIssuingFailed.');
         } catch (InvoiceIssuingFailed $e) {
-            $this->assertSame('finalize', $e->step);
             $this->assertSame(404, $e->httpStatus);
-            $this->assertSame('987', $e->providerInvoiceId);
+            $this->assertNoSecretsOrPersonalData($e->getMessage());
         }
 
         $this->assertSame(0, $this->countRequests('POST', '/invoice_receipts.json'));

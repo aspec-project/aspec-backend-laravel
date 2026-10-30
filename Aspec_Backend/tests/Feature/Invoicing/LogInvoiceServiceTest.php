@@ -44,6 +44,49 @@ class LogInvoiceServiceTest extends TestCase
     }
 
     #[Test]
+    public function logs_the_vat_rate_and_exemption_code(): void
+    {
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(fn (string $message, array $context = []) => ($context['vat_rate'] ?? null) === 0
+                && ($context['vat_exemption_code'] ?? null) === 'M07')
+            ->once();
+    }
+
+    #[Test]
+    public function logs_the_vat_rate_of_a_taxed_invoice_without_exemption_code(): void
+    {
+        $this->service()->issue($this->customer(), $this->invoice(tax: $this->taxedAt(23)));
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(fn (string $message, array $context = []) => ($context['vat_rate'] ?? null) === 23
+                && array_key_exists('vat_exemption_code', $context)
+                && $context['vat_exemption_code'] === null)
+            ->once();
+    }
+
+    #[Test]
+    public function exempt_invoice_log_context_has_no_personal_data(): void
+    {
+        $this->service()->issue($this->customer(), $this->invoice(amount: 3000, tax: $this->exemptTax('M07')));
+
+        Log::shouldHaveReceived('info')
+            ->withArgs(function (string $message, array $context = []) {
+                $logged = $message.json_encode($context, JSON_UNESCAPED_UNICODE);
+
+                foreach ([self::NIF, self::CUSTOMER_NAME, self::CUSTOMER_EMAIL, self::CUSTOMER_ADDRESS, self::CUSTOMER_CODE] as $personal) {
+                    if (str_contains($logged, $personal)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            })
+            ->once();
+    }
+
+    #[Test]
     public function log_context_has_no_personal_data(): void
     {
         $this->service()->issue($this->customer(), $this->invoice());

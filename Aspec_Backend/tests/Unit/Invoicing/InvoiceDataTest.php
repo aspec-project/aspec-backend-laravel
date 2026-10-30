@@ -3,6 +3,7 @@
 namespace Tests\Unit\Invoicing;
 
 use App\Services\Invoicing\Data\InvoiceData;
+use App\Services\Invoicing\Data\InvoiceTax;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -20,6 +21,7 @@ class InvoiceDataTest extends TestCase
             currency: $currency,
             description: 'Quota ASPEC — período de 07/10/2026 a 06/10/2027',
             date: new DateTimeImmutable('2026-10-07'),
+            tax: new InvoiceTax(rate: 0, exemptionCode: 'M07', exemptionReason: 'Isento de IVA — motivo de teste'),
         );
     }
 
@@ -49,6 +51,8 @@ class InvoiceDataTest extends TestCase
         $this->assertSame(6000, $invoice->amount);
         $this->assertSame('eur', $invoice->currency);
         $this->assertSame('2026-10-07', $invoice->date->format('Y-m-d'));
+        $this->assertSame(0, $invoice->tax->rate);
+        $this->assertSame('M07', $invoice->tax->exemptionCode);
     }
 
     #[Test]

@@ -235,6 +235,29 @@ class InvoicePdfTest extends TestCase
     }
 
     #[Test]
+    public function invoiceexpress_pdf_is_served_even_without_a_vat_exemption_code(): void
+    {
+        // O código de isenção só é exigido ao emitir: faturas já emitidas continuam a descarregar-se.
+        $this->useInvoiceExpress();
+        config([
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => '',
+        ]);
+        $member = $this->member();
+        $invoice = Invoice::factory()->for($member)->invoiceExpress()->issued()->create(['provider_invoice_id' => '42']);
+        Http::fake([
+            '*aspec-test.app.invoicexpress.com/api/pdf/42.json*' => Http::response(['output' => ['pdfUrl' => 'https://cdn.invoicexpress.test/42.pdf']], 200),
+            'https://cdn.invoicexpress.test/42.pdf' => Http::response(self::PDF_BYTES, 200, ['Content-Type' => 'application/pdf']),
+        ]);
+        Sanctum::actingAs($member);
+
+        $response = $this->get($this->url($invoice->id));
+
+        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertSame(self::PDF_BYTES, $response->getContent());
+    }
+
+    #[Test]
     public function invoiceexpress_failure_gets_502_and_logs_without_the_api_key(): void
     {
         $this->useInvoiceExpress();
