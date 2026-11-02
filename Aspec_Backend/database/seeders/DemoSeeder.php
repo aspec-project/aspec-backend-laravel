@@ -3,10 +3,14 @@
 namespace Database\Seeders;
 
 use App\Enums\InactiveReason;
+use App\Enums\InvoiceStatus;
+use App\Enums\SubscriptionInterval;
+use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\EventSeries;
+use App\Models\Invoice;
 use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\PrayerCard;
@@ -18,12 +22,14 @@ use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
 use App\Services\Events\EventSeriesSchedule;
+use Closure;
 use GdImage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Cashier\Subscription;
 use RuntimeException;
 
 /**
@@ -36,7 +42,9 @@ use RuntimeException;
  * pelo nome e distrito e a série pelas suas sessões, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
  * e as inscrições e os cartões de oração desses eventos (útil para repetir a demonstração).
  * Os cartões de oração ficam encriptados com a APP_KEY de quem corre o seeder.
- * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ * Cria subscrições (trial, ativas, em carência, terminadas) e faturas de demonstração sem chamar o
+ * Stripe nem o InvoiceExpress: ids falsos com "_demo_" e PDFs do driver demo, apagados e criados de
+ * novo em cada execução.
  */
 class DemoSeeder extends Seeder
 {
@@ -102,6 +110,7 @@ class DemoSeeder extends Seeder
             $this->seedAccount($applicant);
         }
 
+        $this->seedPayments();
         $this->seedReviews($profileIds);
         $this->seedEvents();
         $this->seedSeries();
@@ -121,7 +130,11 @@ class DemoSeeder extends Seeder
 
     /**
      * Cria ou repõe a conta (papel, estado, motivo, telefone e password) e o respetivo perfil.
-     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana.
+     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana,
+     * e as datas de trial e carência e a sessão de Checkout (o seedPayments() repõe as do cenário).
+     * Nunca toca no stripe_id (um cliente real de um ensaio fica) nem na isenção de subscrição.
+     * Numa conta com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio) também
+     * não toca no estado, no motivo, no trial, na carência nem na sessão de Checkout: são do Stripe.
      *
      * @param  array<string, mixed>  $data  Uma entrada de activeMembers() ou applicants().
      */
@@ -129,13 +142,20 @@ class DemoSeeder extends Seeder
     {
         $user = User::firstOrNew(['email' => $data['email']]);
 
+        $paymentState = [
+            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
+            'inactive_reason' => $data['reason'] ?? null,
+            'trial_ends_at' => null,
+            'grace_ends_at' => null,
+            'stripe_checkout_session_id' => null,
+        ];
+
         // Papel, estado e motivo não são fillable (só o admin e os pagamentos os mudam), daí o forceFill.
         $user->forceFill([
+            ...($this->hasRealRunningSubscription($user) ? [] : $paymentState),
             'password' => self::PASSWORD,
             'phone' => $data['phone'],
             'role_id' => $this->lookupId(Role::class, $data['role'] ?? 'Member'),
-            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
-            'inactive_reason' => $data['reason'] ?? null,
             'email_verified_at' => $user->email_verified_at ?? now(),
             'weekly_agenda_sent_at' => null,
         ])->save();
@@ -511,13 +531,300 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Mostra as contas criadas, a password comum e o lembrete do storage:link.
+     * Dados de pagamento de demonstração, sem chamar o Stripe: por conta, apaga os da execução
+     * anterior, preenche a faturação e cria a subscrição e as faturas do cenário de payments().
+     * As contas Pending e Approved ficam sem faturação nem subscrição (ainda não ativaram).
+     * Uma conta demo com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio)
+     * fica como está: duas subscrições em curso fariam o webhook seguinte tratar a real como duplicada.
+     */
+    private function seedPayments(): void
+    {
+        $payments = $this->payments();
+
+        foreach (User::with('memberProfile')->whereIn('email', array_column($this->accountRows, 0))->get() as $user) {
+            $this->resetDemoPayments($user);
+
+            if ($this->hasRealRunningSubscription($user)) {
+                $this->command?->warn("A conta {$user->email} tem uma subscrição real do Stripe em curso: ficou sem dados de pagamento de demonstração.");
+                $this->command?->warn('Para os ter, cancele-a no dashboard de teste do Stripe e volte a correr o seeder.');
+
+                continue;
+            }
+
+            $payment = $payments[$user->email] ?? null;
+
+            $this->seedBilling($user, $payment['nif'] ?? null);
+
+            if ($payment !== null) {
+                $this->seedSubscription($user, $this->subscriptionDates($payment));
+            }
+        }
+    }
+
+    /**
+     * Apaga os dados de pagamento de demonstração da conta (linhas com o prefixo "_demo_" e os PDFs
+     * das faturas). Nunca toca em linhas reais. Exceção consciente à regra "as faturas nunca se
+     * apagam": são documentos de demonstração, sem validade fiscal.
+     */
+    private function resetDemoPayments(User $user): void
+    {
+        $invoices = $user->issuedInvoices()->where('stripe_invoice_id', 'like', 'in_demo_%')->get()
+            ->filter(fn (Invoice $invoice) => str_starts_with($invoice->stripe_invoice_id, 'in_demo_'));
+
+        foreach ($invoices as $invoice) {
+            $path = (string) $invoice->provider_invoice_id;
+
+            if ($invoice->provider === 'demo' && str_starts_with($path, "invoices/{$user->id}/") && ! str_contains($path, '..')) {
+                Storage::disk('local')->delete($path);
+            }
+
+            $invoice->delete();
+        }
+
+        $subscriptions = $user->subscriptions()->where('stripe_id', 'like', 'sub_demo_%')->get()
+            ->filter(fn (Subscription $subscription) => str_starts_with($subscription->stripe_id, 'sub_demo_'));
+
+        foreach ($subscriptions as $subscription) {
+            $subscription->items()->delete();
+            $subscription->delete();
+        }
+    }
+
+    /**
+     * Se a conta (já existente) tem uma subscrição real do Stripe em curso, que o seeder não pode tocar.
+     */
+    private function hasRealRunningSubscription(User $user): bool
+    {
+        return $user->exists
+            && $user->subscriptions()->where('stripe_id', 'not like', 'sub_demo_%')->active()->exists();
+    }
+
+    /**
+     * Dados de faturação da conta (os pedidos na ativação): a empresa e a morada do perfil e um NIF
+     * de demonstração. Null em quem ainda não ativou. Sem cartão guardado (pm_type, pm_last_four).
+     */
+    private function seedBilling(User $user, ?string $nif): void
+    {
+        $profile = $user->memberProfile;
+        $activated = $nif !== null;
+
+        $user->forceFill([
+            'billing_name' => $activated ? $profile->business_name : null,
+            'nif' => $nif,
+            'billing_address' => $activated ? $profile->address : null,
+            'billing_postal_code' => $activated ? $profile->postal_code : null,
+            'billing_city' => $activated ? $profile->city : null,
+            'pm_type' => null,
+            'pm_last_four' => null,
+        ])->save();
+    }
+
+    /**
+     * Datas e estado da subscrição de um cenário, relativos a agora e à configuração (trial, carência
+     * e periodicidade da quota). O trial começa quando a subscrição é criada; o primeiro período
+     * pago começa quando o trial acaba, e os seguintes seguem-se sem intervalos.
+     *
+     * @param  array{type: string, days: int, invoices?: int}  $payment  Uma entrada de payments().
+     * @return array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function subscriptionDates(array $payment): array
+    {
+        $trialDays = (int) config('subscription.trial_days');
+        $graceDays = (int) config('subscription.grace_days');
+        $keyDate = now()->addDays($payment['days']);
+
+        $dates = match ($payment['type']) {
+            'paid' => $this->paidDates($keyDate, $payment['invoices']),
+            'grace' => $this->graceDates($keyDate, $graceDays),
+            'trial', 'cancel_scheduled' => [
+                'status' => 'trialing',
+                'trial_ends_at' => $keyDate,
+                'ends_at' => $payment['type'] === 'cancel_scheduled' ? $keyDate->copy() : null,
+            ],
+            'unpaid' => [
+                'status' => 'canceled',
+                'trial_ends_at' => $keyDate,
+                'ends_at' => $keyDate->copy()->addDays($graceDays),
+            ],
+            'blocked' => [
+                'status' => 'canceled',
+                'created_at' => $keyDate,
+                'trial_ends_at' => $keyDate->copy()->addDays($trialDays),
+                'ends_at' => $keyDate->copy()->addDays(10),
+            ],
+        };
+
+        return [
+            'created_at' => $dates['trial_ends_at']->copy()->subDays($trialDays),
+            'ends_at' => null,
+            'grace_ends_at' => null,
+            'periods' => [],
+            ...$dates,
+        ];
+    }
+
+    /**
+     * Subscrição em carência: um período pago que terminou em $failedRenewalAt, a renovação falhou
+     * (past_due) e a carência termina grace_days depois.
+     *
+     * @return array{status: string, trial_ends_at: Carbon, grace_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function graceDates(Carbon $failedRenewalAt, int $graceDays): array
+    {
+        $dates = $this->paidDates($this->previousPeriodStart($failedRenewalAt), 1);
+        $periodEnd = $dates['periods'][0][1];
+
+        return [...$dates, 'status' => 'past_due', 'grace_ends_at' => $periodEnd->copy()->addDays($graceDays)];
+    }
+
+    /**
+     * Subscrição ativa com N períodos pagos seguidos, o último a começar em $currentPeriodStart.
+     * Os períodos são construídos para a frente a partir do primeiro (fim = início + 1 período),
+     * como o Stripe os renova.
+     *
+     * @return array{status: string, trial_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function paidDates(Carbon $currentPeriodStart, int $paidPeriods): array
+    {
+        $interval = SubscriptionInterval::configured();
+        $start = $currentPeriodStart->copy();
+
+        for ($period = 1; $period < $paidPeriods; $period++) {
+            $start = $this->previousPeriodStart($start);
+        }
+
+        $trialEndsAt = $start->copy();
+        $periods = [];
+
+        for ($period = 0; $period < $paidPeriods; $period++) {
+            $end = Carbon::instance($interval->addTo($start));
+            $periods[] = [$start, $end];
+            $start = $end->copy();
+        }
+
+        return ['status' => 'active', 'trial_ends_at' => $trialEndsAt, 'periods' => $periods];
+    }
+
+    /**
+     * Recua um período da quota configurada, sem transbordar (31/03 − 1 mês = 28/02).
+     */
+    private function previousPeriodStart(Carbon $date): Carbon
+    {
+        return match (SubscriptionInterval::configured()) {
+            SubscriptionInterval::Month => $date->copy()->subMonthNoOverflow(),
+            SubscriptionInterval::Year => $date->copy()->subYearNoOverflow(),
+        };
+    }
+
+    /**
+     * Grava a subscrição e o item como o Cashier os grava no customer.subscription.created, as
+     * datas de trial e carência na conta (como o webhook) e emite as faturas dos períodos pagos.
+     *
+     * @param  array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}  $dates
+     */
+    private function seedSubscription(User $user, array $dates): void
+    {
+        $subscription = $user->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => $this->demoStripeId($user, 'sub'),
+            'stripe_status' => $dates['status'],
+            'stripe_price' => 'price_demo',
+            'quantity' => 1,
+            'trial_ends_at' => $dates['trial_ends_at'],
+            'ends_at' => $dates['ends_at'],
+            'created_at' => $dates['created_at'],
+            'updated_at' => $dates['created_at'],
+        ]);
+
+        $subscription->items()->create([
+            'stripe_id' => $this->demoStripeId($user, 'si'),
+            'stripe_product' => 'prod_demo',
+            'stripe_price' => 'price_demo',
+            'quantity' => 1,
+        ]);
+
+        $user->forceFill([
+            'trial_ends_at' => $dates['trial_ends_at'],
+            'grace_ends_at' => $dates['grace_ends_at'],
+        ])->save();
+
+        foreach ($dates['periods'] as $index => [$start, $end]) {
+            $this->issueDemoInvoice($user, $index + 1, $start, $end);
+        }
+    }
+
+    /**
+     * Fatura de um período pago pelo mesmo caminho do webhook: linha pending e IssueInvoiceJob,
+     * aqui síncrono e com as trocas de withDemoInvoicing() (driver demo, sem email, data do pagamento).
+     */
+    private function issueDemoInvoice(User $user, int $number, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        $this->withDemoInvoicing($periodStart, function () use ($user, $number, $periodStart, $periodEnd) {
+            $invoice = $user->issuedInvoices()->create([
+                'stripe_invoice_id' => $this->demoStripeId($user, 'in')."_{$number}",
+                'provider' => config('services.invoicing.driver'),
+                'amount' => (int) round(config('subscription.price_amount') * 100),
+                'currency' => config('subscription.currency'),
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'status' => InvoiceStatus::Pending,
+            ]);
+
+            IssueInvoiceJob::dispatchSync($invoice->id);
+        });
+    }
+
+    /**
+     * Corre a emissão com três trocas, repostas num finally (também se a emissão falhar):
+     * driver de faturação demo (o seeder nunca chama a InvoiceExpress e o PDF existe mesmo com
+     * INVOICING_DRIVER=log), mailer array (o PDF tem NIF e morada e não pode sair por email nem ficar
+     * no laravel.log) e relógio no dia do pagamento (o job usa "agora" como data de emissão, que dá
+     * a data e o ano do número da fatura).
+     */
+    private function withDemoInvoicing(Carbon $paidAt, Closure $issue): void
+    {
+        $driver = config('services.invoicing.driver');
+        $mailer = config('mail.default');
+        $testNow = Carbon::getTestNow();
+
+        config(['services.invoicing.driver' => 'demo', 'mail.default' => 'array']);
+        Carbon::setTestNow($paidAt->copy());
+
+        try {
+            $issue();
+        } finally {
+            config(['services.invoicing.driver' => $driver, 'mail.default' => $mailer]);
+            Carbon::setTestNow($testNow);
+        }
+    }
+
+    /**
+     * Id falso do Stripe para a conta (ex.: sub_demo_ seguido dos 32 hex do id): o "_demo_" mostra que não vem do
+     * Stripe e marca as linhas que o seeder apaga; derivar do id da conta evita repetir o id quando
+     * uma conta demo anonimizada (cujas linhas ficam) é criada de novo.
+     */
+    private function demoStripeId(User $user, string $prefix): string
+    {
+        return "{$prefix}_demo_".str_replace('-', '', $user->id);
+    }
+
+    /**
+     * Mostra as contas criadas com o estado da subscrição (como no backoffice), a password comum,
+     * o lembrete do storage:link e o que não funciona com as subscrições de demonstração.
      */
     private function printSummary(): void
     {
-        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa'], $this->accountRows);
+        $states = User::with('accountStatus')
+            ->whereIn('email', array_column($this->accountRows, 0))
+            ->get()
+            ->mapWithKeys(fn (User $user) => [$user->email => $user->subscriptionState()->label()]);
+
+        $rows = array_map(fn (array $row) => [...$row, $states[$row[0]] ?? ''], $this->accountRows);
+
+        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa', 'Subscrição'], $rows);
         $this->command?->info('Password de todas as contas: '.self::PASSWORD);
         $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');
+        $this->command?->warn('As subscrições de demonstração não existem no Stripe: o portal de faturação, cancelar e retomar não funcionam com elas (use uma conta ativada pelo Checkout).');
     }
 
     /**
@@ -1028,6 +1335,40 @@ class DemoSeeder extends Seeder
                 'congregation' => 'Igreja Evangélica de Portalegre',
                 'role_in_congregation' => 'Membro',
             ]),
+        ];
+    }
+
+    /**
+     * Cenários de pagamento por conta (as contas que já ativaram), com um NIF de demonstração com
+     * dígito de controlo válido. "days" é a data-chave do cenário em dias a partir de agora:
+     * - paid: início do período pago atual (invoices = n.º de períodos pagos, um por fatura);
+     * - grace: fim do último período pago, quando a renovação falhou (1 fatura; carência a seguir);
+     * - trial / cancel_scheduled: fim do trial (com cancelamento agendado para essa data);
+     * - unpaid: fim do trial, quando a cobrança falhou (nunca pagou; terminou depois da carência);
+     * - blocked: ativação (bloqueado ainda em trial, 10 dias depois).
+     * Os trials terminam pelo menos uma semana depois de agora: sem webhooks, um trial que passe o
+     * fim ficava "trialing" com data no passado (voltar a correr o seeder antes de cada demonstração).
+     *
+     * @return array<string, array{type: string, days: int, invoices?: int, nif: string}>
+     */
+    private function payments(): array
+    {
+        return [
+            'demo.membro@aspec.test' => ['type' => 'paid', 'days' => -5, 'invoices' => 2, 'nif' => '509000010'],
+            'demo.admin@aspec.test' => ['type' => 'paid', 'days' => -20, 'invoices' => 1, 'nif' => '509000029'],
+            'demo.membro07@aspec.test' => ['type' => 'grace', 'days' => -2, 'invoices' => 1, 'nif' => '509000037'],
+            'demo.membro02@aspec.test' => ['type' => 'cancel_scheduled', 'days' => 10, 'nif' => '509000045'],
+            'demo.membro01@aspec.test' => ['type' => 'trial', 'days' => 7, 'nif' => '509000053'],
+            'demo.membro03@aspec.test' => ['type' => 'trial', 'days' => 9, 'nif' => '509000061'],
+            'demo.membro04@aspec.test' => ['type' => 'trial', 'days' => 12, 'nif' => '509000070'],
+            'demo.membro05@aspec.test' => ['type' => 'trial', 'days' => 14, 'nif' => '509000088'],
+            'demo.membro06@aspec.test' => ['type' => 'trial', 'days' => 17, 'nif' => '509000096'],
+            'demo.membro08@aspec.test' => ['type' => 'trial', 'days' => 20, 'nif' => '509000100'],
+            'demo.membro09@aspec.test' => ['type' => 'trial', 'days' => 23, 'nif' => '509000118'],
+            'demo.membro10@aspec.test' => ['type' => 'trial', 'days' => 26, 'nif' => '509000126'],
+            'demo.membro11@aspec.test' => ['type' => 'trial', 'days' => 28, 'nif' => '509000134'],
+            'demo.inativo.pagamento@aspec.test' => ['type' => 'unpaid', 'days' => -17, 'nif' => '509000142'],
+            'demo.bloqueado@aspec.test' => ['type' => 'blocked', 'days' => -15, 'nif' => '509000150'],
         ];
     }
 

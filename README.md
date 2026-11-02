@@ -95,21 +95,57 @@ Cartões de oração em dois eventos:
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
 - o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens.
 
 Password de todas as contas: `Demo#2026`
 
 O seeder não cria o administrador técnico: para mostrar o estado "Isento" no backoffice, correr também `php artisan aspec:create-admin`.
 
-| Email | Papel | Estado |
-|---|---|---|
-| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento, aparece "Ativo") |
-| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
-| `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
-| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
-| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) |
-| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) |
-| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) |
+| Email | Papel | Estado | Subscrição |
+|---|---|---|---|
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento) | Ativo |
+| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) | Ativo |
+| `demo.membro07@aspec.test` | Member | Active | Em carência |
+| restantes `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active | Em trial |
+| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) | Pendente |
+| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) | Por ativar |
+| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) | Subscrição caída |
+| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) | Bloqueado |
+
+### Subscrições e faturas de demonstração
+
+O seeder cria subscrições e faturas **sem chamar o Stripe nem o InvoiceExpress**: os ids são falsos e têm `_demo_` (`sub_demo_…`, `si_demo_…`, `in_demo_…_1`), as contas demo não têm cliente Stripe (`users.stripe_id` vazio) e as datas são relativas ao momento em que corre, com o trial, a carência e a periodicidade da configuração (`SUBSCRIPTION_*`). As contas que já ativaram têm dados de faturação (empresa, morada do perfil e um NIF de demonstração válido). Os NIFs são fictícios mas têm dígito de controlo válido, por isso podem coincidir com empresas reais: não usar as contas demo para testar o driver `invoiceexpress` (usar contas criadas à mão).
+
+| Conta | Estado da subscrição | Situação | Faturas |
+|---|---|---|---|
+| `demo.membro` | Ativo | período atual começou há 5 dias; já pagou dois períodos | 2 |
+| `demo.admin` | Ativo | período atual começou há 20 dias (paga como os outros admins) | 1 |
+| `demo.membro07` | Em carência | renovação falhada há 2 dias; a carência (`SUBSCRIPTION_GRACE_DAYS`, 7 por omissão) termina daqui a 5 dias | 1 |
+| `demo.membro02` | Em trial | cancelamento agendado para o fim do trial (daqui a 10 dias) | 0 |
+| outros 9 `demo.membroNN` | Em trial | o trial termina entre 7 e 28 dias depois | 0 |
+| `demo.inativo.pagamento` | Subscrição caída | o trial terminou há 17 dias e a cobrança falhou | 0 |
+| `demo.bloqueado` | Bloqueado | bloqueado ainda em trial | 0 |
+| `demo.aprovado`, `demo.pendenteNN` | Por ativar / Pendente | sem subscrição nem faturação | — |
+
+As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `storage/app/private/invoices/{user_id}/`, com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 2 quotas em atraso (1 em carência, 1 por pagar).
+
+Cada execução apaga e cria de novo as subscrições, as faturas e os PDFs com `_demo_` das contas demo; nunca toca noutras linhas nem noutras contas. Se uma conta demo tiver uma subscrição **real** em curso (ex.: o `demo.inativo.pagamento` reativado pelo Checkout num ensaio), fica sem dados de demonstração e o seeder avisa: cancelar essa subscrição no dashboard de teste do Stripe e voltar a correr o seeder.
+
+O que funciona com as subscrições de demonstração (o Stripe não as conhece):
+
+| Ação | Resultado |
+|---|---|
+| Ver a subscrição e as faturas, descarregar o PDF | funciona (só base de dados e disco privado) |
+| Portal de faturação | 404 "Não existe subscrição." (a conta não tem cliente Stripe) |
+| Cancelar / retomar a subscrição (membro) | 502 "Não foi possível contactar o serviço de pagamentos. Tente novamente."; nada é gravado nem enviado |
+| Admin bloqueia | funciona; o pedido de cancelamento ao Stripe falha sem erro (com chaves de teste a subscrição fica cancelada; sem chaves fica um aviso no log) |
+| Admin desbloqueia → link de reativação → Checkout | funciona com as chaves de teste (cria um cliente Stripe real) |
+| Admin "Enviar link de pagamento" e anonimizar | funcionam sem Stripe; as faturas de uma conta anonimizada ficam, e a execução seguinte cria a conta de novo |
+| `stripe listen` / webhooks | o Stripe nunca envia eventos de ids `_demo_`; os dados demo não mudam |
+
+Para mostrar o portal, cancelar e retomar, usar uma conta ativada pelo Checkout (guião "Ativação da conta (demo ponta a ponta)").
+
+**Voltar a correr o seeder antes de cada demonstração:** não há webhooks para as subscrições demo, por isso as datas não avançam sozinhas. Com o `schedule:work` ligado vários dias, o `subscriptions:end-grace` passa o `demo.membro07` a inativo quando a carência acaba, e os trials terminam sem cobrança.
 
 ## Email
 
@@ -254,7 +290,7 @@ Calculado a partir das colunas da conta, sem coluna própria: `$user->subscripti
 
 Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
 
-"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: contas da demo ou admins promovidos antes de os admins pagarem, que não têm subscrição). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
+"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: admins promovidos antes de os admins pagarem, que não têm subscrição; na demo, o `demo.membro` e o `demo.admin` têm uma subscrição de demonstração que o Stripe não conhece). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
 
 ### Faturas do membro
 

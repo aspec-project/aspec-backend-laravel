@@ -2,31 +2,50 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Contracts\InvoiceService;
 use App\Enums\InactiveReason;
+use App\Enums\InvoiceStatus;
 use App\Enums\SubscriptionState;
 use App\Jobs\AnnounceNewEventJob;
+use App\Models\AccountStatus;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\EventSeries;
+use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\Review;
 use App\Models\User;
 use App\Rules\InternationalPhone;
+use App\Rules\PortugueseNif;
 use App\Rules\PortuguesePostalCode;
+use App\Services\Invoicing\Data\InvoiceCustomerData;
+use App\Services\Invoicing\Data\InvoiceData;
+use App\Services\Invoicing\Data\IssuedInvoice;
+use App\Services\Payments\StripeCustomerService;
+use App\Services\Payments\StripeSubscriptionService;
+use Carbon\CarbonInterface;
+use Closure;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Laravel\Cashier\Subscription;
+use Laravel\Cashier\SubscriptionItem;
 use Laravel\Sanctum\Sanctum;
+use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
+use RuntimeException;
+use Stripe\Exception\InvalidRequestException;
 use Tests\TestCase;
+use Throwable;
 
 /**
  * Seeder de dados de demonstração (php artisan db:seed --class=DemoSeeder).
@@ -39,11 +58,58 @@ class DemoSeederTest extends TestCase
 
     private const SERIES_PLACE_ID = 'ChIJLfCNbWxzIg0RRw7VWELDhHQ';
 
+    /** NIFs de demonstração (dígito de controlo válido). */
+    private const DEMO_NIFS = [
+        '509000010', '509000029', '509000037', '509000045', '509000053', '509000061', '509000070', '509000088',
+        '509000096', '509000100', '509000118', '509000126', '509000134', '509000142', '509000150',
+    ];
+
+    /** Contas Active em trial sem cancelamento agendado (o demo.membro02 tem-no). */
+    private const TRIAL_MEMBERS = [
+        'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro05@aspec.test',
+        'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro09@aspec.test', 'demo.membro10@aspec.test',
+        'demo.membro11@aspec.test',
+    ];
+
     protected function setUp(): void
     {
         parent::setUp();
 
         Storage::fake('public');
+        Storage::fake('local');
+
+        $this->app->instance(InvoiceService::class, $this->fastInvoiceService());
+    }
+
+    /**
+     * Cada execução do seeder emite 4 faturas demo e cada PDF (dompdf) demora cerca de 0,25 s; com
+     * dezenas de execuções neste ficheiro, os testes que não olham para as faturas usam este serviço,
+     * que devolve o mesmo que o driver demo sem gerar o PDF nem enviar o email.
+     */
+    private function fastInvoiceService(): InvoiceService
+    {
+        return new class implements InvoiceService
+        {
+            public function issue(InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
+            {
+                $number = 'DEMO-'.$invoice->date->format('Y').'-'.strtoupper(substr(sha1($invoice->stripeInvoiceId), 0, 8));
+
+                return new IssuedInvoice('demo', "invoices/{$customer->code}/{$number}.pdf", $number, null, IssuedInvoice::ISSUED);
+            }
+
+            public function pdf(string $providerInvoiceId): ?string
+            {
+                return null;
+            }
+        };
+    }
+
+    /**
+     * Repõe o serviço de faturação configurado, para o seeder emitir as faturas pelo driver demo real (PDF e email).
+     */
+    private function useRealInvoiceService(): void
+    {
+        $this->app->forgetInstance(InvoiceService::class);
     }
 
     /**
@@ -58,6 +124,16 @@ class DemoSeederTest extends TestCase
     private function demoUser(string $email): User
     {
         return User::with(['role', 'accountStatus', 'memberProfile'])->where('email', $email)->firstOrFail();
+    }
+
+    /**
+     * Corre o seeder e devolve a conta demo indicada.
+     */
+    private function runAndGet(string $email): User
+    {
+        $this->runDemoSeeder();
+
+        return $this->demoUser($email);
     }
 
     private function activeProfiles()
@@ -107,11 +183,87 @@ class DemoSeederTest extends TestCase
             ->all();
     }
 
+    /**
+     * Início do UUID da conta sem hífenes, de onde derivam os ids falsos do Stripe da demonstração.
+     */
+    private function demoIdFragment(User $user): string
+    {
+        return str_replace('-', '', $user->id);
+    }
+
+    private function subscriptionOf(string $email): Subscription
+    {
+        $subscriptions = Subscription::where('user_id', $this->demoUser($email)->id)->get();
+        $this->assertCount(1, $subscriptions, "{$email}: subscrições");
+
+        return $subscriptions->first();
+    }
+
     private function demoSeries(): EventSeries
     {
         $this->assertSame(1, EventSeries::count(), 'Séries de demonstração');
 
         return EventSeries::sole();
+    }
+
+    /**
+     * Faturas da conta, da mais antiga para a mais recente.
+     *
+     * @return Collection<int, Invoice>
+     */
+    private function invoicesOf(string $email): Collection
+    {
+        return Invoice::where('user_id', $this->demoUser($email)->id)->orderBy('period_start')->get()->values();
+    }
+
+    /**
+     * As datas do seeder são relativas a "agora"; a tolerância (por omissão um dia) aceita que o
+     * seeder use o início do dia ou a hora exata.
+     */
+    private function assertAbout(CarbonInterface $expected, ?CarbonInterface $actual, string $message = '', int $toleranceSeconds = 86400): void
+    {
+        $this->assertNotNull($actual, $message);
+        $this->assertEqualsWithDelta($expected->getTimestamp(), $actual->getTimestamp(), $toleranceSeconds, $message);
+    }
+
+    /**
+     * Mailer "espião" como mailer por omissão: o seeder tem de trocar para o array durante a
+     * emissão das faturas demo, por isso nada pode chegar a este.
+     */
+    private function useSpyMailerAsDefault(): void
+    {
+        config([
+            'mail.mailers.demo_spy' => ['transport' => 'array'],
+            'mail.default' => 'demo_spy',
+        ]);
+    }
+
+    private function spyMailerMessageCount(): int
+    {
+        return app('mail.manager')->mailer('demo_spy')->getSymfonyTransport()->messages()->count();
+    }
+
+    /**
+     * Serviço de faturação que falha sempre e conta as chamadas (o job resolve o contrato pelo container).
+     */
+    private function failingInvoiceService(): InvoiceService
+    {
+        return new class implements InvoiceService
+        {
+            public int $calls = 0;
+
+            public function issue(InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
+            {
+                $this->calls++;
+
+                throw new RuntimeException('Falha simulada na emissão.');
+            }
+
+            public function pdf(string $providerInvoiceId): ?string
+            {
+                return null;
+            }
+        };
     }
 
     #[Test]
@@ -380,6 +532,7 @@ class DemoSeederTest extends TestCase
     #[Test]
     public function running_twice_does_not_duplicate_anything(): void
     {
+        $this->useRealInvoiceService();
         $this->runDemoSeeder();
 
         $counts = fn () => [
@@ -391,6 +544,10 @@ class DemoSeederTest extends TestCase
             'registrations' => EventRegistration::count(),
             'registrations_per_event' => EventInstance::withCount('registrations')->orderBy('id')->pluck('registrations_count', 'id')->all(),
             'event_series' => EventSeries::count(),
+            'subscriptions' => Subscription::count(),
+            'subscription_items' => SubscriptionItem::count(),
+            'invoices' => Invoice::count(),
+            'invoice_files' => count(Storage::disk('local')->allFiles()),
         ];
 
         $first = $counts();
@@ -606,7 +763,10 @@ class DemoSeederTest extends TestCase
         $this->assertSame(0, MemberProfile::count());
         $this->assertSame(0, EventInstance::count());
         $this->assertSame(0, EventSeries::count());
+        $this->assertSame(0, Subscription::count());
+        $this->assertSame(0, Invoice::count());
         $this->assertEmpty(Storage::disk('public')->allFiles());
+        $this->assertEmpty(Storage::disk('local')->allFiles());
     }
 
     #[Test]
@@ -883,5 +1043,697 @@ class DemoSeederTest extends TestCase
         }
 
         $this->assertSame($sessions->last()->event_date->toDateString(), $this->demoSeries()->ends_on->toDateString());
+    }
+
+    /**
+     * Estado derivado de cada conta (o que o backoffice mostra) e estado da subscrição local.
+     */
+    #[Test]
+    public function every_demo_account_has_the_subscription_of_its_scenario(): void
+    {
+        $this->runDemoSeeder();
+
+        $expected = [
+            'demo.membro@aspec.test' => [SubscriptionState::Active, 'active'],
+            'demo.admin@aspec.test' => [SubscriptionState::Active, 'active'],
+            'demo.membro07@aspec.test' => [SubscriptionState::Grace, 'past_due'],
+            'demo.membro02@aspec.test' => [SubscriptionState::Trial, 'trialing'],
+            'demo.inativo.pagamento@aspec.test' => [SubscriptionState::Lapsed, 'canceled'],
+            'demo.bloqueado@aspec.test' => [SubscriptionState::Blocked, 'canceled'],
+            'demo.aprovado@aspec.test' => [SubscriptionState::AwaitingActivation, null],
+            'demo.pendente01@aspec.test' => [SubscriptionState::Pending, null],
+            'demo.pendente02@aspec.test' => [SubscriptionState::Pending, null],
+            'demo.pendente03@aspec.test' => [SubscriptionState::Pending, null],
+        ];
+
+        foreach (self::TRIAL_MEMBERS as $email) {
+            $expected[$email] = [SubscriptionState::Trial, 'trialing'];
+        }
+
+        $this->assertCount(19, $expected);
+
+        foreach ($expected as $email => [$state, $stripeStatus]) {
+            $user = $this->demoUser($email);
+            $subscriptions = Subscription::with('items')->where('user_id', $user->id)->get();
+
+            $this->assertSame($state, $user->subscriptionState(), $email);
+            $this->assertFalse($user->isSubscriptionExempt(), $email);
+
+            if ($stripeStatus === null) {
+                $this->assertCount(0, $subscriptions, $email);
+
+                continue;
+            }
+
+            $this->assertCount(1, $subscriptions, $email);
+            $subscription = $subscriptions->first();
+
+            $this->assertSame('default', $subscription->type, $email);
+            $this->assertSame($stripeStatus, $subscription->stripe_status, $email);
+            $this->assertSame(1, $subscription->quantity, $email);
+            $this->assertCount(1, $subscription->items, $email);
+            $this->assertSame(1, $subscription->items->first()->quantity, $email);
+            $this->assertSame($subscription->trial_ends_at?->getTimestamp(), $user->trial_ends_at?->getTimestamp(), $email);
+        }
+
+        $this->assertSame(0, User::where('subscription_exempt', true)->count());
+    }
+
+    /**
+     * Datas de cada cenário relativas a "agora" (T): trial, períodos pagos, carência e fim.
+     */
+    #[Test]
+    public function payment_dates_follow_each_scenario(): void
+    {
+        $this->runDemoSeeder();
+
+        $graceDays = config('subscription.grace_days');
+        $trialDays = config('subscription.trial_days');
+
+        $demoMember = $this->subscriptionOf('demo.membro@aspec.test');
+        $demoMemberInvoices = $this->invoicesOf('demo.membro@aspec.test');
+        $this->assertCount(2, $demoMemberInvoices);
+        $this->assertAbout(now()->subDays(5), $demoMemberInvoices[1]->period_start, 'demo.membro: período atual');
+        $this->assertSame($demoMemberInvoices[0]->period_end->getTimestamp(), $demoMemberInvoices[1]->period_start->getTimestamp());
+        $this->assertNotNull($demoMember->trial_ends_at);
+        $this->assertLessThanOrEqual($demoMemberInvoices[0]->period_start->getTimestamp() + 60, $demoMember->trial_ends_at->getTimestamp());
+        $this->assertAbout($demoMember->trial_ends_at->copy()->subDays($trialDays), $demoMember->created_at, 'demo.membro: início do trial');
+        $this->assertNull($demoMember->ends_at);
+
+        $admin = $this->subscriptionOf('demo.admin@aspec.test');
+        $adminInvoices = $this->invoicesOf('demo.admin@aspec.test');
+        $this->assertCount(1, $adminInvoices);
+        $this->assertAbout(now()->subDays(20), $adminInvoices[0]->period_start, 'demo.admin: período atual');
+        $this->assertNotNull($admin->trial_ends_at);
+        $this->assertTrue($admin->trial_ends_at->isPast());
+        $this->assertNull($admin->ends_at);
+
+        $graceMember = $this->demoUser('demo.membro07@aspec.test');
+        $graceInvoices = $this->invoicesOf('demo.membro07@aspec.test');
+        $this->assertCount(1, $graceInvoices);
+        $this->assertAbout(now()->subDays(2), $graceInvoices[0]->period_end, 'demo.membro07: renovação falhada');
+        $this->assertAbout($graceInvoices[0]->period_end->copy()->addDays($graceDays), $graceMember->grace_ends_at, 'demo.membro07: fim da carência', 60);
+        $this->assertTrue($graceMember->grace_ends_at->isFuture());
+        $this->assertNull($this->subscriptionOf('demo.membro07@aspec.test')->ends_at);
+
+        $scheduledCancel = $this->subscriptionOf('demo.membro02@aspec.test');
+        $this->assertAbout(now()->addDays(10), $scheduledCancel->trial_ends_at, 'demo.membro02: fim do trial');
+        $this->assertSame($scheduledCancel->trial_ends_at->getTimestamp(), $scheduledCancel->ends_at?->getTimestamp());
+
+        foreach (self::TRIAL_MEMBERS as $email) {
+            $subscription = $this->subscriptionOf($email);
+
+            $this->assertNotNull($subscription->trial_ends_at, $email);
+            $this->assertGreaterThanOrEqual(now()->addDays(7)->subMinute()->getTimestamp(), $subscription->trial_ends_at->getTimestamp(), $email);
+            $this->assertLessThanOrEqual(now()->addDays(29)->getTimestamp(), $subscription->trial_ends_at->getTimestamp(), $email);
+            $this->assertAbout($subscription->trial_ends_at->copy()->subDays($trialDays), $subscription->created_at, $email);
+            $this->assertNull($subscription->ends_at, $email);
+            $this->assertNull($this->demoUser($email)->grace_ends_at, $email);
+        }
+
+        $lapsed = $this->subscriptionOf('demo.inativo.pagamento@aspec.test');
+        $this->assertAbout(now()->subDays(17), $lapsed->trial_ends_at, 'demo.inativo.pagamento: fim do trial');
+        $this->assertAbout($lapsed->trial_ends_at->copy()->addDays($graceDays), $lapsed->ends_at, 'demo.inativo.pagamento: fim', 60);
+
+        $blocked = $this->subscriptionOf('demo.bloqueado@aspec.test');
+        $this->assertAbout(now()->subDays(15), $blocked->created_at, 'demo.bloqueado: criada');
+        $this->assertAbout(now()->subDays(5), $blocked->ends_at, 'demo.bloqueado: fim');
+
+        foreach (['demo.membro@aspec.test', 'demo.admin@aspec.test', ...self::TRIAL_MEMBERS] as $email) {
+            $this->assertNull($this->demoUser($email)->grace_ends_at, $email);
+        }
+    }
+
+    /**
+     * Ids falsos com "_demo_" derivados da conta (nunca do Stripe), sem cliente Stripe na conta,
+     * e faturação preenchida só em quem já ativou.
+     */
+    #[Test]
+    public function payment_rows_use_fake_demo_ids_and_billing_only_where_the_account_was_activated(): void
+    {
+        $this->runDemoSeeder();
+
+        $users = User::with('memberProfile')->where('email', 'like', 'demo.%@aspec.test')->get();
+        $this->assertCount(19, $users);
+
+        $withoutBilling = ['demo.aprovado@aspec.test', 'demo.pendente01@aspec.test', 'demo.pendente02@aspec.test', 'demo.pendente03@aspec.test'];
+
+        foreach ($users as $user) {
+            $email = $user->email;
+
+            $this->assertNull($user->stripe_id, $email);
+            $this->assertNull($user->pm_type, $email);
+            $this->assertNull($user->pm_last_four, $email);
+            $this->assertNull($user->stripe_checkout_session_id, $email);
+
+            if (in_array($email, $withoutBilling, true)) {
+                foreach (['billing_name', 'nif', 'billing_address', 'billing_postal_code', 'billing_city'] as $field) {
+                    $this->assertNull($user->{$field}, "{$email}: {$field}");
+                }
+
+                continue;
+            }
+
+            $fragment = $this->demoIdFragment($user);
+            $subscription = Subscription::with('items')->where('user_id', $user->id)->first();
+            $this->assertNotNull($subscription, "{$email}: sem subscrição");
+            $this->assertCount(1, $subscription->items, "{$email}: items");
+
+            $this->assertSame("sub_demo_{$fragment}", $subscription->stripe_id, $email);
+            $this->assertSame("si_demo_{$fragment}", $subscription->items->sole()->stripe_id, $email);
+            $this->assertSame('prod_demo', $subscription->items->sole()->stripe_product, $email);
+            $this->assertSame('price_demo', $subscription->items->sole()->stripe_price, $email);
+
+            foreach (Invoice::where('user_id', $user->id)->get() as $invoice) {
+                $this->assertMatchesRegularExpression("/^in_demo_{$fragment}_\\d+$/", $invoice->stripe_invoice_id, $email);
+            }
+
+            $validator = Validator::make(['nif' => $user->nif], ['nif' => ['required', new PortugueseNif]]);
+            $this->assertFalse($validator->fails(), "{$email}: NIF {$user->nif}");
+            $this->assertContains($user->nif, self::DEMO_NIFS, $email);
+            $this->assertSame($user->memberProfile->business_name, $user->billing_name, $email);
+            $this->assertSame($user->memberProfile->address, $user->billing_address, $email);
+            $this->assertSame($user->memberProfile->postal_code, $user->billing_postal_code, $email);
+            $this->assertSame($user->memberProfile->city, $user->billing_city, $email);
+        }
+
+        $this->assertSame(15, Subscription::where('stripe_id', 'like', 'sub_demo_%')->count());
+        $this->assertSame(15, SubscriptionItem::where('stripe_id', 'like', 'si_demo_%')->count());
+        $this->assertSame(4, Invoice::where('stripe_invoice_id', 'like', 'in_demo_%')->count());
+    }
+
+    /**
+     * O que o membro vê em /conta/subscricao: tudo vem da base de dados, sem chamar o Stripe.
+     */
+    #[Test]
+    public function subscription_endpoint_shows_each_demo_scenario(): void
+    {
+        $this->mock(StripeSubscriptionService::class);
+
+        $this->runDemoSeeder();
+
+        $latestInvoice = $this->invoicesOf('demo.membro@aspec.test')->last();
+        $this->assertNotNull($latestInvoice);
+
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+        $response = $this->getJson('/api/subscription')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'active')
+            ->assertJsonPath('data.next_payment_at', $latestInvoice->period_end->toIso8601String())
+            ->assertJsonPath('data.grace_ends_at', null)
+            ->assertJsonPath('data.cancel_at_period_end', false)
+            ->assertJsonPath('data.price.currency', config('subscription.currency'))
+            ->assertJsonPath('data.price.interval', config('subscription.interval'))
+            ->assertJsonPath('data.billing.billing_name', 'Ferreira Arquitetura e Interiores')
+            ->assertJsonPath('data.billing.billing_address', 'Rua de Cedofeita 300')
+            ->assertJsonPath('data.billing.billing_postal_code', '4050-174')
+            ->assertJsonPath('data.billing.billing_city', 'Porto');
+
+        $this->assertEquals(config('subscription.price_amount'), $response->json('data.price.amount'));
+
+        Sanctum::actingAs($this->demoUser('demo.membro02@aspec.test'));
+        $this->getJson('/api/subscription')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'trialing')
+            ->assertJsonPath('data.cancel_at_period_end', true);
+
+        Sanctum::actingAs($this->demoUser('demo.membro01@aspec.test'));
+        $this->getJson('/api/subscription')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'trialing')
+            ->assertJsonPath('data.trial_days', config('subscription.trial_days'))
+            ->assertJsonPath('data.cancel_at_period_end', false);
+
+        Sanctum::actingAs($this->demoUser('demo.membro07@aspec.test'));
+        $graceEndsAt = $this->getJson('/api/subscription')
+            ->assertOk()
+            ->assertJsonPath('data.status', 'past_due')
+            ->json('data.grace_ends_at');
+
+        $this->assertNotNull($graceEndsAt);
+        $this->assertTrue(Carbon::parse($graceEndsAt)->isFuture());
+    }
+
+    #[Test]
+    public function monthly_fee_produces_monthly_periods(): void
+    {
+        config(['subscription.interval' => 'month']);
+        $this->travelTo(now('Europe/Lisbon')->startOfMonth()->addDays(14)->setTime(12, 0));
+
+        $this->runDemoSeeder();
+
+        $invoices = $this->invoicesOf('demo.membro@aspec.test');
+        $this->assertCount(2, $invoices);
+
+        foreach ($invoices as $invoice) {
+            $this->assertSame($invoice->period_start->copy()->addMonthNoOverflow()->getTimestamp(), $invoice->period_end->getTimestamp());
+        }
+
+        $this->assertSame($invoices[0]->period_end->getTimestamp(), $invoices[1]->period_start->getTimestamp());
+        $this->assertAbout(now()->subDays(5), $invoices[1]->period_start);
+
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+        $this->getJson('/api/subscription')
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', $invoices[1]->period_end->toIso8601String())
+            ->assertJsonPath('data.price.interval', 'month');
+
+        $adminInvoices = $this->invoicesOf('demo.admin@aspec.test');
+        $this->assertCount(1, $adminInvoices);
+        $adminInvoice = $adminInvoices->first();
+        $this->assertSame($adminInvoice->period_start->copy()->addMonthNoOverflow()->getTimestamp(), $adminInvoice->period_end->getTimestamp());
+    }
+
+    #[Test]
+    public function yearly_fee_produces_yearly_periods(): void
+    {
+        $this->assertSame('year', config('subscription.interval'));
+
+        $this->runDemoSeeder();
+
+        $invoices = Invoice::where('stripe_invoice_id', 'like', 'in_demo_%')->get();
+        $this->assertCount(4, $invoices);
+
+        foreach ($invoices as $invoice) {
+            $this->assertSame($invoice->period_start->copy()->addYearNoOverflow()->getTimestamp(), $invoice->period_end->getTimestamp());
+        }
+    }
+
+    /**
+     * Lista de faturas como o membro a vê: duas pagas do demo.membro, uma do admin e do membro em
+     * carência, nenhuma em trial.
+     */
+    #[Test]
+    public function invoices_endpoint_lists_the_demo_invoices_of_each_account(): void
+    {
+        $this->useRealInvoiceService();
+        $this->runDemoSeeder();
+
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+        $items = $this->getJson('/api/invoices')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.total', 2)
+            ->json('data.items');
+
+        $this->assertCount(2, $items);
+        $this->assertGreaterThan($items[1]['period_start'], $items[0]['period_start']);
+        $this->assertSame(Carbon::parse($items[1]['period_end'])->addDay()->toDateString(), $items[0]['period_start']);
+
+        foreach ($items as $item) {
+            $this->assertSame('issued', $item['status']);
+            $this->assertEquals(config('subscription.price_amount'), $item['amount']);
+            $this->assertSame(config('subscription.currency'), $item['currency']);
+            $this->assertTrue($item['pdf_available']);
+            $this->assertMatchesRegularExpression('/^DEMO-\d{4}-[0-9A-F]{8}$/', $item['number']);
+        }
+
+        foreach (['demo.admin@aspec.test' => 1, 'demo.membro07@aspec.test' => 1, 'demo.membro02@aspec.test' => 0, ...array_fill_keys(self::TRIAL_MEMBERS, 0)] as $email => $count) {
+            Sanctum::actingAs($this->demoUser($email));
+
+            $this->getJson('/api/invoices')
+                ->assertOk()
+                ->assertJsonPath('data.pagination.total', $count);
+        }
+    }
+
+    /**
+     * As faturas passam pelo mesmo job do webhook com o driver demo, mas com as datas do pagamento
+     * (não as do dia em que o seeder corre).
+     */
+    #[Test]
+    public function demo_invoices_are_issued_by_the_demo_driver_with_the_payment_date(): void
+    {
+        $this->useRealInvoiceService();
+        $this->runDemoSeeder();
+
+        $invoices = Invoice::with('user')->where('stripe_invoice_id', 'like', 'in_demo_%')->get();
+        $this->assertCount(4, $invoices);
+
+        foreach ($invoices as $invoice) {
+            $label = $invoice->stripe_invoice_id;
+            $paidAt = $invoice->period_start;
+
+            $this->assertSame('demo', $invoice->provider, $label);
+            $this->assertSame(InvoiceStatus::Issued, $invoice->status, $label);
+            $this->assertSame((int) round(config('subscription.price_amount') * 100), $invoice->amount, $label);
+            $this->assertSame(config('subscription.currency'), $invoice->currency, $label);
+            $this->assertMatchesRegularExpression('/^DEMO-'.$paidAt->format('Y').'-[0-9A-F]{8}$/', $invoice->number, $label);
+            $this->assertAbout($paidAt, $invoice->issued_at, $label, 5);
+            $this->assertAbout($paidAt, $invoice->created_at, $label, 5);
+            $this->assertSame(config('services.invoicing.vat_rate'), $invoice->vat_rate, $label);
+            $this->assertSame(config('services.invoicing.vat_exemption_reason'), $invoice->vat_exemption_reason, $label);
+            $this->assertStringStartsWith("invoices/{$invoice->user_id}/", $invoice->provider_invoice_id, $label);
+            Storage::disk('local')->assertExists($invoice->provider_invoice_id);
+        }
+    }
+
+    #[Test]
+    public function demo_member_downloads_a_demo_invoice_pdf(): void
+    {
+        $this->useRealInvoiceService();
+        $this->runDemoSeeder();
+
+        $invoice = $this->invoicesOf('demo.membro@aspec.test')->last();
+        $this->assertNotNull($invoice);
+
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+
+        $this->get("/api/invoices/{$invoice->id}/pdf")
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    /**
+     * O seeder troca o driver de faturação, o mailer e o relógio só durante a emissão: depois volta
+     * tudo ao que era e nenhum email sai pelo mailer configurado (NIF e morada no PDF).
+     */
+    #[Test]
+    public function issuing_restores_the_driver_mailer_and_clock_and_sends_no_email(): void
+    {
+        $this->useRealInvoiceService();
+        $this->useSpyMailerAsDefault();
+        $this->assertSame('log', config('services.invoicing.driver'));
+
+        $this->runDemoSeeder();
+
+        $this->assertSame(4, Invoice::where('provider', 'demo')->where('stripe_invoice_id', 'like', 'in_demo_%')->count());
+        $this->assertSame('log', config('services.invoicing.driver'));
+        $this->assertSame('demo_spy', config('mail.default'));
+        $this->assertFalse(Carbon::hasTestNow());
+        $this->assertSame(0, $this->spyMailerMessageCount());
+    }
+
+    #[Test]
+    public function issuing_restores_the_driver_mailer_and_clock_when_it_fails(): void
+    {
+        $this->useSpyMailerAsDefault();
+        $failing = $this->failingInvoiceService();
+        $this->app->instance(InvoiceService::class, $failing);
+
+        try {
+            $this->app->make(DemoSeeder::class)->setContainer($this->app)->__invoke();
+        } catch (Throwable) {
+            // A falha pode ou não chegar aqui; o que conta é o estado reposto depois.
+        }
+
+        $this->assertGreaterThan(0, $failing->calls);
+        $this->assertSame('log', config('services.invoicing.driver'));
+        $this->assertSame('demo_spy', config('mail.default'));
+        $this->assertFalse(Carbon::hasTestNow());
+    }
+
+    /**
+     * Seeder sem Stripe: os serviços do Stripe são mocks sem expectativas (qualquer chamada falha),
+     * nenhum pedido HTTP sai e a rede de segurança do Cashier aponta para uma porta fechada.
+     */
+    #[Test]
+    public function seeding_payments_never_calls_stripe_nor_external_services(): void
+    {
+        Http::preventStrayRequests();
+        $this->mock(StripeSubscriptionService::class);
+        $this->mock(StripeCustomerService::class);
+
+        $this->runDemoSeeder();
+
+        $this->assertSame(15, Subscription::count());
+        $this->assertSame(4, Invoice::count());
+    }
+
+    #[Test]
+    public function admin_dashboard_counts_one_member_in_grace_and_one_unpaid(): void
+    {
+        $this->runDemoSeeder();
+
+        Sanctum::actingAs($this->demoUser('demo.admin@aspec.test'));
+
+        $this->getJson('/api/admin/dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.stats.overdue_payments.total', 2)
+            ->assertJsonPath('data.stats.overdue_payments.grace', 1)
+            ->assertJsonPath('data.stats.overdue_payments.unpaid', 1);
+    }
+
+    /**
+     * Bloquear o membro em carência pede ao Stripe o cancelamento da subscrição demo (com chaves
+     * de teste o Stripe responde resource_missing); o bloqueio nunca falha por isso.
+     */
+    #[Test]
+    public function blocking_the_member_in_grace_cancels_the_demo_subscription_without_error(): void
+    {
+        Notification::fake();
+        $member = $this->runAndGet('demo.membro07@aspec.test');
+        $expectedStripeId = 'sub_demo_'.$this->demoIdFragment($member);
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) use ($expectedStripeId) {
+            $mock->shouldReceive('cancelNow')
+                ->once()
+                ->withArgs(fn (Subscription $subscription) => $subscription->stripe_id === $expectedStripeId);
+            $mock->shouldNotReceive('expireCheckout');
+        });
+
+        Sanctum::actingAs($this->demoUser('demo.admin@aspec.test'));
+
+        $this->patchJson("/api/admin/users/{$member->id}/block")->assertOk();
+
+        $this->assertSame(InactiveReason::Blocked, $member->fresh()->inactive_reason);
+    }
+
+    /**
+     * As contas demo não têm cliente Stripe: o portal responde 404 sem chamar o Stripe, embora a
+     * subscrição demo exista.
+     */
+    #[Test]
+    public function billing_portal_for_a_demo_subscription_is_not_found_without_calling_stripe(): void
+    {
+        $member = $this->runAndGet('demo.membro@aspec.test');
+        $this->assertNotNull($member->currentSubscription());
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('billingPortalUrl');
+        });
+
+        Sanctum::actingAs($member);
+
+        $this->postJson('/api/subscription/billing-portal')->assertNotFound();
+    }
+
+    /**
+     * Cancelar uma subscrição demo: o Stripe não a conhece, por isso o pedido falha de forma
+     * controlada (502) sem gravar nada nem enviar o email de confirmação.
+     */
+    #[Test]
+    public function cancelling_a_demo_subscription_fails_with_502_and_changes_nothing(): void
+    {
+        Notification::fake();
+        $member = $this->runAndGet('demo.membro@aspec.test');
+        $subscription = $member->currentSubscription();
+        $this->assertNotNull($subscription);
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) use ($subscription) {
+            $mock->shouldReceive('cancelAtPeriodEnd')
+                ->once()
+                ->andThrow(InvalidRequestException::factory("No such subscription: '{$subscription->stripe_id}'", 404, null, null, null, 'resource_missing'));
+        });
+
+        Sanctum::actingAs($member);
+
+        $this->postJson('/api/subscription/cancel')
+            ->assertStatus(502)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Não foi possível contactar o serviço de pagamentos. Tente novamente.');
+
+        $subscription->refresh();
+        $this->assertSame('active', $subscription->stripe_status);
+        $this->assertNull($subscription->ends_at);
+        $this->assertSame('Active', $this->demoUser('demo.membro@aspec.test')->accountStatus->name);
+        Notification::assertNothingSent();
+    }
+
+    /**
+     * O end-grace não toca no demo.membro07 antes do fim da carência; depois, com o Stripe a dizer
+     * que a subscrição terminou, a conta passa a Inactive por falta de pagamento (estado coerente).
+     */
+    #[Test]
+    public function end_grace_leaves_the_demo_member_alone_until_the_grace_period_ends(): void
+    {
+        Notification::fake();
+        $member = $this->runAndGet('demo.membro07@aspec.test');
+        $this->assertNotNull($member->grace_ends_at);
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('retrieveStatus');
+        });
+
+        $this->artisan('subscriptions:end-grace')->assertSuccessful();
+
+        $this->assertSame('Active', $this->demoUser('demo.membro07@aspec.test')->accountStatus->name);
+
+        $this->travelTo($member->grace_ends_at->copy()->addMinute());
+
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('retrieveStatus')->once()->andReturn('canceled');
+            $mock->shouldReceive('cancelNow')->byDefault();
+        });
+
+        $this->artisan('subscriptions:end-grace')->assertSuccessful();
+
+        $member = $this->demoUser('demo.membro07@aspec.test');
+        $this->assertSame('Inactive', $member->accountStatus->name);
+        $this->assertSame(InactiveReason::Unpaid, $member->inactive_reason);
+    }
+
+    /**
+     * Anonimizar o demo.membro não chama o Stripe (sem cliente) e guarda as faturas (retenção
+     * fiscal); a execução seguinte cria a conta de novo, com ids demo diferentes e sem violar o unique.
+     */
+    #[Test]
+    public function anonymizing_a_demo_member_keeps_its_invoices_and_the_seeder_recreates_it(): void
+    {
+        Notification::fake();
+        $old = $this->runAndGet('demo.membro@aspec.test');
+        $oldSubscriptionId = $old->currentSubscription()?->stripe_id;
+        $this->assertNotNull($oldSubscriptionId);
+
+        $this->mock(StripeCustomerService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('delete');
+        });
+        $this->mock(StripeSubscriptionService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('cancelNow')->byDefault();
+            $mock->shouldNotReceive('expireCheckout');
+        });
+
+        Sanctum::actingAs($this->demoUser('demo.admin@aspec.test'));
+
+        $this->postJson("/api/admin/users/{$old->id}/anonymize")->assertOk();
+
+        $this->assertSame(2, Invoice::where('user_id', $old->id)->count());
+
+        $this->runDemoSeeder();
+
+        $new = $this->demoUser('demo.membro@aspec.test');
+        $newSubscription = $new->currentSubscription();
+
+        $this->assertNotSame($old->id, $new->id);
+        $this->assertNotNull($newSubscription);
+        $this->assertNotSame($oldSubscriptionId, $newSubscription->stripe_id);
+        $this->assertTrue(Subscription::where('stripe_id', $oldSubscriptionId)->exists());
+        $this->assertSame(2, Invoice::where('user_id', $old->id)->count());
+        $this->assertSame(2, Invoice::where('user_id', $new->id)->count());
+    }
+
+    /**
+     * O reset só apaga linhas e PDFs com o prefixo "_demo_" das contas demo: as linhas reais de uma
+     * conta demo, os dados de outras contas e ficheiros que não são da demo ficam intactos.
+     */
+    #[Test]
+    public function running_again_never_touches_payments_that_are_not_demo(): void
+    {
+        $this->runDemoSeeder();
+
+        $other = User::factory()->withBilling()->create();
+        $otherSubscription = $other->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_test_other',
+            'stripe_status' => 'active',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+        $otherPdf = "invoices/{$other->id}/DEMO-2026-ABCDEF12.pdf";
+        Storage::disk('local')->put($otherPdf, 'pdf');
+        $otherInvoice = Invoice::factory()->issued()->create([
+            'user_id' => $other->id,
+            'stripe_invoice_id' => 'in_test_other',
+            'provider' => 'demo',
+            'provider_invoice_id' => $otherPdf,
+        ]);
+        Storage::disk('local')->put('invoices/manual/nota.pdf', 'pdf');
+
+        $demoMember = $this->demoUser('demo.membro@aspec.test');
+        $endedRealSubscription = $demoMember->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_test_old_real',
+            'stripe_status' => 'canceled',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+            'ends_at' => now()->subYears(2),
+        ]);
+        $realInvoice = Invoice::factory()->issued()->create([
+            'user_id' => $demoMember->id,
+            'stripe_invoice_id' => 'in_test_real_demo_member',
+            'created_at' => now()->subYears(2),
+        ]);
+
+        $this->runDemoSeeder();
+
+        $this->assertModelExists($otherSubscription);
+        $this->assertModelExists($otherInvoice);
+        $this->assertModelExists($endedRealSubscription);
+        $this->assertModelExists($realInvoice);
+        Storage::disk('local')->assertExists($otherPdf);
+        Storage::disk('local')->assertExists('invoices/manual/nota.pdf');
+        $this->assertSame(2, Invoice::where('user_id', $demoMember->id)->where('stripe_invoice_id', 'like', 'in_demo_%')->count());
+    }
+
+    /**
+     * Antes de recriar as faturas demo, o seeder apaga o PDF de cada uma (o caminho guardado na
+     * linha), para não ficarem ficheiros órfãos no disco privado.
+     */
+    #[Test]
+    public function running_again_deletes_the_pdf_of_each_previous_demo_invoice(): void
+    {
+        $this->runDemoSeeder();
+
+        $invoice = $this->invoicesOf('demo.membro@aspec.test')->first();
+        $this->assertNotNull($invoice);
+        $stalePdf = "invoices/{$invoice->user_id}/DEMO-1999-0000000A.pdf";
+        Storage::disk('local')->put($stalePdf, 'pdf');
+        $invoice->forceFill(['provider_invoice_id' => $stalePdf])->save();
+
+        $this->runDemoSeeder();
+
+        Storage::disk('local')->assertMissing($stalePdf);
+        $this->assertModelMissing($invoice);
+    }
+
+    /**
+     * Uma conta demo reativada a sério num ensaio (subscrição real em curso) fica sem dados de
+     * pagamento demo: duas subscrições em curso fariam o webhook tratar a real como duplicado.
+     */
+    #[Test]
+    public function demo_account_with_a_real_running_subscription_gets_no_demo_payments(): void
+    {
+        $member = $this->runAndGet('demo.inativo.pagamento@aspec.test');
+
+        $real = $member->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => 'sub_real_123',
+            'stripe_status' => 'active',
+            'stripe_price' => 'price_test',
+            'quantity' => 1,
+        ]);
+        $member->forceFill([
+            'account_status_id' => AccountStatus::where('name', 'Active')->value('id'),
+            'inactive_reason' => null,
+            'grace_ends_at' => now()->addDays(3),
+            'stripe_checkout_session_id' => 'cs_test_real',
+        ])->save();
+
+        $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--force' => true])
+            ->expectsOutputToContain('A conta demo.inativo.pagamento@aspec.test tem uma subscrição real do Stripe em curso')
+            ->expectsOutputToContain('cancele-a no dashboard de teste do Stripe e volte a correr o seeder.')
+            ->assertSuccessful();
+
+        $real->refresh();
+        $this->assertSame('active', $real->stripe_status);
+        $this->assertNull($real->ends_at);
+        $this->assertSame(0, Subscription::where('user_id', $member->id)->where('stripe_id', 'like', 'sub_demo_%')->count());
+        $this->assertSame(1, Subscription::where('user_id', $member->id)->count());
+        $this->assertSame(14, Subscription::where('stripe_id', 'like', 'sub_demo_%')->count());
+
+        $member->refresh();
+        $this->assertSame('Active', $member->accountStatus->name);
+        $this->assertNull($member->inactive_reason);
+        $this->assertNotNull($member->grace_ends_at);
+        $this->assertSame('cs_test_real', $member->stripe_checkout_session_id);
     }
 }
