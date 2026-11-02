@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Enums\InactiveReason;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\EventSeries;
 use App\Models\MemberProfile;
 use App\Models\Review;
@@ -127,6 +128,20 @@ class AdminDashboardTest extends TestCase
         return $review;
     }
 
+    private function register(User $user, EventInstance $event, ?string $createdAtUtc = null): EventRegistration
+    {
+        $registration = EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $user->id,
+        ]);
+
+        if ($createdAtUtc !== null) {
+            DB::table('event_registrations')->where('id', $registration->id)->update(['created_at' => $createdAtUtc]);
+        }
+
+        return $registration;
+    }
+
     private function dashboard(): TestResponse
     {
         return $this->getJson(self::URL)->assertOk();
@@ -166,11 +181,16 @@ class AdminDashboardTest extends TestCase
 
         $data = $response->json('data');
         $this->assertSame(['pending_applications', 'recent_reviews', 'stats'], $this->sortedKeys($data));
-        $this->assertSame(['active_members', 'events', 'pending_applications', 'reviews'], $this->sortedKeys($data['stats']));
+        $this->assertSame(
+            ['active_members', 'event_registrations', 'events', 'overdue_payments', 'pending_applications', 'reviews'],
+            $this->sortedKeys($data['stats'])
+        );
         $this->assertSame(['new_this_month', 'total'], $this->sortedKeys($data['stats']['active_members']));
         $this->assertSame(['total'], $this->sortedKeys($data['stats']['pending_applications']));
         $this->assertSame(['this_month', 'this_week'], $this->sortedKeys($data['stats']['events']));
         $this->assertSame(['flagged', 'new_this_week'], $this->sortedKeys($data['stats']['reviews']));
+        $this->assertSame(['grace', 'total', 'unpaid'], $this->sortedKeys($data['stats']['overdue_payments']));
+        $this->assertSame(['this_week'], $this->sortedKeys($data['stats']['event_registrations']));
 
         $this->assertSame(0, $data['stats']['active_members']['total']);
         $this->assertSame(0, $data['stats']['active_members']['new_this_month']);
@@ -179,6 +199,10 @@ class AdminDashboardTest extends TestCase
         $this->assertSame(0, $data['stats']['events']['this_week']);
         $this->assertSame(0, $data['stats']['reviews']['flagged']);
         $this->assertSame(0, $data['stats']['reviews']['new_this_week']);
+        $this->assertSame(0, $data['stats']['overdue_payments']['total']);
+        $this->assertSame(0, $data['stats']['overdue_payments']['grace']);
+        $this->assertSame(0, $data['stats']['overdue_payments']['unpaid']);
+        $this->assertSame(0, $data['stats']['event_registrations']['this_week']);
         $this->assertSame([], $data['pending_applications']);
         $this->assertSame([], $data['recent_reviews']);
 
@@ -486,7 +510,7 @@ class AdminDashboardTest extends TestCase
         $pending = $this->withProfile(User::factory()->pending()->create());
         $active = $this->withProfile(User::factory()->create());
         $this->subscription($active, '2026-10-05 10:00:00');
-        $this->event('2026-10-30');
+        $this->register($active, $this->event('2026-10-30'));
         $this->review($active->memberProfile, $pending->memberProfile);
 
         // Pedido de aquecimento: os middlewares carregam o papel e o estado do admin só no primeiro pedido.
@@ -501,17 +525,31 @@ class AdminDashboardTest extends TestCase
         $this->withProfile(User::factory()->admin()->create());
         $this->subscription($this->withProfile(User::factory()->create()), '2026-10-12 10:00:00');
         $this->withProfile(User::factory()->create());
+        $this->inGrace(User::factory()->create());
+        $this->inGrace(User::factory()->create());
+        User::factory()->inactive(InactiveReason::Unpaid)->create();
+        User::factory()->inactive(InactiveReason::Unpaid)->create();
+        User::factory()->inactive(InactiveReason::Cancelled)->create();
+        $events = [];
         foreach (['2026-10-01', '2026-10-15', '2026-10-27', '2026-10-31', '2026-11-01'] as $date) {
-            $this->event($date);
+            $events[$date] = $this->event($date);
         }
+        $admin = User::factory()->admin()->create();
+        $members = User::factory()->count(2)->create();
+        foreach (['2026-10-27', '2026-10-31', '2026-11-01'] as $date) {
+            $this->register($members[0], $events[$date]);
+        }
+        $this->register($members[1], $events['2026-10-27']);
+        $this->register($members[1], $events['2026-10-31']);
+        $this->register($admin, $events['2026-11-01']);
         for ($i = 0; $i < 5; $i++) {
             $this->review($this->profile(), $this->profile(), $i % 2 === 0 ? 'Visible' : 'Flagged');
         }
 
         $large = $this->countQueries();
-
         $this->assertSame($small, $large);
         $this->assertLessThanOrEqual(25, $large);
+        $this->assertSame(19, $large);
     }
 
     #[Test]
@@ -547,6 +585,175 @@ class AdminDashboardTest extends TestCase
         $this->getJson(self::URL)->assertOk();
     }
 
+    #[Test]
+    public function overdue_payments_count_accounts_in_grace_and_inactive_for_not_paying(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $this->overduePaymentsScenario();
+
+        $overdue = $this->dashboard()->json('data.stats.overdue_payments');
+
+        $this->assertSame(['total' => 5, 'grace' => 3, 'unpaid' => 2], $overdue);
+    }
+
+    #[Test]
+    public function overdue_payments_match_the_subscription_state_counts_of_the_users_list(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $cancelled = $this->overduePaymentsScenario();
+
+        $counts = $this->getJson('/api/admin/users?include_admins=1')
+            ->assertOk()
+            ->json('data.subscription_state_counts');
+        $this->assertSame(3, $counts['grace']);
+        $this->assertSame(3, $counts['lapsed']);
+
+        $response = $this->dashboard();
+
+        $this->assertSame($counts['grace'], $response->json('data.stats.overdue_payments.grace'));
+        $this->assertSame($counts['lapsed'] - $cancelled, $response->json('data.stats.overdue_payments.unpaid'));
+    }
+
+    #[Test]
+    public function registrations_this_week_count_rows_by_the_event_date_in_the_lisbon_week(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        [$a, $b, $c, $d] = User::factory()->count(4)->create()->all();
+
+        $sunday = $this->event('2026-10-25');
+        $this->register($a, $sunday);
+        $this->register($b, $sunday);
+        $this->register($a, $this->event('2026-10-26'));
+        $this->register($b, $this->event('2026-10-29', ['event_start_time' => '08:00:00', 'event_end_time' => '09:00:00']));
+        $online = $this->event('2026-10-31', [
+            'is_online' => true,
+            'online_url' => 'https://reunioes.example.pt/aspec',
+            'address' => null,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+        $this->register($a, $online, '2026-10-01 10:00:00');
+        $this->register($c, $online);
+        $this->register($d, $this->event('2026-11-01'));
+        $nextMonday = $this->event('2026-11-02');
+        foreach ([$a, $b, $c] as $member) {
+            $this->register($member, $nextMonday);
+        }
+        $this->event('2026-10-30');
+
+        $response = $this->dashboard();
+
+        $this->assertSame(5, $response->json('data.stats.event_registrations.this_week'));
+        $this->assertSame(5, $response->json('data.stats.events.this_week'));
+    }
+
+    #[Test]
+    public function registrations_this_week_use_the_lisbon_week_when_utc_is_still_in_the_previous_week(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-06 23:30:00', 'UTC'));
+        $this->actingAsTechnicalAdmin();
+        $member = User::factory()->create();
+
+        foreach (['2026-09-06', '2026-09-07', '2026-09-13', '2026-09-14'] as $date) {
+            $this->register($member, $this->event($date));
+        }
+
+        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+    }
+
+    #[Test]
+    public function registrations_this_week_respect_the_week_boundaries_on_clock_change_days(): void
+    {
+        $member = User::factory()->create();
+        foreach (['2026-10-18', '2026-10-19', '2026-10-25', '2026-10-26', '2026-03-29', '2026-03-30', '2026-04-05'] as $date) {
+            $this->register($member, $this->event($date));
+        }
+
+        $this->nowInLisbon('2026-10-25 23:30:00');
+        $this->actingAsTechnicalAdmin();
+        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+
+        $this->nowInLisbon('2026-03-30 00:15:00');
+        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+    }
+
+    #[Test]
+    public function each_series_session_counts_only_its_own_registrations(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        [$a, $b] = User::factory()->count(2)->create()->all();
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => '2026-11-09',
+            'registration_deadline_days_before' => 1,
+        ]);
+        $sessions = [];
+        foreach (['2026-10-26', '2026-11-02', '2026-11-09'] as $date) {
+            $sessions[$date] = $this->event($date, ['series_id' => $series->id]);
+            $this->register($a, $sessions[$date]);
+        }
+        $this->register($b, $sessions['2026-10-26']);
+
+        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+    }
+
+    #[Test]
+    public function registrations_this_week_include_anonymized_blocked_and_admin_accounts(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        $anonymized = $this->withProfile(User::factory()->create());
+        $past = $this->register($anonymized, $this->event('2026-10-27'));
+        $future = $this->register($anonymized, $this->event('2026-10-31'));
+        $anonymized->anonymizeAndDelete();
+        $this->assertDatabaseHas('event_registrations', ['id' => $past->id]);
+        $this->assertDatabaseMissing('event_registrations', ['id' => $future->id]);
+
+        $friday = $this->event('2026-10-30');
+        $blocked = $this->withProfile(User::factory()->create());
+        $this->register($blocked, $friday);
+        $this->patchJson("/api/admin/users/{$blocked->id}/block")->assertOk();
+        $this->register(User::factory()->admin()->create(), $friday);
+
+        $this->assertDatabaseCount('event_registrations', 3);
+        $this->assertSame(3, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+    }
+
+    #[Test]
+    public function being_in_grace_does_not_give_admin_access_and_a_promoted_admin_in_grace_counts_himself(): void
+    {
+        Sanctum::actingAs($this->inGrace(User::factory()->create()));
+        $this->assertJsonError($this->getJson(self::URL), 403, self::FORBIDDEN_MESSAGE);
+
+        Sanctum::actingAs($this->inGrace(User::factory()->admin()->create()));
+        $this->dashboard()
+            ->assertJsonPath('data.stats.overdue_payments.grace', 2)
+            ->assertJsonPath('data.stats.overdue_payments.total', 2);
+    }
+
+    #[Test]
+    public function overdue_payments_and_registrations_do_not_expose_personal_data(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        $registrant = User::factory()->create(['email' => 'inscrito.semana@example.pt', 'phone' => '+351910000777']);
+        $this->register($registrant, $this->event('2026-10-30'));
+        $this->inGrace(User::factory()->create(['email' => 'carencia@example.pt']));
+
+        $content = $this->dashboard()->getContent();
+
+        foreach (['inscrito.semana@example.pt', '+351910000777', 'carencia@example.pt', '"user_id"', '"grace_ends_at"', '"stripe'] as $forbidden) {
+            $this->assertStringNotContainsString($forbidden, $content);
+        }
+    }
+
     /**
      * @return list<string>
      */
@@ -556,6 +763,32 @@ class AdminDashboardTest extends TestCase
         sort($keys);
 
         return $keys;
+    }
+
+    /**
+     * Cria as contas da regra das quotas em atraso (3 em carência e 2 sem pagamento contam) e devolve o número de canceladas.
+     */
+    private function overduePaymentsScenario(): int
+    {
+        $this->inGrace(User::factory()->create());
+        $this->inGrace(User::factory()->admin()->create());
+        $this->inGrace(User::factory()->create(['trial_ends_at' => now()->addDays(10)]));
+        $this->inGrace(User::factory()->technicalAdmin()->create());
+
+        User::factory()->inactive(InactiveReason::Unpaid)->create();
+        User::factory()->admin()->inactive(InactiveReason::Unpaid)->create();
+
+        User::factory()->inactive(InactiveReason::Cancelled)->create();
+        User::factory()->inactive(InactiveReason::Blocked)->create();
+        User::factory()->inactive(InactiveReason::Rejected)->create();
+        User::factory()->inactive()->create();
+        User::factory()->create();
+        User::factory()->create(['trial_ends_at' => now()->addDays(10)]);
+        User::factory()->pending()->create();
+        User::factory()->approved()->create();
+        $this->inGrace($this->withProfile(User::factory()->create()))->anonymizeAndDelete();
+
+        return 1;
     }
 
     private function countQueries(): int
