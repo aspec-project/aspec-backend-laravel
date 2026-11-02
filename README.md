@@ -95,7 +95,7 @@ Cartões de oração em dois eventos:
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
 - o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens.
+ Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. Os logótipos são gerados com a extensão GD do PHP (sem ela, os perfis ficam sem logótipo). O portefólio usa 17 fotografias reais do Pexels guardadas em `database/seeders/demo/portfolio/` (origem e licença em `THIRD_PARTY_NOTICES.md`); ao correr outra vez, as imagens de demonstração antigas do portefólio são substituídas e as que o membro enviou ficam.
 
 Password de todas as contas: `Demo#2026`
 
