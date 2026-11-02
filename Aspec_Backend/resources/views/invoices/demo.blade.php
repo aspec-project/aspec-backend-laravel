@@ -44,20 +44,30 @@
         <thead>
             <tr>
                 <th>Descrição</th>
-                <th class="amount">Valor</th>
+                <th class="amount">Base</th>
+                <th class="amount">Taxa IVA</th>
+                <th class="amount">IVA</th>
+                <th class="amount">Total</th>
             </tr>
         </thead>
         <tbody>
             <tr>
                 <td>{{ $description }}</td>
+                <td class="amount">{{ $base }}</td>
+                <td class="amount">{{ $vat_rate }}</td>
+                <td class="amount">{{ $vat_amount }}</td>
                 <td class="amount">{{ $total }}</td>
             </tr>
             <tr class="total">
-                <td>Total (IVA incluído)</td>
+                <td colspan="4">{{ $exemption ? 'Total' : 'Total (IVA incluído)' }}</td>
                 <td class="amount">{{ $total }}</td>
             </tr>
         </tbody>
     </table>
+
+    @if ($exemption)
+        <p>Motivo de isenção de IVA: {{ $exemption['reason'] }}{{ $exemption['code'] ? ' ('.$exemption['code'].')' : '' }}</p>
+    @endif
 
     <p class="small">Referência do pagamento: {{ $reference }}</p>
 </body>

@@ -1,10 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\Account\AccountPasswordController;
+use App\Http\Controllers\Api\Account\NotificationPreferenceController;
+use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
+use App\Http\Controllers\Api\Admin\AdminPrayerCardController;
 use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
@@ -12,6 +15,8 @@ use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
 use App\Http\Controllers\Api\Events\EventRegistrationController;
+use App\Http\Controllers\Api\Events\PrayerCardController;
+use App\Http\Controllers\Api\Events\ReceivedPrayerCardController;
 use App\Http\Controllers\Api\Lists\EventCategoryController;
 use App\Http\Controllers\Api\Lists\LocationController;
 use App\Http\Controllers\Api\Lists\SectorController;
@@ -19,6 +24,7 @@ use App\Http\Controllers\Api\Lists\SocialPlatformController;
 use App\Http\Controllers\Api\Lists\WeekDayController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
+use App\Http\Controllers\Api\Member\MemberReviewController;
 use App\Http\Controllers\Api\Member\PortfolioController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
@@ -55,6 +61,7 @@ Route::middleware('throttle:public-events')->group(function () {
 Route::middleware('throttle:member-directory')->group(function () {
     Route::get('/members', [MemberController::class, 'index']);
     Route::get('/members/{member}', [MemberController::class, 'show'])->whereUuid('member');
+    Route::get('/members/{member}/reviews', [MemberReviewController::class, 'index'])->whereUuid('member');
 });
 
 Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)->group(function () {
@@ -70,8 +77,10 @@ Route::withoutMiddleware(EnsureFrontendRequestsAreStateful::class)->group(functi
     });
 });
 
-// Público e sem throttle: protegido pela assinatura do Stripe, que envia eventos em rajada.
-Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])->name('stripe.webhook');
+// Público e fora do limite geral: protegido pela assinatura do Stripe, que envia eventos em rajada e repete após erro.
+Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook'])
+    ->withoutMiddleware('throttle:api')
+    ->name('stripe.webhook');
 
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'account.active', 'admin'])
@@ -98,7 +107,8 @@ Route::prefix('admin')
         Route::delete('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'destroy'])
             ->whereUuid('eventCategory');
         Route::get('/events', [AdminEventInstanceController::class, 'index']);
-        Route::post('/events', [AdminEventInstanceController::class, 'store']);
+        Route::post('/events', [AdminEventInstanceController::class, 'store'])
+            ->middleware('throttle:admin-event-create');
         Route::get('/events/{eventInstance}', [AdminEventInstanceController::class, 'show'])
             ->whereUuid('eventInstance');
         Route::put('/events/{eventInstance}', [AdminEventInstanceController::class, 'update'])
@@ -111,7 +121,13 @@ Route::prefix('admin')
         Route::get('/events/{eventInstance}/attendees.csv', [AdminEventAttendeeController::class, 'export'])
             ->whereUuid('eventInstance')
             ->middleware('throttle:event-attendees');
+        Route::get('/events/{eventInstance}/prayer-cards', [AdminPrayerCardController::class, 'show'])
+            ->whereUuid('eventInstance');
+        Route::post('/events/{eventInstance}/prayer-cards/distribute', [AdminPrayerCardController::class, 'distribute'])
+            ->whereUuid('eventInstance')
+            ->middleware('throttle:admin-prayer-distribute');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
+        Route::get('/dashboard', AdminDashboardController::class)->middleware('throttle:admin-dashboard');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -125,7 +141,14 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::post('/member-profile/logo', [MemberLogoController::class, 'store'])->middleware('throttle:logo-upload');
     Route::post('/member-portfolio', [PortfolioController::class, 'store'])->middleware('throttle:portfolio-upload');
     Route::delete('/member-portfolio/{id}', [PortfolioController::class, 'destroy'])->middleware('throttle:portfolio-delete');
+    Route::post('/members/{member}/reviews', [MemberReviewController::class, 'store'])
+        ->whereUuid('member')->middleware('throttle:review-submit');
+    Route::delete('/members/{member}/reviews', [MemberReviewController::class, 'destroy'])
+        ->whereUuid('member')->middleware('throttle:review-delete');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
+    Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
+    Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])
+        ->middleware('throttle:notification-preferences');
     Route::get('/subscription', [SubscriptionController::class, 'show']);
     Route::post('/subscription/billing-portal', [BillingPortalSessionController::class, 'store'])->middleware('throttle:billing-portal');
     Route::post('/subscription/cancel', [SubscriptionController::class, 'cancel'])->middleware('throttle:subscription-change');
@@ -140,4 +163,10 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
         ->whereUuid('eventInstance');
     Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
+    Route::middleware('throttle:prayer-cards')->group(function () {
+        Route::get('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'show'])->whereUuid('eventInstance');
+        Route::put('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'update'])->whereUuid('eventInstance');
+        Route::delete('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'destroy'])->whereUuid('eventInstance');
+        Route::get('/me/prayer-cards', [ReceivedPrayerCardController::class, 'index']);
+    });
 });

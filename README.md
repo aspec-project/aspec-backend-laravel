@@ -81,11 +81,18 @@ Na pasta `Aspec_Backend/`:
 
 Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
 
-- 11 presenciais futuros, alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 11 presenciais futuros (um deles hoje), alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
 - 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
 - 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
 
-Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados. Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados.
+
+Cartões de oração em dois eventos:
+
+- a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
+- o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
+
+ Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
 
 Password de todas as contas: `Demo#2026`
 
@@ -118,15 +125,38 @@ Erros comuns: `535 Username and Password not accepted` → palavra-passe de apli
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
 
+### Emails de eventos
+
+Vão para as contas **Active com perfil de membro** (membros e admins com perfil) que não desligaram a preferência na página da conta (`GET|PUT /api/account/notification-preferences`; ligadas por omissão).
+
+- **Anúncio de novo evento:** sai quando um admin cria um evento **pontual** (as sessões de séries nunca são anunciadas). Um evento só é anunciado uma vez (`event_instances.announced_at`). Nunca inclui o link de um evento online.
+- **Agenda semanal:** comando `events:send-weekly-agenda`, agendado ao **sábado às 10:00 (hora de Lisboa)**. Cada membro recebe os eventos em que está inscrito com início até ao sábado seguinte às 23:59 e até 10 eventos pontuais com inscrições abertas. Quem não tem nada para mostrar não recebe email. No máximo uma agenda por semana a cada conta (`users.weekly_agenda_sent_at`).
+
+Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local, o agendamento só corre com `php artisan schedule:work` (em produção, um cron com `php artisan schedule:run` a cada minuto).
+
+**Demo:** correr à mão `php artisan events:send-weekly-agenda` (com o `queue:work` a correr). Fora do sábado, a agenda vai de agora até ao sábado seguinte às 23:59. Para a enviar outra vez na mesma semana às contas demo, voltar a correr `php artisan db:seed --class=DemoSeeder` (limpa a marca da agenda dessas contas).
+
+## Cartões de oração
+
+O admin ativa os cartões num evento e define o versículo da semana (`prayer_cards_enabled`, `prayer_verse` em criar/editar evento). Os membros **Active, com perfil e inscritos** preenchem um cartão (Pessoal, Emprego, Salvação; pelo menos um, até 500 caracteres cada) do **início do evento às 23:59 desse dia** (hora de Lisboa). Depois do 1.º cartão, o admin já não pode mudar a ativação, o versículo, a data nem a hora de início (`prayer_cards_locked`).
+
+- **Distribuição em cadeia:** os cartões são baralhados e cada autor recebe o cartão do seguinte (ninguém recebe o seu). Comando `prayer-cards:distribute`, agendado **de hora a hora**: distribui os eventos cujo dia já passou. O botão do backoffice (`POST /api/admin/events/{id}/prayer-cards/distribute`) distribui mais cedo, a partir do início do evento. Cada evento é distribuído uma só vez. Com um só cartão, fica sem destinatário. Cada destinatário recebe um email sem o conteúdo nem o nome do autor (precisa de `php artisan queue:work`).
+- **Expiração:** comando `prayer-cards:expire`, agendado **todos os dias às 03:00 (hora de Lisboa)**: os cartões de eventos com mais de 6 meses ficam sem conteúdo e com soft delete (a linha fica só como presença).
+- **Privacidade:** os pedidos são dados de crenças religiosas (RGPD art. 9.º). O admin vê só contagens e quem entregou; nunca o conteúdo nem quem recebeu de quem. Só o destinatário vê o nome, email e telefone **pessoais** do autor, lidos da conta no momento.
+
+Em local, o agendamento só corre com `php artisan schedule:work`; para a demonstração podem correr-se os dois comandos à mão. Valores (dias de oração, meses de retenção, máximo de caracteres) em `config/prayer_cards.php`.
+
+**Atenção à `APP_KEY`:** os pedidos ficam **encriptados** na base de dados com a `APP_KEY`. Cada máquina tem a sua, por isso os cartões criados noutra máquina (ou antes de um `key:generate`) ficam ilegíveis: voltar a correr o `DemoSeeder`. Em produção, para trocar a chave sem perder os cartões, pôr a chave antiga em `APP_PREVIOUS_KEYS` (lista separada por vírgulas) antes de mudar a `APP_KEY`; nunca correr `php artisan key:generate` num servidor com dados.
+
 ## Pagamentos (Stripe, modo de teste)
 
 Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chaves no `.env` a aplicação funciona; só a anonimização de quem já tem cliente Stripe precisa delas. Os testes automáticos nunca usam o `.env` nem chamam o Stripe.
 
 - **Chaves:** criar uma conta Stripe e, em **modo de teste**, copiar a `pk_test_…` para `STRIPE_KEY` e a `sk_test_…` para `STRIPE_SECRET` no `.env`. Nunca usar chaves `live` e nunca commitar o `.env`. Depois de mudar o `.env`: `php artisan config:clear` (não usar `config:cache` em desenvolvimento).
-- **Preço:** no dashboard, criar o Product "Quota mensal ASPEC" com um Price mensal de 60 € e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor mostrado ao membro (`SUBSCRIPTION_PRICE_AMOUNT`) tem de bater certo com esse Price.
+- **Preço:** no dashboard, criar o Product "Quota Anual ASPEC" com um Price recorrente de 30 € por ano (ver "Quota anual" abaixo) e copiar o id (`price_…`) para `STRIPE_PRICE_ID`. O valor, a moeda e a periodicidade mostrados ao membro (`SUBSCRIPTION_PRICE_AMOUNT`, `CASHIER_CURRENCY`, `SUBSCRIPTION_INTERVAL`) têm de bater certo com esse Price: confirmar com `php artisan subscriptions:check-price`.
 - **Webhooks locais:** instalar a Stripe CLI, `stripe login` e depois
   ```
-  stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed
+  stripe listen --forward-to localhost:8000/api/stripe/webhook --events customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,customer.deleted,invoice.payment_succeeded,invoice.payment_failed,invoice.upcoming
   ```
   Copiar o `whsec_…` mostrado para `STRIPE_WEBHOOK_SECRET`. Mantém-se enquanto o login da CLI for válido; se mudar, atualizar o `.env` e `php artisan config:clear` (senão os webhooks locais dão 403). Para gerar eventos: `stripe trigger invoice.payment_failed`.
 - **Versão da API dos webhooks:** o código lê os eventos no formato **`2025-06-30.basil`** (a versão do Cashier 16.8). Ao criar o endpoint no dashboard (servidor), escolher essa versão. O `stripe listen` usa a versão por omissão da conta: confirmar em Developers → versão da API e verificar o `api_version` de um evento no `stripe listen`. Com uma versão anterior, as cobranças falhadas não abrem o período de carência e o log mostra "Falha de pagamento num formato antigo da API do Stripe; carência não aberta.".
@@ -160,6 +190,17 @@ Os pagamentos usam o Laravel Cashier com o Stripe em **modo de teste**. Sem chav
 - **Test clocks:** só servem para clientes criados dentro de um clock; os clientes criados pelo Checkout não estão, por isso a demo usa o guião "Ciclo de vida da subscrição" abaixo.
 - **Processos em segundo plano:** `php artisan queue:work` (faturas, apagar o cliente Stripe, emails) e o scheduler (fim da carência, de hora a hora): `php artisan schedule:work` em local; no servidor, um cron `* * * * * php artisan schedule:run`. Para a demo, `php artisan subscriptions:end-grace` corre o fim da carência à mão.
 - **Depois de `git pull`:** `composer install` e `php artisan migrate`.
+
+### Quota anual
+
+Quota definida pelo cliente (30/10/2026): **30 € por ano**, sem IVA, com 30 dias de período experimental. O código também suporta quota mensal (muda-se só o `.env` e o Price no Stripe), mas a configuração do projeto é anual.
+
+- **Price no Stripe (modo de teste):** no Product "Quota Anual ASPEC", criar um Price recorrente de 30 € em EUR, com intervalo "a cada 1 ano" (nunca "a cada 3 anos"). No `.env`: `STRIPE_PRICE_ID` com esse Price, `SUBSCRIPTION_INTERVAL=year`, `SUBSCRIPTION_PRICE_AMOUNT=30.00` e `SUBSCRIPTION_INVOICE_DESCRIPTION` / `INVOICEEXPRESS_ITEM_NAME` = "Quota Anual ASPEC".
+- **Mudar de periodicidade:** no `.env`, `STRIPE_PRICE_ID` (o Price da nova periodicidade) + `SUBSCRIPTION_INTERVAL` (`month` ou `year`, igual ao intervalo do Price) + `SUBSCRIPTION_PRICE_AMOUNT`; depois `php artisan config:clear` e `php artisan subscriptions:check-price`.
+- **`php artisan subscriptions:check-price`:** lê o Price no Stripe e compara-o com o `.env` (ativo, moeda, valor em cêntimos, intervalo e `interval_count` = 1). Sai com 0 se bater certo; senão mostra cada diferença com a variável a corrigir e sai com 1. Correr sempre que mudar o Price ou estes valores: quem cobra é o Stripe, mas os emails, a página da subscrição e as faturas usam o `.env`, e um erro só aparecia num email errado a um membro.
+- **Subscrições existentes não mudam:** só as novas ativações usam o novo Price. Converter subscrições já ativas (`swap()` do Cashier) está fora da Fase 1; sem membros reais não é preciso.
+- **Faturas:** a descrição indica o período pago, do Stripe (ex. "Quota Anual ASPEC — período de 28/10/2026 a 27/10/2027"), guardado em `invoices.period_start` / `period_end`; `GET /api/invoices` devolve-o em `period_start` / `period_end` (datas de Lisboa, fim inclusivo). O `next_payment_at` de `GET /api/subscription` é o fim desse período.
+- **Aviso de renovação (só quota anual):** o webhook `invoice.upcoming` envia ao membro Active, sem cancelamento agendado, o email "A sua quota anual de 30,00 € renova a dd/mm/aaaa". No dashboard: Settings → Billing → Subscriptions and emails → **Upcoming renewal events**, 7 dias antes; e acrescentar `invoice.upcoming` aos eventos do endpoint (e ao `stripe listen`, como acima). Com quota mensal o evento é ignorado (seriam 12 emails por ano).
 
 ### Ativação da conta (demo ponta a ponta)
 
@@ -217,17 +258,23 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 - **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.
 - **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `storage/app/private/invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` (disco privado, nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
 - **Email das faturas:** `MAIL_MAILER=log` é só para desenvolvimento local: o email da fatura (com o PDF, que tem NIF e morada) fica escrito no `storage/logs/laravel.log`, por isso limpar esse ficheiro depois de testar. Na apresentação usar um SMTP de teste (Mailpit, Mailtrap ou uma conta de email com password de aplicação).
-- **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 10 por minuto). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
+- **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 120 por minuto e 2000 por hora). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
 - **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
 - **InvoiceExpress:** o trial gratuito de 30 dias serve de sandbox (sem comunicação à AT). Criá-lo perto da apresentação (~2/11, para cobrir a semana de 30/11), copiar o nome da conta e a chave da API para `INVOICEEXPRESS_ACCOUNT_NAME` / `INVOICEEXPRESS_API_KEY` e mudar para `INVOICING_DRIVER=invoiceexpress`. "Limpar Conta" (definições da InvoiceExpress) apaga os documentos de teste. As faturas já emitidas com `demo` continuam a descarregar-se pelo driver que as emitiu.
+- **IVA (quota isenta):** a quota não tem IVA (decisão do cliente: associação sem fins lucrativos). A configuração é comum a todos os drivers:
+  - `INVOICE_VAT_RATE` (por omissão `0`; com IVA, ex. `23`, e código vazio);
+  - `INVOICE_VAT_EXEMPTION_CODE`: código do motivo de isenção da AT, vazio por omissão. Quem decide é o contabilista da ASPEC; candidatos: `M07` (art. 9.º, n.º 19, do CIVA, organismos sem fins lucrativos com quota estatutária), `M10` (art. 53.º, regime de isenção) ou `M99` (não sujeito). Ser associação sem fins lucrativos não é, por si, motivo de isenção;
+  - `INVOICE_VAT_EXEMPTION_REASON`: texto do motivo, mostrado no PDF `demo` e no log. Por omissão é um texto provisório até o motivo legal ser definido.
+  - O PDF `demo` mostra base, taxa, IVA e total e, se isenta, "Motivo de isenção de IVA: …". Cada fatura guarda em `invoices` a taxa, o código e o motivo usados na emissão (`vat_rate`, `vat_exemption_code`, `vat_exemption_reason`; `null` nas faturas anteriores).
+  - **InvoiceExpress:** recusa emitir uma fatura isenta sem código (a menção legal na fatura sai do código, o texto livre não é enviado) e só finaliza o rascunho se o total calculado pela InvoiceExpress for o valor cobrado no Stripe. `INVOICEEXPRESS_TAX_NAME` (por omissão `IVA0`) tem de ser o nome de uma taxa que exista na conta: confirmar no trial com `GET /taxes.json`. Para o trial, pôr `INVOICE_VAT_EXEMPTION_CODE=M07` **só no `.env` local** (provisório, até o contabilista decidir).
 
 ## Diretório
 
-- **Endpoints públicos** (sem login; limite partilhado de 60 pedidos por minuto por IP):
+- **Endpoints públicos** (sem login; limite partilhado de 120 pedidos por minuto por utilizador com login, senão por IP):
   - `GET /api/members` — lista paginada, ordenada por empresa, nome e id. Filtros opcionais e combináveis: `search` (nome, empresa ou descrição; até 100 caracteres), `sector_id`, `location_id` (distrito), `min_rating` (1 a 5; devolve uma lista vazia enquanto não existirem avaliações), `page` e `per_page` (12 por omissão, máximo 50). Cada item traz `id`, `name`, `business_name`, `description` (texto completo ou `null`; o corte para o cartão é feito no frontend), `sector`, `location`, `logo_url`, `average_rating` e `reviews_count`.
   - `GET /api/members/{id}` — perfil público (`id` = id do perfil, o mesmo da lista).
 - **Quem aparece:** contas **Active** com perfil de membro, seja qual for o papel (um admin com perfil aparece; um admin sem perfil nunca). Contas Pending, Approved, Inactive ou apagadas não aparecem e o perfil devolve 404 "Membro não encontrado.", igual a um id que não existe. Contas em trial ou em período de carência continuam a aparecer.
-- **Contactos:** website, morada, redes sociais e contactos comerciais (`commercial_email`, `commercial_phone`) só vêm em `members_only` para quem consulta com uma conta Active (sessão do frontend ou token Bearer), sempre com as 5 chaves (valores `null`/`[]` em perfis antigos); para os outros `members_only` é `null`. Descrição, setor, distrito, logótipo, horário e portfólio são públicos. O email e o telefone da conta e a congregação nunca aparecem no diretório.
+- **Contactos:** website, morada, redes sociais e contactos comerciais (`commercial_email`, `commercial_phone`) só vêm em `members_only` para quem consulta com uma conta Active (sessão do frontend ou token Bearer), sempre com as 7 chaves, incluindo `postal_code` e `city` (valores `null`/`[]` em perfis antigos); para os outros `members_only` é `null`. Descrição, setor, distrito, logótipo, horário e portfólio são públicos. O email e o telefone da conta e a congregação nunca aparecem no diretório.
 - **Contactos comerciais vs pessoais:** `users.email` (login) e `users.phone` são **pessoais**: só os vê o próprio (`GET /api/member-profile`, `GET /api/auth/me`) e o admin (`GET /api/admin/users/{id}`); a exportação de presenças usa estes. `commercial_email` e `commercial_phone` (em `member_profiles`) são os contactos do negócio, mostrados a membros Active. Em `PUT /api/member-profile` são obrigatórios quando enviados (vazio ou `null` → 422; ausentes ficam inalterados), o telefone aceita qualquer país e guarda-se em E.164 (ex. `213 456 789` → `+351213456789`), podem repetir os contactos pessoais e mudá-los não pede a password atual. Perfis antigos ficam com os dois a `null` até o membro guardar o formulário.
 
 ## Telefones
@@ -235,3 +282,33 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 - **Formato:** o registo e `PUT /api/member-profile` aceitam números de qualquer país (telefone pessoal e comercial), validados com a libphonenumber. Sem indicativo, o número é tratado como português (`912345678`); estrangeiros precisam do indicativo (`+44 7911 123456` ou `0044…`). Espaços, `-`, `.` e parênteses são ignorados.
 - **Guardado e devolvido em E.164** (`+351912345678`, `+447911123456`) em todas as respostas (`phone`, `commercial_phone`). A formatação para mostrar é feita no frontend.
 - **Bases de dados existentes:** `php artisan migrate` converte os telefones antigos de 9 dígitos para `+351…`. O `down()` só repõe os números portugueses; os estrangeiros ficam em E.164.
+
+## Limites de pedidos
+
+Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite a API responde `429` "Demasiados pedidos. Tente novamente mais tarde." com o header `Retry-After` (segundos). Uma rota com limite próprio conta também no limite geral: ganha o primeiro que se esgotar. "Por utilizador" = utilizador com login (sessão do frontend ou token Bearer); sem login válido, conta por IP.
+
+| Limite | Valor | Porquê |
+|---|---|---|
+| Geral (`api`, todas as rotas `api/*` exceto o webhook) | 300/min por utilizador ou IP | Cobre as rotas sem limite próprio, incluindo as futuras; mais largo que os específicos, para estes continuarem a ser o limite efetivo |
+| Ações do membro (perfil, logótipo, portefólio, password, preferências, portal de faturação, PDF da fatura, cartões de oração) | 120/min e 2000/hora por utilizador, cada ação à parte | 2000/hora sugerido pelos professores; 120/min trava scripts sem afetar o uso normal (guardar a montra são ~12 pedidos) |
+| Cancelar / retomar a subscrição | 120/min e 10/dia por utilizador (partilhado pelas duas) | Ação rara que chama o Stripe e envia um email: sem limite diário, alternar as duas esgotava a quota de email da plataforma (o Gmail de demonstração tem ~500 destinatários/dia; um serviço de email de produção tem mais, mas o envio em massa continuaria a ser abuso) |
+| Diretório e eventos públicos | 120/min por utilizador ou IP | Visitantes por IP travam a recolha automática; membros pelo seu id não se bloqueiam atrás do mesmo IP (escritório, evento) |
+| Registo | 20/min por IP | Um grupo pode inscrever-se da mesma rede num evento; bots continuam travados |
+| Login e token | 5/min por email + IP | Valor habitual do Laravel; OWASP Authentication Cheat Sheet |
+| Falhas da password atual | 5 em 15 min por utilizador | NIST SP 800-63B e OWASP (limitar tentativas falhadas) |
+| Recuperar / redefinir password | 5/min (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
+| Ativação; reenvio do link | 20/min por IP; 3 em 15 min por email + IP, 10/hora por IP, 5/dia por email | Cada pedido chama o Stripe ou envia um email |
+| Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação, distribuir cartões de oração | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min; 10/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
+| Webhook do Stripe | sem limite | Autenticado pela assinatura; o Stripe envia em rajada e repete após erro |
+
+Em produção atrás de um proxy ou balanceador é preciso configurar os proxies de confiança (`$middleware->trustProxies(at: [...])` com os IPs do proxy), senão todos os visitantes contam com o IP do proxy. Nunca usar `at: '*'` com a API exposta diretamente: o header `X-Forwarded-For` passaria a ser falsificável e cada pedido teria um contador novo, também no login.
+
+## Mapas (Google)
+
+A localização dos eventos está a passar do OpenStreetMap para o Google Maps (story ASPEC-411). Enquanto o `GoogleGeocoder` não estiver feito, e sempre que não houver chave, a geocodificação usa o Nominatim (`GEOCODING_DRIVER=nominatim`, o valor por omissão e o dos testes automáticos).
+
+- **Projeto Google Cloud:** `aspec-plataforma`, na conta do projeto (`geral.teste.aspec@gmail.com`), em período experimental (crédito de teste, sem cobranças no cartão) e com alerta de orçamento de 1 €. As chaves são pedidas ao Mário e passadas em privado; nunca no `.env.example`, no git nem em mensagens públicas.
+- **Chave do backend** (`GOOGLE_MAPS_GEOCODING_KEY` no `.env` do backend): restrita só à **Geocoding API**. Para a usar: `GEOCODING_DRIVER=google`, depois `php artisan config:clear`.
+- **Chave do frontend** (`VITE_GOOGLE_MAPS_EMBED_KEY` no `.env` do frontend): restrita só à **Maps Embed API** e ao site `http://localhost:5173/*`. Abrir sempre o frontend em `localhost`, não em 127.0.0.1.
+- **Termos do Google (confirmados a 27/10/2026):** a Geocoding API tem 10 000 pedidos grátis por mês; **só se guarda o `place_id`** (a latitude e a longitude só podem ficar em cache 30 dias); os resultados só podem ser mostrados em **mapas do Google** (por isso o Leaflet/OpenStreetMap sai do frontend); a Maps Embed API é gratuita e sem limite.
+- **Erros comuns:** `REQUEST_DENIED` → chave errada, API não ativada ou restrição de API errada; mapa em branco com `RefererNotAllowedMapError` → o frontend não está a correr em `http://localhost:5173`.

@@ -9,6 +9,7 @@ use App\Services\Invoicing\Data\InvoiceCustomerData;
 use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Closure;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -33,13 +34,13 @@ class DemoInvoiceService implements InvoiceService
      * Gera o PDF da fatura, grava-o e envia-o por email ao cliente.
      *
      * Só EUR (como na InvoiceExpress). O número deriva do id da fatura do Stripe, por isso o job pode
-     * repetir sem criar outro documento (reescreve o mesmo ficheiro). Ignora o $draftId: não há rascunhos.
+     * repetir sem criar outro documento (reescreve o mesmo ficheiro). Ignora o $draftId e o $onDraftCreated: não há rascunhos.
      * Uma falha no email não lança exceção (o PDF já existe): devolve ISSUED_NOT_SENT.
      *
      * @throws InvoiceIssuingFailed Se a moeda não for EUR ou o PDF não puder ser gravado.
      * @throws InvalidArgumentException Se o código do cliente não for um UUID (entra no caminho do ficheiro).
      */
-    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null): IssuedInvoice
+    public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
     {
         if ($invoice->currency !== 'eur') {
             throw InvoiceIssuingFailed::unsupportedCurrency($invoice->currency);
@@ -103,14 +104,23 @@ class DemoInvoiceService implements InvoiceService
      * PDF a partir da vista invoices.demo. Recebe só os dados que vão no documento: nunca o email
      * nem o telefone do cliente (minimização de dados). Só os caracteres usados da fonte são embutidos,
      * para o PDF (guardado e enviado por email) ter dezenas de KB em vez de quase 1 MB.
+     * Mostra a base, a taxa e o valor do IVA e, se isenta, o motivo (a lei pede os três, CIVA art. 36.º).
      */
     private function renderPdf(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, string $number): string
     {
+        $tax = $invoice->tax;
+
         return Pdf::loadView('invoices.demo', [
             'number' => $number,
             'date' => $invoice->date->format('d/m/Y'),
             'description' => $invoice->description,
-            'total' => number_format($invoice->amount / 100, 2, ',', '.').' €',
+            'base' => $this->money($tax->netAmount($invoice->amount)),
+            'vat_rate' => "{$tax->rate} %",
+            'vat_amount' => $this->money($tax->taxAmount($invoice->amount)),
+            'total' => $this->money($invoice->amount),
+            'exemption' => $tax->isExempt()
+                ? ['code' => $tax->exemptionCode, 'reason' => $tax->exemptionReason]
+                : null,
             'reference' => $invoice->stripeInvoiceId,
             'customer' => [
                 'name' => $customer->name,
@@ -120,6 +130,14 @@ class DemoInvoiceService implements InvoiceService
                 'city' => $customer->city,
             ],
         ])->setPaper('a4')->setOption('isFontSubsettingEnabled', true)->output();
+    }
+
+    /**
+     * Valor em cêntimos no formato português (ex. "30,00 €").
+     */
+    private function money(int $cents): string
+    {
+        return number_format($cents / 100, 2, ',', '.').' €';
     }
 
     /**

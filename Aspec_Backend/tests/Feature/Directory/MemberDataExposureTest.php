@@ -17,7 +17,7 @@ use Tests\TestCase;
 /**
  * O que o diretório nunca pode expor.
  *
- * Website, morada, redes sociais e contactos comerciais só para contas Active; o email e o
+ * Website, morada (com código postal e localidade), redes sociais e contactos comerciais só para contas Active; o email e o
  * telefone da conta nunca (são contactos pessoais e o email é a credencial de acesso);
  * congregação e cargo nunca (revelam convicção religiosa, categoria especial do RGPD);
  * dados internos, de faturação e do Stripe nunca.
@@ -41,6 +41,10 @@ class MemberDataExposureTest extends TestCase
 
     private const ADDRESS = 'Rua ZXQWMORADA 1';
 
+    private const POSTAL_CODE = '7777-321';
+
+    private const CITY = 'Localidade ZXQWCIDADE';
+
     private const LINKEDIN_URL = 'https://www.linkedin.com/company/zxqw-linkedin';
 
     private const INSTAGRAM_URL = 'https://instagram.com/zxqw-instagram';
@@ -57,6 +61,8 @@ class MemberDataExposureTest extends TestCase
         '213456789',
         'zxqw-site',
         'ZXQWMORADA',
+        self::POSTAL_CODE,
+        'ZXQWCIDADE',
         'zxqw-linkedin',
         'zxqw-instagram',
     ];
@@ -132,6 +138,8 @@ class MemberDataExposureTest extends TestCase
             'logo_path' => "logos/{$owner->id}/logo.png",
             'website_url' => self::WEBSITE,
             'address' => self::ADDRESS,
+            'postal_code' => self::POSTAL_CODE,
+            'city' => self::CITY,
         ]);
         $profile->portfolios()->create(['image_path' => "portfolios/{$owner->id}/foto.jpg"]);
         $profile->socialPlatforms()->attach([
@@ -258,9 +266,31 @@ class MemberDataExposureTest extends TestCase
             ->assertJsonPath('data.members_only.commercial_phone', self::COMMERCIAL_PHONE)
             ->assertJsonPath('data.members_only.website_url', self::WEBSITE)
             ->assertJsonPath('data.members_only.address', self::ADDRESS)
+            ->assertJsonPath('data.members_only.postal_code', self::POSTAL_CODE)
+            ->assertJsonPath('data.members_only.city', self::CITY)
             ->assertDontSee('931111111')
             ->assertDontSee('quem.consulta@empresa.test')
             ->assertDontSee('229876543');
+    }
+
+    #[Test]
+    #[DataProvider('allViewers')]
+    public function members_only_is_null_or_has_exactly_the_seven_contact_keys(string $viewer): void
+    {
+        $profile = $this->exposedOwner();
+
+        $response = $this->asViewer($viewer, $profile)->showMember($profile->id)->assertOk();
+
+        if (in_array($viewer, array_column(self::viewersWithoutContacts(), 0), true)) {
+            $response->assertJsonPath('data.members_only', null)
+                ->assertJsonMissingPath('data.postal_code')
+                ->assertJsonMissingPath('data.city');
+
+            return;
+        }
+
+        $this->assertCount(7, $response->json('data.members_only'));
+        $this->assertEqualsCanonicalizing(self::MEMBERS_ONLY_KEYS, array_keys($response->json('data.members_only')));
     }
 
     #[Test]
@@ -275,7 +305,7 @@ class MemberDataExposureTest extends TestCase
             $this->assertEqualsCanonicalizing(self::LIST_ITEM_KEYS, array_keys($item));
         }
         $this->assertNoForbiddenKeys($response);
-        foreach (['members_only', 'commercial_email', 'commercial_phone', 'website_url', 'address', 'social_links'] as $key) {
+        foreach (['members_only', 'commercial_email', 'commercial_phone', 'website_url', 'address', 'postal_code', 'city', 'social_links'] as $key) {
             $this->assertNotContains($key, $this->allJsonKeys($response->json()));
         }
     }
@@ -304,6 +334,10 @@ class MemberDataExposureTest extends TestCase
             'telefone comercial sem indicativo' => ['213456789'],
             'morada' => [self::ADDRESS],
             'parte da morada' => ['ZXQWMORADA'],
+            'código postal' => [self::POSTAL_CODE],
+            'código postal sem hífen' => ['7777321'],
+            'localidade' => [self::CITY],
+            'parte da localidade' => ['ZXQWCIDADE'],
             'website' => [self::WEBSITE],
             'parte do website' => ['zxqw-site'],
             'rede social' => ['zxqw-linkedin'],

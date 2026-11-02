@@ -15,6 +15,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use RuntimeException;
 use Stripe\Exception\ApiConnectionException;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class BillingPortalTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/subscription/billing-portal';
@@ -193,16 +195,15 @@ class BillingPortalTest extends TestCase
     }
 
     #[Test]
-    public function eleventh_request_in_a_minute_is_throttled_per_member(): void
+    public function request_over_the_minute_limit_is_throttled_per_member(): void
     {
         $member = $this->memberWithSubscription();
         $other = $this->memberWithSubscription();
         $this->stripe()->shouldReceive('billingPortalUrl')->andReturn(self::PORTAL_URL);
+        $this->fillRateLimit('billing-portal', 'minute:'.$member->id, 119);
 
         Sanctum::actingAs($member);
-        for ($i = 0; $i < 10; $i++) {
-            $this->postJson(self::URL)->assertOk();
-        }
+        $this->postJson(self::URL)->assertOk();
 
         $this->postJson(self::URL)
             ->assertTooManyRequests()

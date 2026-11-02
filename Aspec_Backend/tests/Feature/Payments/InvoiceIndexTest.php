@@ -21,7 +21,7 @@ class InvoiceIndexTest extends TestCase
 
     private const URL = '/api/invoices';
 
-    private const ITEM_KEYS = ['id', 'number', 'amount', 'currency', 'status', 'paid_at', 'issued_at', 'pdf_available'];
+    private const ITEM_KEYS = ['id', 'number', 'amount', 'currency', 'status', 'paid_at', 'issued_at', 'pdf_available', 'period_start', 'period_end'];
 
     private const PAGINATION_KEYS = ['current_page', 'per_page', 'total', 'last_page'];
 
@@ -94,6 +94,96 @@ class InvoiceIndexTest extends TestCase
             ->assertJsonPath('data.items.0.currency', 'eur')
             ->assertJsonPath('data.items.0.paid_at', $paidAt->toIso8601String())
             ->assertJsonPath('data.items.0.issued_at', $issuedAt->toIso8601String());
+    }
+
+    // --- Período pago ---
+
+    /**
+     * O fim do Stripe é exclusivo (início do período seguinte); a API devolve o último dia pago,
+     * para o frontend mostrar "28/10/2026 – 27/10/2027" sem repetir a regra.
+     */
+    #[Test]
+    public function item_has_the_paid_period_as_inclusive_dates(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.period_start', '2026-10-28')
+            ->assertJsonPath('data.items.0.period_end', '2027-10-27');
+    }
+
+    #[Test]
+    public function monthly_period_ends_the_day_before_the_next_month_starts(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2026-11-28 10:00:00',
+        ]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.period_start', '2026-10-28')
+            ->assertJsonPath('data.items.0.period_end', '2026-11-27');
+    }
+
+    /**
+     * 23:30 UTC no verão já é o dia seguinte em Lisboa (UTC+1).
+     */
+    #[Test]
+    public function period_dates_are_the_lisbon_dates(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'period_start' => '2026-06-14 23:30:00',
+            'period_end' => '2026-07-14 23:30:00',
+        ]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.period_start', '2026-06-15')
+            ->assertJsonPath('data.items.0.period_end', '2026-07-14');
+    }
+
+    #[Test]
+    public function invoice_without_period_has_null_period_dates(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->for($member)->demo()->issued()->withoutPeriod()->create();
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.period_start', null)
+            ->assertJsonPath('data.items.0.period_end', null);
+    }
+
+    /**
+     * O período é do pagamento, não da emissão: aparece mesmo com a fatura ainda em processamento.
+     */
+    #[Test]
+    public function processing_invoice_already_shows_the_paid_period(): void
+    {
+        $member = $this->member();
+        Invoice::factory()->for($member)->create([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.status', 'processing')
+            ->assertJsonPath('data.items.0.period_start', '2026-10-28')
+            ->assertJsonPath('data.items.0.period_end', '2027-10-27');
     }
 
     #[Test]

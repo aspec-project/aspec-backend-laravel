@@ -4,14 +4,17 @@ namespace Tests\Feature\Lists;
 
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventSeries;
 use App\Models\Location;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 class EventInstanceAgendaTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const URL = '/api/events';
@@ -70,6 +73,34 @@ class EventInstanceAgendaTest extends TestCase
             ->assertJsonPath('data.items.0.id', $todayLater->id)
             ->assertJsonPath('data.items.1.id', $tomorrow->id)
             ->assertJsonPath('data.items.0.category.id', $category->id);
+    }
+
+    #[Test]
+    public function public_agenda_includes_series_id_for_series_sessions(): void
+    {
+        $category = EventCategory::factory()->create();
+        $eventDate = today()->addDays(30)->toDateString();
+
+        $event = $this->createEvent(
+            $category,
+            $eventDate,
+            '10:00',
+            'Sessão de uma série'
+        );
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => Carbon::parse($eventDate)->addWeeks(2)->toDateString(),
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        $event->update(['series_id' => $series->id]);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items')
+            ->assertJsonPath('data.items.0.id', $event->id)
+            ->assertJsonPath('data.items.0.series_id', $series->id);
     }
 
     #[Test]
@@ -245,14 +276,12 @@ class EventInstanceAgendaTest extends TestCase
     }
 
     #[Test]
-    public function public_event_routes_share_a_sixty_requests_per_minute_ip_limit(): void
+    public function public_event_routes_share_a_hundred_and_twenty_requests_per_minute_ip_limit(): void
     {
         $event = EventInstance::factory()->create();
+        $this->fillRateLimit('public-events', '127.0.0.1', 119);
 
-        for ($i = 1; $i <= 60; $i++) {
-            $this->getJson(self::URL)->assertOk();
-        }
-
+        $this->getJson(self::URL)->assertOk();
         $this->getJson('/api/events/'.$event->id)
             ->assertTooManyRequests();
     }

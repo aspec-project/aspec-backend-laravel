@@ -288,6 +288,210 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function event_creation_is_limited_to_20_per_hour_per_admin(): void
+    {
+        Notification::fake();
+
+        $admin = $this->actingAsAdmin();
+        $payload = $this->validPayload();
+
+        for ($i = 1; $i <= 20; $i++) {
+            $this->postJson(self::URL, $payload)->assertCreated();
+        }
+
+        $this->postJson(self::URL, $payload)
+            ->assertTooManyRequests()
+            ->assertJsonPath(
+                'message',
+                'Demasiados pedidos. Tente novamente mais tarde.'
+            );
+
+        $this->actingAsAdmin();
+        $this->postJson(self::URL, $payload)->assertCreated();
+
+        $this->travel(61)->minutes();
+        Sanctum::actingAs($admin);
+
+        $this->postJson(self::URL, $payload)->assertCreated();
+    }
+
+    #[Test]
+    public function admin_can_create_a_recurring_event_series_with_deadlines_for_each_session(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+
+        $payload['place_id'] = $placeId;
+        unset($payload['registration_deadline'], $payload['latitude'], $payload['longitude']);
+
+        $this->mock(Geocoder::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('geocode');
+        });
+
+        $firstDate = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        );
+
+        $sessionDates = [
+            $firstDate->toDateString(),
+            $firstDate->copy()->addWeek()->toDateString(),
+            $firstDate->copy()->addWeeks(2)->toDateString(),
+        ];
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ];
+
+        $response = $this->postJson(self::URL, $payload);
+
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.series.frequency', 'weekly')
+            ->assertJsonPath('data.series.ends_on', $sessionDates[2])
+            ->assertJsonPath('data.series.registration_deadline_days_before', 3)
+            ->assertJsonCount(3, 'data.sessions');
+
+        $seriesId = $response->json('data.series.id');
+
+        $this->assertDatabaseHas('event_series', [
+            'id' => $seriesId,
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ]);
+
+        foreach ($sessionDates as $index => $sessionDate) {
+            $deadline = Carbon::createFromFormat('!Y-m-d', $sessionDate, $timezone)
+                ->subDays(3)
+                ->setTime(23, 59);
+
+            $this->assertDatabaseHas('event_instances', [
+                'series_id' => $seriesId,
+                'event_date' => $sessionDate,
+                'registration_deadline' => $deadline->format('Y-m-d H:i:s'),
+                'place_id' => $placeId,
+                'latitude' => null,
+                'longitude' => null,
+            ]);
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.event_date",
+                $sessionDate
+            );
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.registration_deadline",
+                $deadline->toIso8601String()
+            );
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.series_id",
+                $seriesId
+            );
+
+            $response->assertJsonPath(
+                "data.sessions.{$index}.place_id",
+                $placeId
+            );
+        }
+    }
+
+    #[Test]
+    public function event_creation_rejects_invalid_recurring_event_data(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $endsOn = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        )->addWeeks(2)->toDateString();
+
+        $validRecurrence = [
+            'frequency' => 'weekly',
+            'ends_on' => $endsOn,
+            'registration_deadline_days_before' => 2,
+        ];
+
+        $invalidCases = [
+            [
+                'recurrence' => array_merge($validRecurrence, ['frequency' => 'daily']),
+                'error' => 'recurrence.frequency',
+            ],
+            [
+                'recurrence' => [
+                    'frequency' => 'weekly',
+                    'registration_deadline_days_before' => 2,
+                ],
+                'error' => 'recurrence.ends_on',
+            ],
+            [
+                'recurrence' => array_merge(
+                    $validRecurrence,
+                    ['registration_deadline_days_before' => 0]
+                ),
+                'error' => 'recurrence.registration_deadline_days_before',
+            ],
+        ];
+
+        foreach ($invalidCases as $invalidCase) {
+            $response = $this->postJson(self::URL, array_merge(
+                $payload,
+                ['recurrence' => $invalidCase['recurrence']]
+            ));
+
+            $response
+                ->assertUnprocessable()
+                ->assertJsonStructure([
+                    'errors' => [$invalidCase['error']],
+                ]);
+        }
+
+        $this->assertDatabaseCount('event_series', 0);
+        $this->assertDatabaseCount('event_instances', 0);
+    }
+
+    #[Test]
+    public function event_creation_rejects_a_recurring_series_with_more_than_52_sessions(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => Carbon::createFromFormat(
+                '!Y-m-d',
+                $payload['event_date'],
+                $timezone
+            )->addWeeks(52)->toDateString(),
+            'registration_deadline_days_before' => 2,
+        ];
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['recurrence.ends_on'],
+            ]);
+
+        $this->assertDatabaseCount('event_series', 0);
+        $this->assertDatabaseCount('event_instances', 0);
+    }
+
+    #[Test]
     public function admin_can_show_an_event(): void
     {
         $this->actingAsAdmin();
@@ -316,6 +520,90 @@ class AdminEventInstanceTest extends TestCase
         $this->assertDatabaseHas('event_instances', [
             'id' => $event->id,
             'name' => 'Workshop atualizado',
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_update_one_session_in_a_recurring_series_without_changing_the_others(): void
+    {
+        $this->actingAsAdmin();
+
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $payload = $this->validPayload();
+        unset($payload['registration_deadline']);
+
+        $firstDate = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['event_date'],
+            $timezone
+        );
+
+        $sessionDates = [
+            $firstDate->toDateString(),
+            $firstDate->copy()->addWeek()->toDateString(),
+            $firstDate->copy()->addWeeks(2)->toDateString(),
+        ];
+
+        $payload['recurrence'] = [
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
+        ];
+
+        $createResponse = $this->postJson(self::URL, $payload)
+            ->assertCreated();
+
+        $seriesId = $createResponse->json('data.series.id');
+
+        $sessions = EventInstance::query()
+            ->where('series_id', $seriesId)
+            ->orderBy('event_date')
+            ->get();
+
+        $this->assertCount(3, $sessions);
+
+        $firstSession = $sessions[0];
+        $sessionToUpdate = $sessions[1];
+        $thirdSession = $sessions[2];
+
+        $firstSessionBefore = $firstSession->getAttributes();
+        $thirdSessionBefore = $thirdSession->getAttributes();
+
+        $updatePayload = $this->validPayload();
+        $updatePayload['name'] = 'Sessão individual atualizada';
+        $updatePayload['event_date'] = $sessionToUpdate->event_date->toDateString();
+        $updatePayload['registration_deadline'] = substr(
+            (string) $sessionToUpdate->getRawOriginal('registration_deadline'),
+            0,
+            10
+        );
+
+        $this->putJson(self::URL."/{$sessionToUpdate->id}", $updatePayload)
+            ->assertOk()
+            ->assertJsonPath('data.id', $sessionToUpdate->id)
+            ->assertJsonPath('data.name', 'Sessão individual atualizada');
+
+        $this->assertSame(
+            $firstSessionBefore,
+            $firstSession->fresh()->getAttributes()
+        );
+        $this->assertSame(
+            $thirdSessionBefore,
+            $thirdSession->fresh()->getAttributes()
+        );
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $sessionToUpdate->id,
+            'series_id' => $seriesId,
+            'name' => 'Sessão individual atualizada',
+            'event_date' => $sessionToUpdate->event_date->toDateString(),
+        ]);
+
+        $this->assertDatabaseHas('event_series', [
+            'id' => $seriesId,
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDates[2],
+            'registration_deadline_days_before' => 3,
         ]);
     }
 
@@ -403,6 +691,152 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_clear_place_id_when_updating_a_google_event_to_online(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create([
+            'address' => 'Rua de teste, 10',
+            'place_id' => 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'https://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('data.place_id', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'is_online' => true,
+            'place_id' => null,
+        ]);
+    }
+
+    #[Test]
+    public function admin_can_create_and_update_events_with_place_id_without_coordinates(): void
+    {
+        $this->actingAsAdmin();
+
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+        $payload = $this->validPayload();
+        $payload['place_id'] = $placeId;
+
+        unset($payload['latitude'], $payload['longitude']);
+
+        $this->mock(Geocoder::class, function (MockInterface $mock): void {
+            $mock->shouldNotReceive('geocode');
+        });
+
+        $created = $this->postJson(self::URL, $payload);
+
+        $created
+            ->assertCreated()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $created->json('data.id'),
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $event = EventInstance::factory()->create([
+            'latitude' => 38.7223,
+            'longitude' => -9.1393,
+            'place_id' => null,
+        ]);
+
+        $updatePayload = $payload;
+        $updatePayload['name'] = 'Workshop atualizado com Google Maps';
+
+        $updated = $this->putJson(self::URL."/{$event->id}", $updatePayload);
+
+        $updated
+            ->assertOk()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
+    public function geocoding_persists_google_place_id_on_create_and_update(): void
+    {
+        $this->actingAsAdmin();
+
+        $placeId = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
+        $payload = $this->validPayload();
+
+        unset($payload['latitude'], $payload['longitude']);
+
+        $locationName = Location::query()
+            ->findOrFail($payload['location_id'])
+            ->name;
+        $query = $payload['address'].', '.$locationName;
+
+        $result = new GeocodingResult(
+            null,
+            null,
+            'Rua Augusta, Lisboa',
+            false,
+            $placeId
+        );
+
+        $this->mock(Geocoder::class, function (MockInterface $mock) use ($query, $result): void {
+            $mock->shouldReceive('geocode')
+                ->twice()
+                ->with($query)
+                ->andReturn($result);
+        });
+
+        $created = $this->postJson(self::URL, $payload);
+
+        $created
+            ->assertCreated()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $created->json('data.id'),
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $event = EventInstance::factory()->create();
+        $updated = $this->putJson(self::URL."/{$event->id}", $payload);
+
+        $updated
+            ->assertOk()
+            ->assertJsonPath('data.place_id', $placeId)
+            ->assertJsonPath('data.latitude', null)
+            ->assertJsonPath('data.longitude', null);
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $event->id,
+            'place_id' => $placeId,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
     public function online_event_rejects_physical_address_and_coordinates(): void
     {
         $this->actingAsAdmin();
@@ -412,6 +846,7 @@ class AdminEventInstanceTest extends TestCase
         $payload = $this->validPayload();
         $payload['is_online'] = true;
         $payload['online_url'] = 'https://meet.example.com/event';
+        $payload['place_id'] = 'ChIJN1t_tDeuEmsRUsoyG83frY4';
 
         foreach ([
             ['method' => 'post', 'url' => self::URL],
@@ -420,7 +855,7 @@ class AdminEventInstanceTest extends TestCase
             $this->{$request['method'].'Json'}($request['url'], $payload)
                 ->assertUnprocessable()
                 ->assertJsonStructure([
-                    'errors' => ['address', 'latitude', 'longitude'],
+                    'errors' => ['address', 'latitude', 'longitude', 'place_id'],
                 ]);
         }
     }
@@ -751,19 +1186,23 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
-    public function deleting_an_event_with_registrations_removes_them_and_notifies_each_registrant(): void
+    public function deleting_an_event_with_registrations_removes_them_and_notifies_each_active_registrant(): void
     {
         Notification::fake();
         $this->actingAsAdmin();
 
         $event = EventInstance::factory()->create();
         $registrants = User::factory()->count(2)->create();
+        $inactiveRegistrant = User::factory()->inactive()->create();
+        $pendingRegistrant = User::factory()->pending()->create();
 
-        foreach ($registrants as $user) {
-            EventRegistration::query()->create([
-                'event_instance_id' => $event->id,
-                'user_id' => $user->id,
-            ]);
+        foreach ([$registrants, collect([$inactiveRegistrant, $pendingRegistrant])] as $users) {
+            foreach ($users as $user) {
+                EventRegistration::query()->create([
+                    'event_instance_id' => $event->id,
+                    'user_id' => $user->id,
+                ]);
+            }
         }
 
         $justification = 'O evento foi cancelado pela organização.';
@@ -788,6 +1227,9 @@ class AdminEventInstanceTest extends TestCase
                 }
             );
         }
+
+        Notification::assertNotSentTo($inactiveRegistrant, EventCancelledNotification::class);
+        Notification::assertNotSentTo($pendingRegistrant, EventCancelledNotification::class);
 
         $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
         $this->assertDatabaseMissing('event_registrations', [
@@ -1029,11 +1471,15 @@ class AdminEventInstanceTest extends TestCase
 
         $event = EventInstance::factory()->create();
         $registrant = User::factory()->create();
+        $inactiveRegistrant = User::factory()->inactive()->create();
+        $pendingRegistrant = User::factory()->pending()->create();
 
-        EventRegistration::query()->create([
-            'event_instance_id' => $event->id,
-            'user_id' => $registrant->id,
-        ]);
+        foreach ([$registrant, $inactiveRegistrant, $pendingRegistrant] as $user) {
+            EventRegistration::query()->create([
+                'event_instance_id' => $event->id,
+                'user_id' => $user->id,
+            ]);
+        }
 
         $payload = $this->validPayload();
         $payload['justification'] = 'Alteração do horário do evento.';
@@ -1053,6 +1499,57 @@ class AdminEventInstanceTest extends TestCase
                 return $notification->justification === 'Alteração do horário do evento.';
             }
         );
+
+        Notification::assertNotSentTo($inactiveRegistrant, EventUpdatedNotification::class);
+        Notification::assertNotSentTo($pendingRegistrant, EventUpdatedNotification::class);
+    }
+
+    #[Test]
+    public function updating_an_event_without_attendee_relevant_changes_does_not_notify_registrants(): void
+    {
+        Notification::fake();
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+
+        $deadline = Carbon::createFromFormat(
+            '!Y-m-d',
+            $payload['registration_deadline'],
+            $timezone
+        )
+            ->setTime(23, 59)
+            ->format('Y-m-d H:i:s');
+
+        $event = EventInstance::factory()->create([
+            'category_id' => $payload['category_id'],
+            'location_id' => $payload['location_id'],
+            'name' => $payload['name'],
+            'event_date' => $payload['event_date'],
+            'event_start_time' => $payload['event_start_time'].':00',
+            'event_end_time' => $payload['event_end_time'].':00',
+            'description' => $payload['description'],
+            'address' => $payload['address'],
+            'latitude' => number_format((float) $payload['latitude'], 7, '.', ''),
+            'longitude' => number_format((float) $payload['longitude'], 7, '.', ''),
+            'max_attendees' => $payload['max_attendees'],
+            'registration_deadline' => $deadline,
+            'organizer_notes' => $payload['organizer_notes'],
+            'is_online' => false,
+            'online_url' => null,
+        ]);
+
+        $registrant = User::factory()->create();
+
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant->id,
+        ]);
+
+        $this->putJson(self::URL."/{$event->id}", $payload)
+            ->assertOk();
+
+        Notification::assertNothingSent();
     }
 
     #[Test]

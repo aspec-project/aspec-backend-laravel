@@ -9,13 +9,16 @@ use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
+use App\Models\Review;
 use App\Models\User;
 use App\Rules\InternationalPhone;
+use App\Rules\PortuguesePostalCode;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -167,6 +170,29 @@ class DemoSeederTest extends TestCase
     }
 
     #[Test]
+    public function every_demo_profile_has_street_postal_code_and_city_separated(): void
+    {
+        $this->runDemoSeeder();
+
+        $profiles = MemberProfile::whereHas('user', fn ($query) => $query->where('email', 'like', 'demo.%@aspec.test'))->get();
+        $this->assertNotEmpty($profiles);
+
+        foreach ($profiles as $profile) {
+            $validator = Validator::make(
+                $profile->only(['postal_code', 'city']),
+                [
+                    'postal_code' => ['required', 'string', new PortuguesePostalCode],
+                    'city' => 'required|string|max:100',
+                ],
+            );
+
+            $this->assertFalse($validator->fails(), "{$profile->business_name}: ".$validator->errors()->toJson());
+            $this->assertNotEmpty($profile->address, $profile->business_name);
+            $this->assertStringNotContainsString($profile->postal_code, $profile->address, $profile->business_name);
+        }
+    }
+
+    #[Test]
     public function every_demo_profile_has_valid_commercial_email_and_e164_phone(): void
     {
         $this->runDemoSeeder();
@@ -221,6 +247,43 @@ class DemoSeederTest extends TestCase
 
         $replicated = $events->groupBy('name')->filter(fn ($sameFormat) => $sameFormat->pluck('location_id')->unique()->count() > 1);
         $this->assertGreaterThanOrEqual(2, $replicated->count());
+    }
+
+    /**
+     * Cada evento presencial (futuro ou passado) tem o place_id da Google da sua morada, válido como
+     * o backoffice o aceita e diferente dos outros; os online não têm local.
+     */
+    #[Test]
+    public function in_person_events_have_a_distinct_google_place_id_and_online_events_have_none(): void
+    {
+        $this->runDemoSeeder();
+
+        $events = EventInstance::all();
+        $inPerson = $events->where('is_online', false);
+
+        $this->assertCount(13, $inPerson);
+
+        foreach ($inPerson as $event) {
+            $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]{1,512}$/D', (string) $event->place_id, $event->name);
+        }
+
+        $this->assertCount(13, $inPerson->pluck('place_id')->unique());
+
+        foreach ($events->where('is_online', true) as $event) {
+            $this->assertNull($event->place_id, $event->name);
+        }
+    }
+
+    #[Test]
+    public function public_event_api_returns_the_demo_place_id(): void
+    {
+        $this->runDemoSeeder();
+
+        $event = $this->demoEvent('Pequeno-almoço de Negócios ASPEC', 'Lisboa');
+
+        $this->getJson("/api/events/{$event->id}")
+            ->assertOk()
+            ->assertJsonPath('data.place_id', 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k');
     }
 
     #[Test]
@@ -308,6 +371,24 @@ class DemoSeederTest extends TestCase
         $this->assertSame($expected, $lisbonBreakfast->registrations()->count());
         $this->assertTrue($otherEvent->registrations()->where('user_id', $otherUser->id)->exists());
         $this->assertSame(17, EventInstance::count());
+    }
+
+    /**
+     * A agenda semanal só sai uma vez por semana a cada conta; repetir a demonstração tem de
+     * permitir enviá-la de novo às contas demo, sem mexer nas outras contas.
+     */
+    #[Test]
+    public function running_again_clears_the_weekly_agenda_mark_of_demo_accounts_only(): void
+    {
+        $this->runDemoSeeder();
+
+        $otherUser = User::factory()->create(['weekly_agenda_sent_at' => now()]);
+        User::where('email', 'like', 'demo.%@aspec.test')->update(['weekly_agenda_sent_at' => now()]);
+
+        $this->runDemoSeeder();
+
+        $this->assertSame(0, User::where('email', 'like', 'demo.%@aspec.test')->whereNotNull('weekly_agenda_sent_at')->count());
+        $this->assertNotNull($otherUser->fresh()->weekly_agenda_sent_at);
     }
 
     #[Test]
@@ -487,7 +568,60 @@ class DemoSeederTest extends TestCase
 
         $this->getJson('/api/events')
             ->assertOk()
-            ->assertJsonPath('data.pagination.total', 14);
+            ->assertJsonPath('data.pagination.total', 13);
+
+        $today = EventInstance::where('name', 'Formação: Finanças para Pequenas Empresas')->sole();
+        Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
+
+        $this->getJson("/api/events/{$today->id}/prayer-card")
+            ->assertOk()
+            ->assertJsonPath('data.window.status', 'open')
+            ->assertJsonPath('data.card', null);
+    }
+
+    /**
+     * A demonstração do filtro por avaliação precisa de perfis em "4,5+", outros só em "4+" ou abaixo,
+     * e de uma avaliação Hidden e outra Flagged para a moderação.
+     */
+    #[Test]
+    public function creates_visible_hidden_and_flagged_reviews_that_feed_the_rating_filter(): void
+    {
+        $this->runDemoSeeder();
+
+        $statuses = Review::with('status')->get()->countBy(fn (Review $review) => $review->status->name);
+
+        $this->assertGreaterThanOrEqual(10, $statuses['Visible'] ?? 0);
+        $this->assertSame(1, $statuses['Hidden'] ?? 0);
+        $this->assertSame(1, $statuses['Flagged'] ?? 0);
+        $this->assertSame(0, Review::whereColumn('reviewer_profile_id', 'reviewed_profile_id')->count());
+
+        $highest = $this->getJson('/api/members?min_rating=4.5&per_page=50')->assertOk()->json('data.items');
+        $fourPlus = $this->getJson('/api/members?min_rating=4&per_page=50')->assertOk()->json('data.items');
+
+        $this->assertNotEmpty($highest);
+        $this->assertGreaterThan(count($highest), count($fourPlus));
+        $this->assertTrue(collect($highest)->every(fn (array $item) => $item['average_rating'] >= 4.5));
+    }
+
+    /**
+     * Avaliações moderadas à mão durante uma demonstração voltam ao estado original;
+     * avaliações que não são entre perfis de demonstração ficam como estão.
+     */
+    #[Test]
+    public function running_again_resets_demo_reviews_without_touching_other_reviews(): void
+    {
+        $this->runDemoSeeder();
+
+        $demoCount = Review::count();
+        $demoMemberProfileId = $this->demoUser('demo.membro@aspec.test')->memberProfile->id;
+        Review::where('reviewed_profile_id', $demoMemberProfileId)->delete();
+        $other = Review::factory()->create(['reviewed_profile_id' => $demoMemberProfileId]);
+
+        $this->runDemoSeeder();
+
+        $this->assertSame($demoCount + 1, Review::count());
+        $this->assertModelExists($other);
+        $this->assertSame(4, Review::where('reviewed_profile_id', $demoMemberProfileId)->count());
     }
 
     #[Test]

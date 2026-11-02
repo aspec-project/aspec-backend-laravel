@@ -145,9 +145,9 @@ class CashierSetupTest extends TestCase
     public function subscription_config_has_the_business_values(): void
     {
         $this->assertSame('price_test', config('subscription.price_id'));
-        $this->assertSame(60.0, config('subscription.price_amount'));
+        $this->assertSame(30.0, config('subscription.price_amount'));
         $this->assertSame('eur', config('subscription.currency'));
-        $this->assertSame('month', config('subscription.interval'));
+        $this->assertSame('year', config('subscription.interval'));
         $this->assertSame(30, config('subscription.trial_days'));
         $this->assertSame(7, config('subscription.grace_days'));
         $this->assertSame(7, config('subscription.activation_link_days'));

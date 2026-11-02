@@ -15,6 +15,7 @@ use Illuminate\Testing\TestResponse;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\FillsRateLimits;
 use Tests\TestCase;
 
 /**
@@ -23,6 +24,7 @@ use Tests\TestCase;
  */
 class InvoicePdfTest extends TestCase
 {
+    use FillsRateLimits;
     use RefreshDatabase;
 
     private const PDF_BYTES = '%PDF-1.4 fatura demo de teste';
@@ -233,6 +235,29 @@ class InvoicePdfTest extends TestCase
     }
 
     #[Test]
+    public function invoiceexpress_pdf_is_served_even_without_a_vat_exemption_code(): void
+    {
+        // O código de isenção só é exigido ao emitir: faturas já emitidas continuam a descarregar-se.
+        $this->useInvoiceExpress();
+        config([
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => '',
+        ]);
+        $member = $this->member();
+        $invoice = Invoice::factory()->for($member)->invoiceExpress()->issued()->create(['provider_invoice_id' => '42']);
+        Http::fake([
+            '*aspec-test.app.invoicexpress.com/api/pdf/42.json*' => Http::response(['output' => ['pdfUrl' => 'https://cdn.invoicexpress.test/42.pdf']], 200),
+            'https://cdn.invoicexpress.test/42.pdf' => Http::response(self::PDF_BYTES, 200, ['Content-Type' => 'application/pdf']),
+        ]);
+        Sanctum::actingAs($member);
+
+        $response = $this->get($this->url($invoice->id));
+
+        $response->assertOk()->assertHeader('Content-Type', 'application/pdf');
+        $this->assertSame(self::PDF_BYTES, $response->getContent());
+    }
+
+    #[Test]
     public function invoiceexpress_failure_gets_502_and_logs_without_the_api_key(): void
     {
         $this->useInvoiceExpress();
@@ -338,17 +363,16 @@ class InvoicePdfTest extends TestCase
     // --- P11 ---
 
     #[Test]
-    public function eleventh_download_in_a_minute_gets_429_only_for_that_member(): void
+    public function download_over_the_minute_limit_gets_429_only_for_that_member(): void
     {
         $member = $this->member();
         $invoice = $this->demoInvoiceWithFile($member);
         $other = $this->member();
         $otherInvoice = $this->demoInvoiceWithFile($other);
         Sanctum::actingAs($member);
+        $this->fillRateLimit('invoice-download', 'minute:'.$member->id, 119);
 
-        for ($i = 1; $i <= 10; $i++) {
-            $this->get($this->url($invoice->id))->assertOk();
-        }
+        $this->get($this->url($invoice->id))->assertOk();
         $this->getJson($this->url($invoice->id))->assertTooManyRequests();
 
         Sanctum::actingAs($other);
@@ -361,12 +385,9 @@ class InvoicePdfTest extends TestCase
         $member = $this->member();
         $invoice = $this->demoInvoiceWithFile($member);
         Sanctum::actingAs($member);
+        $this->fillRateLimit('invoice-download', 'minute:'.$member->id, 120);
 
-        for ($i = 1; $i <= 10; $i++) {
-            $this->get($this->url($invoice->id))->assertOk();
-        }
         $this->getJson($this->url($invoice->id))->assertTooManyRequests();
-
         $this->getJson('/api/invoices')->assertOk();
     }
 

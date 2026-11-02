@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Enums\SubscriptionInterval;
 use App\Notifications\Concerns\BuildsPaymentMail;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
@@ -42,10 +43,11 @@ class PaymentFailedNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $date = $this->graceEndsAt->format('d/m/Y');
+        $interval = SubscriptionInterval::configured()->adjective();
 
         return $this->paymentMail($notifiable)
             ->subject('Não foi possível cobrar a quota ASPEC')
-            ->line("Não conseguimos cobrar a quota mensal de {$this->formattedPrice()} €.")
+            ->line("Não conseguimos cobrar a quota {$interval} de {$this->formattedPrice()} €.")
             ->line("A sua conta continua ativa até {$date}. Atualize o cartão até essa data para não perder o acesso; voltaremos a tentar a cobrança.")
             ->line("Depois de atualizar o cartão, carregue em 'Pagar valor em falta' para regularizar já.")
             ->action('Atualizar cartão', rtrim(config('app.frontend_url'), '/').'/conta/subscricao')

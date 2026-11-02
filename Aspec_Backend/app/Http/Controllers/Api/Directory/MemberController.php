@@ -18,10 +18,12 @@ class MemberController extends Controller
      * Lista pública e paginada do diretório (só contas Active com perfil), igual para visitantes e membros.
      * Filtra por texto (nome, empresa ou descrição), setor, distrito e avaliação mínima;
      * ordena por empresa, nome e id para a paginação ser estável.
+     * Cada item traz a média das avaliações Visible (1 casa decimal) e o número de avaliações Visible.
      */
     public function index(IndexMemberRequest $request): JsonResponse
     {
         $members = MemberProfile::listedInDirectory()
+            ->withRatingSummary()
             ->with(['sector:id,name', 'location:id,name'])
             ->when($request->filled('search'), function (Builder $query) use ($request) {
                 // O ! é o caráter de escape porque escreve-se igual em MySQL e SQLite (a \ não).
@@ -57,10 +59,12 @@ class MemberController extends Controller
      * só quem consulta com conta Active (qualquer papel) recebe contactos comerciais, website, morada e redes sociais.
      * Perfil inexistente ou fora do diretório dá o mesmo 404, para não confirmar que o id existe.
      * A resposta depende de quem consulta, por isso nunca fica em cache partilhada (private, no-store).
+     * Média e contagem das avaliações Visible iguais às da lista (mesmo scope e mesmo formato).
      */
     public function show(Request $request, string $member): JsonResponse
     {
         $profile = MemberProfile::listedInDirectory()
+            ->withRatingSummary()
             ->with([
                 'sector:id,name',
                 'location:id,name',

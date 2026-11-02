@@ -16,52 +16,98 @@ class EventRegistrationController extends Controller
 {
     public function store(Request $request, EventInstance $eventInstance): JsonResponse
     {
+        $request->validate([
+            'scope' => $eventInstance->series_id === null
+                ? ['prohibited']
+                : ['sometimes', 'string', 'in:this_and_following'],
+        ]);
+
+        $registerThisAndFollowing = $request->input('scope') === 'this_and_following';
         $userId = $request->user()->getAuthIdentifier();
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
 
-        return DB::transaction(function () use ($eventInstance, $userId, $timezone): JsonResponse {
+        return DB::transaction(function () use (
+            $eventInstance,
+            $userId,
+            $timezone,
+            $registerThisAndFollowing
+        ): JsonResponse {
             $event = EventInstance::query()
                 ->whereKey($eventInstance->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($registerThisAndFollowing) {
+                $events = EventInstance::query()
+                    ->where('series_id', $event->series_id)
+                    ->where('event_date', '>=', $event->event_date->toDateString())
+                    ->orderBy('event_date')
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get();
+            } else {
+                $events = collect([$event]);
+            }
+
             $now = now($timezone);
-            $deadline = Carbon::parse(
-                $event->getRawOriginal('registration_deadline'),
-                $timezone
+
+            foreach ($events as $session) {
+                $deadline = Carbon::parse(
+                    $session->getRawOriginal('registration_deadline'),
+                    $timezone
+                );
+
+                if ($now->greaterThan($deadline)) {
+                    return $this->errorResponse(
+                        'O prazo de inscrição para este evento terminou.',
+                        Response::HTTP_CONFLICT
+                    );
+                }
+
+                if ($session->registrations()->where('user_id', $userId)->exists()) {
+                    return $this->errorResponse(
+                        'Já está inscrito neste evento.',
+                        Response::HTTP_CONFLICT
+                    );
+                }
+
+                if ($session->registrations()->count() >= $session->max_attendees) {
+                    return $this->errorResponse(
+                        'O evento atingiu a lotação máxima.',
+                        Response::HTTP_CONFLICT
+                    );
+                }
+            }
+
+            $registrations = $events->map(
+                fn (EventInstance $session): EventRegistration => $session->registrations()->create([
+                    'user_id' => $userId,
+                ])
             );
 
-            if ($now->greaterThan($deadline)) {
-                return $this->errorResponse(
-                    'O prazo de inscrição para este evento terminou.',
-                    Response::HTTP_CONFLICT
+            if (! $registerThisAndFollowing) {
+                $registration = $registrations->first();
+
+                return $this->successResponse(
+                    [
+                        'id' => $registration->id,
+                        'event_instance_id' => $event->id,
+                    ],
+                    'Inscrição efetuada com sucesso.',
+                    Response::HTTP_CREATED
                 );
             }
-
-            if ($event->registrations()->where('user_id', $userId)->exists()) {
-                return $this->errorResponse(
-                    'Já está inscrito neste evento.',
-                    Response::HTTP_CONFLICT
-                );
-            }
-
-            if ($event->registrations()->count() >= $event->max_attendees) {
-                return $this->errorResponse(
-                    'O evento atingiu a lotação máxima.',
-                    Response::HTTP_CONFLICT
-                );
-            }
-
-            $registration = $event->registrations()->create([
-                'user_id' => $userId,
-            ]);
 
             return $this->successResponse(
                 [
-                    'id' => $registration->id,
-                    'event_instance_id' => $event->id,
+                    'registrations' => $registrations
+                        ->map(fn (EventRegistration $registration): array => [
+                            'id' => $registration->id,
+                            'event_instance_id' => $registration->event_instance_id,
+                        ])
+                        ->values(),
                 ],
-                'Inscrição efetuada com sucesso.',
+                'Inscrições efetuadas com sucesso.',
                 Response::HTTP_CREATED
             );
         });

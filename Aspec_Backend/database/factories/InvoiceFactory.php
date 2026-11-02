@@ -6,10 +6,12 @@ use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
  * Fatura pendente de 60 € (driver log) de um membro com dados de faturação completos.
+ * O período pago é de um mês a contar da criação da linha (fim exclusivo, como no Stripe).
  *
  * @extends Factory<Invoice>
  */
@@ -27,17 +29,35 @@ class InvoiceFactory extends Factory
             'amount' => 6000,
             'currency' => 'eur',
             'status' => InvoiceStatus::Pending,
+            'period_start' => fn (array $attributes) => Carbon::parse($attributes['created_at'] ?? now()),
+            'period_end' => fn (array $attributes) => $attributes['period_start'] === null
+                ? null
+                : Carbon::parse($attributes['period_start'])->addMonthNoOverflow(),
         ];
     }
 
     /**
-     * Fatura emitida e enviada, com o número no formato do driver que a emitiu.
+     * Fatura sem período pago (linhas anteriores ao registo do período ou payload sem linhas).
+     */
+    public function withoutPeriod(): static
+    {
+        return $this->state(fn () => [
+            'period_start' => null,
+            'period_end' => null,
+        ]);
+    }
+
+    /**
+     * Fatura emitida e enviada, com o número no formato do driver que a emitiu e isenta de IVA
+     * (taxa 0 % e o motivo configurado), como as faturas da quota.
      */
     public function issued(): static
     {
         return $this->state(fn () => [
             'status' => InvoiceStatus::Issued,
             'issued_at' => now(),
+            'vat_rate' => 0,
+            'vat_exemption_reason' => config('services.invoicing.vat_exemption_reason'),
             'number' => fn (array $attributes) => self::numberFor($attributes),
         ]);
     }

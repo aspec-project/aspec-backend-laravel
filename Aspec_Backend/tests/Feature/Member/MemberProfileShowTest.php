@@ -84,6 +84,44 @@ class MemberProfileShowTest extends TestCase
     }
 
     #[Test]
+    public function own_profile_includes_postal_code_and_city(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile(profile: [
+            'address' => 'Avenida da República 50, 3.º Esq.',
+            'postal_code' => '1050-196',
+            'city' => 'Lisboa',
+        ]));
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.address', 'Avenida da República 50, 3.º Esq.')
+            ->assertJsonPath('data.postal_code', '1050-196')
+            ->assertJsonPath('data.city', 'Lisboa');
+    }
+
+    #[Test]
+    public function legacy_profile_returns_null_postal_code_and_city(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile(profile: ['postal_code' => null, 'city' => null]));
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.postal_code', null)
+            ->assertJsonPath('data.city', null);
+    }
+
+    #[Test]
+    public function authenticated_user_endpoint_includes_postal_code_and_city_in_the_profile(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile(profile: ['postal_code' => '4050-262', 'city' => 'Porto']));
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.member_profile.postal_code', '4050-262')
+            ->assertJsonPath('data.member_profile.city', 'Porto');
+    }
+
+    #[Test]
     public function response_does_not_expose_internal_or_sensitive_fields(): void
     {
         Sanctum::actingAs($this->memberWithProfile(profile: ['logo_path' => 'logos/x/logo.png']));

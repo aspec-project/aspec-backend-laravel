@@ -519,19 +519,128 @@ class SubscriptionShowTest extends TestCase
             ->assertJsonPath('data.next_payment_at', '2026-11-15T08:30:00+00:00');
     }
 
+    /**
+     * O período pago vem do Stripe (aniversário da ativação): a próxima cobrança é o fim desse
+     * período, mesmo que o pagamento tenha sido registado noutro dia (ex.: retry atrasado) e
+     * qualquer que seja a configuração.
+     */
     #[Test]
-    public function next_payment_follows_the_configured_interval(): void
+    public function next_payment_is_the_period_end_of_the_latest_invoice(): void
     {
         $this->travelTo('2026-10-20 10:00:00');
-        config(['subscription.interval' => 'year']);
         $member = $this->member();
         $this->subscriptionFor($member, 'active');
-        Invoice::factory()->for($member)->demo()->issued()->create(['created_at' => '2026-10-15 08:30:00']);
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'created_at' => '2025-10-12 10:00:00',
+            'period_start' => '2025-10-12 10:00:00',
+            'period_end' => '2026-10-12 10:00:00',
+        ]);
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'created_at' => '2026-10-17 08:30:00',
+            'period_start' => '2026-10-12 10:00:00',
+            'period_end' => '2027-10-12 10:00:00',
+        ]);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2027-10-12T10:00:00+00:00');
+    }
+
+    #[Test]
+    public function annual_period_end_is_used_even_with_a_monthly_config(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        config(['subscription.interval' => 'month']);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'created_at' => '2026-10-15 08:30:00',
+            'period_start' => '2026-10-15 08:30:00',
+            'period_end' => '2027-10-15 08:30:00',
+        ]);
         Sanctum::actingAs($member);
 
         $this->getJson(self::URL)
             ->assertOk()
             ->assertJsonPath('data.next_payment_at', '2027-10-15T08:30:00+00:00');
+    }
+
+    public static function intervalFallbacks(): array
+    {
+        return [
+            'mensal' => ['month', '2026-11-15T08:30:00+00:00'],
+            'anual' => ['year', '2027-10-15T08:30:00+00:00'],
+        ];
+    }
+
+    /**
+     * Faturas anteriores ao registo do período: a próxima cobrança é estimada pelo pagamento
+     * mais o intervalo configurado.
+     */
+    #[Test]
+    #[DataProvider('intervalFallbacks')]
+    public function invoice_without_period_falls_back_to_the_payment_date_plus_the_configured_interval(string $interval, string $expected): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        config(['subscription.interval' => $interval]);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->withoutPeriod()->create(['created_at' => '2026-10-15 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', $expected);
+    }
+
+    #[Test]
+    public function latest_invoice_without_period_wins_over_an_older_one_with_period(): void
+    {
+        $this->travelTo('2026-10-20 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->create([
+            'created_at' => '2026-09-15 08:30:00',
+            'period_start' => '2026-09-15 08:30:00',
+            'period_end' => '2026-10-15 08:30:00',
+        ]);
+        Invoice::factory()->for($member)->demo()->issued()->withoutPeriod()->create(['created_at' => '2026-10-16 09:00:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2026-11-16T09:00:00+00:00');
+    }
+
+    #[Test]
+    public function fallback_from_the_31st_does_not_overflow_into_the_next_month(): void
+    {
+        $this->travelTo('2027-02-01 10:00:00');
+        $member = $this->member();
+        $this->subscriptionFor($member, 'active');
+        Invoice::factory()->for($member)->demo()->issued()->withoutPeriod()->create(['created_at' => '2027-01-31 08:30:00']);
+        Sanctum::actingAs($member);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.next_payment_at', '2027-02-28T08:30:00+00:00');
+    }
+
+    #[Test]
+    public function price_interval_is_year_when_the_fee_is_annual(): void
+    {
+        config(['subscription.interval' => 'year', 'subscription.price_amount' => 20.00]);
+        $member = $this->member();
+        $this->subscriptionFor($member, 'trialing', ['trial_ends_at' => now()->addDays(30)]);
+        Sanctum::actingAs($member);
+
+        $response = $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.price.interval', 'year')
+            ->assertJsonPath('data.price.currency', 'eur');
+
+        $this->assertEquals(20, $response->json('data.price.amount'));
     }
 
     #[Test]

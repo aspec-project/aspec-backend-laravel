@@ -58,8 +58,6 @@ class InvoiceServiceFactory
             sequenceId: filled($config['sequence_id'] ?? null) ? (string) $config['sequence_id'] : null,
             itemName: $config['item_name'],
             taxName: $config['tax_name'],
-            vatRate: (int) $config['vat_rate'],
-            taxExemption: filled($config['tax_exemption'] ?? null) ? $config['tax_exemption'] : null,
             timeout: (int) $config['timeout'],
             retryTimes: (int) $config['retry_times'],
             retrySleepMs: (int) $config['retry_sleep_ms'],

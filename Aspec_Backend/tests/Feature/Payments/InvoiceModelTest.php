@@ -27,8 +27,33 @@ class InvoiceModelTest extends TestCase
     {
         $this->assertTrue(Schema::hasColumns('invoices', [
             'id', 'user_id', 'stripe_invoice_id', 'provider', 'provider_invoice_id', 'number',
-            'amount', 'currency', 'status', 'pdf_url', 'issued_at', 'created_at', 'updated_at',
+            'amount', 'currency', 'period_start', 'period_end', 'status', 'pdf_url', 'issued_at', 'created_at', 'updated_at',
         ]));
+    }
+
+    #[Test]
+    public function invoices_table_has_the_tax_columns(): void
+    {
+        $this->assertTrue(Schema::hasColumns('invoices', ['vat_rate', 'vat_exemption_code', 'vat_exemption_reason']));
+    }
+
+    #[Test]
+    public function pending_invoice_has_no_tax_until_it_is_issued(): void
+    {
+        $invoice = Invoice::factory()->create()->fresh();
+
+        $this->assertNull($invoice->vat_rate);
+        $this->assertNull($invoice->vat_exemption_code);
+        $this->assertNull($invoice->vat_exemption_reason);
+    }
+
+    #[Test]
+    public function vat_rate_is_cast_to_an_integer(): void
+    {
+        $invoice = Invoice::factory()->create();
+        $invoice->forceFill(['vat_rate' => '23'])->save();
+
+        $this->assertSame(23, $invoice->fresh()->vat_rate);
     }
 
     #[Test]
@@ -128,6 +153,37 @@ class InvoiceModelTest extends TestCase
         $this->assertSame(InvoiceStatus::Pending, $invoice->status);
         $this->assertIsInt($invoice->amount);
         $this->assertInstanceOf(Carbon::class, $invoice->issued_at);
+    }
+
+    #[Test]
+    public function paid_period_is_cast_to_dates(): void
+    {
+        $invoice = Invoice::factory()->create([
+            'period_start' => '2026-10-28 10:00:00',
+            'period_end' => '2027-10-28 10:00:00',
+        ])->fresh();
+
+        $this->assertInstanceOf(Carbon::class, $invoice->period_start);
+        $this->assertInstanceOf(Carbon::class, $invoice->period_end);
+        $this->assertSame('2027-10-28 10:00:00', $invoice->period_end->format('Y-m-d H:i:s'));
+    }
+
+    #[Test]
+    public function paid_period_is_optional(): void
+    {
+        $invoice = Invoice::factory()->withoutPeriod()->create()->fresh();
+
+        $this->assertNull($invoice->period_start);
+        $this->assertNull($invoice->period_end);
+    }
+
+    #[Test]
+    public function factory_paid_period_is_one_month_from_the_payment(): void
+    {
+        $invoice = Invoice::factory()->create(['created_at' => '2027-01-31 08:30:00'])->fresh();
+
+        $this->assertSame('2027-01-31 08:30:00', $invoice->period_start->format('Y-m-d H:i:s'));
+        $this->assertSame('2027-02-28 08:30:00', $invoice->period_end->format('Y-m-d H:i:s'));
     }
 
     #[Test]

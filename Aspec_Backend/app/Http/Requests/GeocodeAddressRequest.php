@@ -49,19 +49,28 @@ class GeocodeAddressRequest extends FormRequest
     }
 
     /**
-     * Texto a pesquisar: a morada sem espaços a mais e, se foi indicado, o nome do distrito no fim.
+     * Morada a pesquisar, sem espaços a mais.
      *
-     * @return string Ex.: "Rua Augusta 1, Lisboa".
+     * @return string Ex.: "Rua Augusta 1".
      */
-    public function geocodingQuery(): string
+    public function geocodingAddress(): string
     {
-        $query = Str::squish((string) $this->validated('address'));
+        return Str::squish((string) $this->validated('address'));
+    }
+
+    /**
+     * Nome do distrito/região indicado, ou null se não foi indicado.
+     *
+     * @return string|null Ex.: "Lisboa".
+     */
+    public function districtName(): ?string
+    {
         $locationId = $this->validated('location_id');
 
         if ($locationId === null) {
-            return $query;
+            return null;
         }
 
-        return $query.', '.Location::query()->whereKey($locationId)->value('name');
+        return Location::query()->whereKey($locationId)->value('name');
     }
 }

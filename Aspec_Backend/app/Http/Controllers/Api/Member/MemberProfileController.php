@@ -63,6 +63,8 @@ class MemberProfileController extends Controller
                 'commercial_email',
                 'commercial_phone',
                 'address',
+                'postal_code',
+                'city',
             ]));
 
             $oldEmail = $user->email;

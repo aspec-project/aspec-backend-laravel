@@ -3,6 +3,8 @@
 namespace Tests\Feature\Invoicing;
 
 use App\Contracts\InvoiceService;
+use App\Exceptions\InvoiceIssuingFailed;
+use App\Services\Invoicing\Data\InvoiceTax;
 use App\Services\Invoicing\DemoInvoiceService;
 use App\Services\Invoicing\InvoiceExpressInvoiceService;
 use App\Services\Invoicing\InvoiceServiceFactory;
@@ -11,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use InvalidArgumentException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\BuildsInvoiceData;
 use Tests\TestCase;
 
 /**
@@ -19,6 +22,8 @@ use Tests\TestCase;
  */
 class InvoiceServiceFactoryTest extends TestCase
 {
+    use BuildsInvoiceData;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -31,11 +36,14 @@ class InvoiceServiceFactoryTest extends TestCase
         return app(InvoiceServiceFactory::class);
     }
 
-    private function configureInvoiceExpress(?string $apiKey = 'secret-key-123'): void
+    private function configureInvoiceExpress(?string $apiKey = 'secret-key-123', ?string $exemptionCode = 'M07'): void
     {
         config([
             'services.invoiceexpress.account_name' => 'aspec-test',
             'services.invoiceexpress.api_key' => $apiKey,
+            'services.invoicing.vat_rate' => 0,
+            'services.invoicing.vat_exemption_code' => $exemptionCode,
+            'services.invoicing.vat_exemption_reason' => 'Isento de IVA — motivo de teste',
         ]);
     }
 
@@ -87,6 +95,73 @@ class InvoiceServiceFactoryTest extends TestCase
         $this->expectExceptionMessage('Faltam o nome da conta ou a chave da API da InvoiceExpress.');
 
         $this->factory()->make('invoiceexpress');
+    }
+
+    // --- Isenção de IVA sem código ---
+
+    public static function missingExemptionCodes(): array
+    {
+        return [
+            'vazio' => [''],
+            'null' => [null],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('missingExemptionCodes')]
+    public function invoiceexpress_exempt_without_exemption_code_is_still_created(?string $code): void
+    {
+        // A recusa é só ao emitir: o PDF de faturas já emitidas tem de continuar a descarregar-se.
+        $this->configureInvoiceExpress(exemptionCode: $code);
+
+        $this->assertInstanceOf(InvoiceExpressInvoiceService::class, $this->factory()->make('invoiceexpress'));
+    }
+
+    #[Test]
+    #[DataProvider('missingExemptionCodes')]
+    public function invoiceexpress_exempt_without_exemption_code_refuses_to_issue_without_requests(?string $code): void
+    {
+        // Um documento fiscal nunca sai com um código de isenção adivinhado.
+        $this->configureInvoiceExpress(exemptionCode: $code);
+        Http::fake();
+
+        try {
+            $this->factory()->make('invoiceexpress')->issue($this->customer(), $this->invoice(amount: 3000, tax: InvoiceTax::fromConfig()));
+            $this->fail('Era esperada uma InvoiceIssuingFailed.');
+        } catch (InvoiceIssuingFailed $e) {
+            $this->assertSame('tax', $e->step);
+            $this->assertSame('Falta o código do motivo de isenção de IVA (INVOICE_VAT_EXEMPTION_CODE).', $e->getMessage());
+            $this->assertStringNotContainsString(self::API_KEY, $e->getMessage());
+            $this->assertStringNotContainsString(self::ACCOUNT_NAME, $e->getMessage());
+        }
+
+        Http::assertNothingSent();
+    }
+
+    #[Test]
+    public function invoiceexpress_with_vat_needs_no_exemption_code(): void
+    {
+        $this->configureInvoiceExpress(exemptionCode: '');
+        config(['services.invoicing.vat_rate' => 23]);
+
+        $this->assertInstanceOf(InvoiceExpressInvoiceService::class, $this->factory()->make('invoiceexpress'));
+    }
+
+    public static function driversWithoutFiscalDocuments(): array
+    {
+        return [
+            'log' => ['log', LogInvoiceService::class],
+            'demo' => ['demo', DemoInvoiceService::class],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('driversWithoutFiscalDocuments')]
+    public function demo_and_log_work_exempt_without_exemption_code(string $provider, string $class): void
+    {
+        $this->configureInvoiceExpress(exemptionCode: '');
+
+        $this->assertInstanceOf($class, $this->factory()->make($provider));
     }
 
     // --- F3 ---

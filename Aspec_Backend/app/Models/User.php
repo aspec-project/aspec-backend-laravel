@@ -49,8 +49,22 @@ class User extends Authenticatable
             'inactive_reason' => InactiveReason::class,
             'terms_accepted_at' => 'datetime',
             'subscription_exempt' => 'boolean',
+            'notify_new_events' => 'boolean',
+            'notify_weekly_agenda' => 'boolean',
+            'weekly_agenda_sent_at' => 'datetime',
         ];
     }
+
+    /**
+     * Valores por omissão iguais aos da base de dados: um utilizador acabado de criar já tem as
+     * preferências dos emails de eventos ligadas, sem ter de ser relido.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'notify_new_events' => true,
+        'notify_weekly_agenda' => true,
+    ];
 
     /**
      * Os dados de faturação só são gravados a partir de um Form Request validado.
@@ -68,6 +82,8 @@ class User extends Authenticatable
         'billing_postal_code',
         'billing_city',
         'terms_accepted_at',
+        'notify_new_events',
+        'notify_weekly_agenda',
     ];
 
     /**
@@ -104,6 +120,37 @@ class User extends Authenticatable
     public function memberProfile()
     {
         return $this->hasOne(MemberProfile::class);
+    }
+
+    /**
+     * Inscrições do utilizador em eventos.
+     */
+    public function eventRegistrations(): HasMany
+    {
+        return $this->hasMany(EventRegistration::class);
+    }
+
+    /**
+     * Participantes dos cartões de oração: conta Active com perfil de membro (Member ou Admin).
+     * As contas anonimizadas ficam de fora (soft delete do utilizador e do perfil).
+     */
+    public function scopeActiveWithProfile(Builder $query): void
+    {
+        $this->whereAccountStatus($query, 'Active')->whereHas('memberProfile');
+    }
+
+    /**
+     * Destinatários dos emails de eventos: conta Active, com perfil de membro (Member ou Admin) e
+     * com a preferência indicada ligada. É a regra do diretório; o admin técnico (sem perfil) fica
+     * de fora e as contas anonimizadas também (soft delete).
+     *
+     * @param  string  $preference  notify_new_events ou notify_weekly_agenda.
+     */
+    public function scopeReceivesEventEmails(Builder $query, string $preference): void
+    {
+        $this->whereAccountStatus($query, 'Active')
+            ->whereHas('memberProfile')
+            ->where($preference, true);
     }
 
     /**
@@ -312,6 +359,8 @@ class User extends Authenticatable
      * ficar vazio); os ficheiros só depois do commit, para não se perderem num rollback.
      * Funciona também sem perfil (ex.: admin) e com perfil já apagado (soft delete).
      * Mantém as faturas e os respetivos PDFs (obrigação fiscal de 10 anos).
+     * Cartões de oração escritos pela conta: conteúdo apagado e soft delete (dados religiosos de quem
+     * pediu o apagamento); os recebidos são dados dos autores e expiram normalmente.
      * Não chamar dentro de outra transação: a chamada ao Stripe não pode ser desfeita por um rollback exterior.
      * Grava a prova da anonimização (conta, admin, data) na mesma transação: nunca uma sem a outra.
      * A conta é relida com lockForUpdate: dois pedidos em simultâneo anonimizam e registam uma só vez.
@@ -341,9 +390,14 @@ class User extends Authenticatable
             $stripeCustomerDeleted = $stripeCustomerDeleted && $this->stripe_id === $handledStripeId;
             $checkoutSessionId = $this->stripe_checkout_session_id;
 
-            $profile = MemberProfile::withTrashed()->where('user_id', $this->id)->first();
+            $profile = MemberProfile::withTrashed()
+                ->where('user_id', $this->id)
+                ->lockForUpdate()
+                ->first();
 
             if ($profile) {
+                $profile->reviewsReceived()->delete();
+
                 $profile->update([
                     'name' => 'Utilizador Anónimo',
                     'business_name' => 'Empresa Removida',
@@ -355,6 +409,8 @@ class User extends Authenticatable
                     'commercial_email' => null,
                     'commercial_phone' => null,
                     'address' => null,
+                    'postal_code' => null,
+                    'city' => null,
                 ]);
 
                 $profile->socialPlatforms()->detach();
@@ -385,6 +441,11 @@ class User extends Authenticatable
                 ->where('user_id', $this->id)
                 ->whereIn('event_instance_id', $futureEventIds)
                 ->delete();
+
+            PrayerCard::query()
+                ->where('author_user_id', $this->id)
+                ->get()
+                ->each(fn (PrayerCard $card) => $card->erase());
 
             // Antes do forceFill: depois dele, $this->email já é o email anonimizado.
             $this->deletePasswordResetTokens();

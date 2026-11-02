@@ -11,7 +11,6 @@ class MemberSummaryResource extends JsonResource
     /**
      * Item da lista pública do diretório: identificação, descrição completa, setor, distrito, logótipo e avaliações.
      * Nunca inclui contactos, email nem congregação. Espera as relações sector e location carregadas.
-     * Sem avaliações ainda, average_rating é null e reviews_count é 0.
      *
      * @return array<string, mixed>
      */

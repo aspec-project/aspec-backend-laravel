@@ -19,8 +19,8 @@ class MemberDetailResource extends JsonResource
 
     /**
      * Perfil público do diretório. A montra (descrição, setor, distrito, logótipo, horário, portfólio) é pública;
-     * website, morada, redes sociais e contactos comerciais só em members_only, que é null para quem não
-     * tem conta Active e traz sempre as 5 chaves para quem tem. O email e o telefone da conta e a
+     * website, morada (com código postal e localidade), redes sociais e contactos comerciais só em members_only,
+     * que é null para quem não tem conta Active e traz sempre as 7 chaves para quem tem. O email e o telefone da conta e a
      * congregação nunca são devolvidos, para ninguém.
      *
      * @return array<string, mixed>
@@ -50,6 +50,8 @@ class MemberDetailResource extends JsonResource
                 'commercial_email' => $this->commercial_email,
                 'website_url' => $this->website_url,
                 'address' => $this->address,
+                'postal_code' => $this->postal_code,
+                'city' => $this->city,
                 'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             ] : null,
         ];

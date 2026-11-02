@@ -14,7 +14,7 @@ use RuntimeException;
 class InvoiceIssuingFailed extends RuntimeException
 {
     /**
-     * @param  string  $step  Passo que falhou: create, finalize, currency ou store.
+     * @param  string  $step  Passo que falhou: tax, create, finalize, currency ou store.
      * @param  int|null  $httpStatus  Código HTTP da resposta, ou null quando não houve resposta.
      * @param  string|null  $providerInvoiceId  Id do rascunho já criado (falhas a finalizar), para a nova
      *                                          tentativa retomar a partir dele em vez de criar outro.
@@ -50,6 +50,24 @@ class InvoiceIssuingFailed extends RuntimeException
     public static function unsupportedCurrency(string $currency): self
     {
         return new self("Moeda não suportada na faturação: {$currency}.", 'currency');
+    }
+
+    /**
+     * Fatura isenta de IVA sem código do motivo de isenção configurado. Na InvoiceExpress o código é
+     * obrigatório e a menção legal sai dele: o documento fiscal nunca sai com um código adivinhado.
+     */
+    public static function missingExemptionCode(): self
+    {
+        return new self('Falta o código do motivo de isenção de IVA (INVOICE_VAT_EXEMPTION_CODE).', 'tax');
+    }
+
+    /**
+     * O total do rascunho no serviço de faturação não corresponde ao valor cobrado (ou não veio na
+     * resposta). O rascunho não é finalizado, por isso nunca chega a documento fiscal.
+     */
+    public static function totalMismatch(): self
+    {
+        return new self('O total da fatura no serviço de faturação não corresponde ao valor cobrado (passo: create).', 'create');
     }
 
     /**
