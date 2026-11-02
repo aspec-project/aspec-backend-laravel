@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\Admin;
 
+use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AdminDashboardReviewResource;
 use App\Http\Resources\AdminUserSummaryResource;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\Review;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -58,7 +60,7 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Calcula os números dos quatro cartões do painel.
+     * Calcula os seis grupos de números dos cartões do painel.
      *
      * @param  array{month_start: CarbonImmutable, month_end: CarbonImmutable, week_start: CarbonImmutable, week_end: CarbonImmutable}  $periods  Limites do mês e da semana em Lisboa.
      * @return array<string, array<string, int>>
@@ -114,7 +116,57 @@ class AdminDashboardController extends Controller
                 'flagged' => (int) $flagged,
                 'new_this_week' => (int) $newReviewsThisWeek,
             ],
+            'overdue_payments' => $this->overduePayments(),
+            'event_registrations' => [
+                'this_week' => $this->registrationsThisWeek($periods),
+            ],
         ];
+    }
+
+    /**
+     * Contas com quotas em atraso: em carência (cobrança falhada, ainda com acesso) e inativas por falta de pagamento.
+     * Usa o scope dos estados de subscrição, com as duas contagens numa só consulta.
+     *
+     * @return array{total: int, grace: int, unpaid: int}
+     */
+    private function overduePayments(): array
+    {
+        $graceQuery = User::query()
+            ->inSubscriptionState(SubscriptionState::Grace)
+            ->selectRaw("'grace' as bucket, COUNT(*) as aggregate")
+            ->toBase();
+
+        $counts = User::query()
+            ->inSubscriptionState(SubscriptionState::Lapsed)
+            ->where('inactive_reason', InactiveReason::Unpaid->value)
+            ->selectRaw("'unpaid' as bucket, COUNT(*) as aggregate")
+            ->toBase()
+            ->unionAll($graceQuery)
+            ->pluck('aggregate', 'bucket');
+
+        $grace = (int) ($counts['grace'] ?? 0);
+        $unpaid = (int) ($counts['unpaid'] ?? 0);
+
+        return [
+            'total' => $grace + $unpaid,
+            'grace' => $grace,
+            'unpaid' => $unpaid,
+        ];
+    }
+
+    /**
+     * Inscrições em eventos com data na semana corrente (segunda a domingo, em Lisboa).
+     * Cada linha conta: sessões de séries, eventos online e inscrições de contas já apagadas.
+     *
+     * @param  array{week_start: CarbonImmutable, week_end: CarbonImmutable}  $periods  Limites da semana em Lisboa.
+     */
+    private function registrationsThisWeek(array $periods): int
+    {
+        return EventRegistration::query()
+            ->whereHas('eventInstance', fn (Builder $event) => $event
+                ->whereDate('event_date', '>=', $periods['week_start']->toDateString())
+                ->whereDate('event_date', '<=', $periods['week_end']->toDateString()))
+            ->count();
     }
 
     /**
