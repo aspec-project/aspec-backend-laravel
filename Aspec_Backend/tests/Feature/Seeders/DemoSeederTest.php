@@ -239,8 +239,9 @@ class DemoSeederTest extends TestCase
 
         foreach ($inPersonFuture as $event) {
             $this->assertNotEmpty($event->address, $event->name);
-            $this->assertNotNull($event->latitude, $event->name);
-            $this->assertNotNull($event->longitude, $event->name);
+            $this->assertNotNull($event->place_id, $event->name);
+            $this->assertNull($event->latitude, $event->name);
+            $this->assertNull($event->longitude, $event->name);
         }
 
         $this->assertGreaterThanOrEqual(2, $events->whereNotNull('venue_name')->count());
@@ -637,5 +638,36 @@ class DemoSeederTest extends TestCase
             ->assertJsonPath('success', true);
 
         $this->assertSame('Demo#2026', DemoSeeder::PASSWORD);
+    }
+
+    /**
+     * O mapa da página do evento usa só o place_id; a API nunca grava place_id e coordenadas juntos.
+     */
+    #[Test]
+    public function no_demo_event_has_coordinates_and_every_in_person_event_has_a_place_id(): void
+    {
+        $this->runDemoSeeder();
+
+        $this->assertSame(0, EventInstance::whereNotNull('latitude')->orWhereNotNull('longitude')->count());
+        $this->assertSame(0, EventInstance::where('is_online', false)->whereNull('place_id')->count());
+    }
+
+    /**
+     * Numa base de dados já semeada com as coordenadas antigas, voltar a correr o seeder limpa-as.
+     */
+    #[Test]
+    public function running_again_clears_coordinates_saved_before(): void
+    {
+        $this->runDemoSeeder();
+
+        $event = $this->demoEvent('Pequeno-almoço de Negócios ASPEC', 'Lisboa');
+        $event->forceFill(['latitude' => 38.7676, 'longitude' => -9.0973])->save();
+
+        $this->runDemoSeeder();
+
+        $event->refresh();
+        $this->assertNull($event->latitude);
+        $this->assertNull($event->longitude);
+        $this->assertSame('ChIJJ8bvTYYxGQ0RoC1RSUhyz2k', $event->place_id);
     }
 }
