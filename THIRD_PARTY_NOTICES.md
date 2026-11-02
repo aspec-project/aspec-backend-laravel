@@ -50,3 +50,29 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 
 SOFTWARE.
 
+## Demo portfolio photos (Pexels)
+
+- Source: https://www.pexels.com (one photo per file, links below)
+- Files: `Aspec_Backend/database/seeders/demo/portfolio/`
+- License: Pexels License, https://www.pexels.com/license/ (free to use and modify, attribution not required; not to be sold unaltered, redistributed on other stock photo platforms or used to imply endorsement).
+- Changes: downloaded at 1200 px width and renamed. Used only as fictional portfolio images of the demo accounts created by `DemoSeeder`.
+
+| File | Pexels photo |
+|---|---|
+| `arquitetura-1.jpg` | https://www.pexels.com/photo/3316922/ |
+| `arquitetura-2.jpg` | https://www.pexels.com/photo/7851904/ |
+| `arquitetura-3.jpg` | https://www.pexels.com/photo/6186813/ |
+| `arquitetura-4.jpg` | https://www.pexels.com/photo/20390760/ |
+| `comunicacao-1.jpg` | https://www.pexels.com/photo/7598007/ |
+| `comunicacao-2.jpg` | https://www.pexels.com/photo/15543040/ |
+| `comunicacao-3.jpg` | https://www.pexels.com/photo/12811291/ |
+| `comunicacao-4.jpg` | https://www.pexels.com/photo/6476254/ |
+| `construcao-1.jpg` | https://www.pexels.com/photo/5335018/ |
+| `construcao-2.jpg` | https://www.pexels.com/photo/17410739/ |
+| `construcao-3.jpg` | https://www.pexels.com/photo/5820968/ |
+| `quinta-1.jpg` | https://www.pexels.com/photo/34803738/ |
+| `quinta-2.jpg` | https://www.pexels.com/photo/26822619/ |
+| `quinta-3.jpg` | https://www.pexels.com/photo/33168420/ |
+| `restaurante-1.jpg` | https://www.pexels.com/photo/11653557/ |
+| `restaurante-2.jpg` | https://www.pexels.com/photo/19615775/ |
+| `restaurante-3.jpg` | https://www.pexels.com/photo/15146204/ |

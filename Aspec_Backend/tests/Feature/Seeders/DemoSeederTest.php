@@ -1736,4 +1736,147 @@ class DemoSeederTest extends TestCase
         $this->assertNotNull($member->grace_ends_at);
         $this->assertSame('cs_test_real', $member->stripe_checkout_session_id);
     }
+
+    /**
+     * Conjuntos de fotografias do portefólio por perfil, com o número de imagens de cada um.
+     *
+     * @return array<string, array{0: string, 1: int}>
+     */
+    private function portfolioSets(): array
+    {
+        return [
+            'Ferreira Arquitetura e Interiores' => ['arquitetura', 4],
+            'Carvalho & Filhos Construções' => ['construcao', 3],
+            'Sabores do Algarve Restaurante' => ['restaurante', 3],
+            'Ideia Viva Comunicação' => ['comunicacao', 4],
+            'Quinta do Vale Verde' => ['quinta', 3],
+        ];
+    }
+
+    /**
+     * Caminhos do portefólio pela ordem em que o perfil público os mostra.
+     *
+     * @return list<string>
+     */
+    private function portfolioPaths(MemberProfile $profile): array
+    {
+        return $profile->portfolios()->orderBy('created_at')->orderBy('id')->pluck('image_path')->all();
+    }
+
+    private function profileByBusinessName(string $businessName): MemberProfile
+    {
+        return MemberProfile::where('business_name', $businessName)->firstOrFail();
+    }
+
+    #[Test]
+    public function only_the_five_showcase_profiles_get_a_portfolio_with_their_photos_in_order(): void
+    {
+        $this->runDemoSeeder();
+
+        $this->assertEqualsCanonicalizing(
+            array_keys($this->portfolioSets()),
+            MemberProfile::has('portfolios')->pluck('business_name')->all(),
+        );
+
+        foreach ($this->portfolioSets() as $businessName => [$set, $count]) {
+            $profile = $this->profileByBusinessName($businessName);
+
+            $expected = array_map(
+                fn (int $number) => "portfolios/{$profile->user_id}/demo-{$set}-{$number}.jpg",
+                range(1, $count),
+            );
+
+            $this->assertSame($expected, $this->portfolioPaths($profile), $businessName);
+        }
+    }
+
+    #[Test]
+    public function demo_member_showcases_the_architecture_portfolio(): void
+    {
+        $member = $this->runAndGet('demo.membro@aspec.test');
+
+        $this->assertSame('Ferreira Arquitetura e Interiores', $member->memberProfile->business_name);
+        $this->assertCount(4, $this->portfolioPaths($member->memberProfile));
+    }
+
+    #[Test]
+    public function portfolio_files_are_the_source_jpeg_photos_byte_for_byte(): void
+    {
+        $this->runDemoSeeder();
+
+        $disk = Storage::disk('public');
+        $checked = 0;
+
+        foreach ($this->portfolioSets() as $businessName => [$set, $count]) {
+            $profile = $this->profileByBusinessName($businessName);
+
+            for ($number = 1; $number <= $count; $number++) {
+                $path = "portfolios/{$profile->user_id}/demo-{$set}-{$number}.jpg";
+                $source = database_path("seeders/demo/portfolio/{$set}-{$number}.jpg");
+
+                $disk->assertExists($path);
+                $stored = $disk->get($path);
+
+                $this->assertSame('image/jpeg', getimagesizefromstring($stored)['mime'] ?? null, $path);
+                $this->assertSame(sha1_file($source), sha1($stored), $path);
+                $checked++;
+            }
+        }
+
+        $this->assertSame(17, $checked);
+        $this->assertCount(17, glob(database_path('seeders/demo/portfolio/*.jpg')));
+    }
+
+    /**
+     * As imagens geradas por versões anteriores da demonstração (demo-projeto-N.png) saem ao repetir o
+     * seeder; uma imagem carregada pelo próprio membro, no mesmo perfil, fica.
+     */
+    #[Test]
+    public function running_again_removes_old_demo_images_but_keeps_member_uploads(): void
+    {
+        $this->runDemoSeeder();
+
+        $profile = $this->profileByBusinessName('Ferreira Arquitetura e Interiores');
+        $oldDemo = "portfolios/{$profile->user_id}/demo-projeto-1.png";
+        $memberUpload = "portfolios/{$profile->user_id}/abc.jpg";
+
+        Storage::disk('public')->put($oldDemo, 'old demo image');
+        Storage::disk('public')->put($memberUpload, 'member upload');
+        $profile->portfolios()->create(['image_path' => $oldDemo]);
+        $profile->portfolios()->create(['image_path' => $memberUpload]);
+
+        $this->runDemoSeeder();
+
+        $this->assertDatabaseMissing('portfolios', ['image_path' => $oldDemo]);
+        Storage::disk('public')->assertMissing($oldDemo);
+
+        $this->assertDatabaseHas('portfolios', ['profile_id' => $profile->id, 'image_path' => $memberUpload]);
+        Storage::disk('public')->assertExists($memberUpload);
+
+        $this->assertSame(5, $profile->portfolios()->count());
+
+        foreach (range(1, 4) as $number) {
+            Storage::disk('public')->assertExists("portfolios/{$profile->user_id}/demo-arquitetura-{$number}.jpg");
+        }
+    }
+
+    #[Test]
+    public function public_profile_returns_the_portfolio_image_urls(): void
+    {
+        $this->runDemoSeeder();
+
+        $profile = $this->profileByBusinessName('Quinta do Vale Verde');
+
+        $expected = array_map(
+            fn (int $number) => Storage::disk('public')->url("portfolios/{$profile->user_id}/demo-quinta-{$number}.jpg"),
+            range(1, 3),
+        );
+
+        $response = $this->getJson("/api/members/{$profile->id}")
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(3, 'data.portfolio');
+
+        $this->assertSame($expected, array_column($response->json('data.portfolio'), 'image_url'));
+    }
 }

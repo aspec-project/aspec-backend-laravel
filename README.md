@@ -69,6 +69,62 @@ Não há apagamento de conta pelo próprio membro: o membro pede à ASPEC por em
 - Não usa os limites do reenvio público (`/api/account-activations/resend`), que um atacante consegue esgotar: tem limites próprios, 30 por hora por administrador e 3 por hora por membro.
 - Cada envio fica no log (`user_id`, `admin_id`, `type`; sem o email).
 
+## Pôr a demo a funcionar do zero
+
+Guia para ter a plataforma completa (API + frontend) com os dados de demonstração num computador novo, sem contas do Stripe nem da Google. Os detalhes de cada passo estão nas secções seguintes.
+
+**Requisitos:** Git, PHP **8.4.1 ou mais recente** com as extensões `intl`, `gd`, `pdo_sqlite` (ou `pdo_mysql`), `fileinfo` e `mbstring`; Composer; Node.js com npm. Por omissão usa SQLite e não precisa de servidor de base de dados; para MySQL (ex.: Laragon), preencher `DB_CONNECTION=mysql` e os `DB_*` no `.env`.
+
+**1. Backend** (pasta `Aspec_Backend/`):
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+# só com SQLite: criar o ficheiro vazio da base de dados
+touch database/database.sqlite
+php artisan migrate:fresh --seed
+php artisan db:seed --class=DemoSeeder
+php artisan storage:link
+php artisan serve --host=localhost
+```
+
+- O `.env.example` já traz o que a demo precisa: `APP_URL=http://localhost:8000`, sessões na base de dados para o login do frontend (`SESSION_DRIVER`, `SESSION_DOMAIN`, `SANCTUM_STATEFUL_DOMAINS`), emails para o log (`MAIL_MAILER=log`, ficam em `storage/logs/laravel.log`) e geocodificação pelo OpenStreetMap.
+- `--host=localhost` evita um atraso de cerca de 0,2 s por pedido no Windows (o browser tenta primeiro o endereço IPv6 de `localhost`).
+- Opcional, noutro terminal: `php artisan queue:work`, para os emails e as tarefas em fila (anúncio de eventos, envio de faturas) correrem enquanto se usa a demo.
+
+**2. Frontend** (repositório `aspec-frontend-react`, pasta `Aspec_Frontend/`):
+
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
+
+- `VITE_API_URL=http://localhost:8000` já vem no `.env.example`. Sem `VITE_GOOGLE_MAPS_EMBED_KEY` a página do evento não mostra o mapa; o resto funciona (a chave de teste pede-se ao Mário em privado).
+- Abrir **`http://localhost:5173`**, nunca `127.0.0.1` nem outra porta: o login usa um cookie de sessão que só vale para `localhost:5173`.
+
+**3. Entrar:** todas as contas têm a password `Demo#2026` (tabela em "Dados de demonstração").
+
+| Para mostrar | Conta |
+|---|---|
+| Área pública, agenda e diretório limitado | sem login |
+| Área de membro: montra, portefólio, inscrições, série, cartões de oração, subscrição e faturas | `demo.membro@aspec.test` |
+| Backoffice: painel, aprovar candidaturas, utilizadores, eventos e cartões de oração | `demo.admin@aspec.test` |
+| Conta em carência (aviso de pagamento) | `demo.membro07@aspec.test` |
+
+**Antes de cada apresentação**, correr outra vez `php artisan db:seed --class=DemoSeeder`: as datas dos eventos, dos trials e da carência são relativas ao dia em que o seeder corre.
+
+**Sem contas externas** funciona tudo menos: ativar ou reativar uma conta e o portal de faturação (precisam das chaves de teste do Stripe, ver "Pagamentos"), o mapa (chave da Google) e o envio real de emails (ver "Email").
+
+| Problema | Causa provável |
+|---|---|
+| Imagens partidas no frontend | Falta `php artisan storage:link`, ou o `APP_URL` não é `http://localhost:8000` (depois de mudar: `php artisan config:clear`) |
+| Login falha com 419 ou "Session store not set" | Frontend aberto noutro endereço que não `http://localhost:5173`, ou `SANCTUM_STATEFUL_DOMAINS` sem `localhost:5173` |
+| Erro 500 "no such table" | Falta `php artisan migrate:fresh --seed` |
+| Pedidos lentos (~2 s) | `php artisan serve` sem `--host=localhost` |
+| O seeder recusa correr | `APP_ENV=production` no `.env` (a demo nunca corre em produção) |
+
 ## Dados de demonstração
 
 **Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.
@@ -95,7 +151,7 @@ Cartões de oração em dois eventos:
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
 - o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens.
+ Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. Os logótipos são gerados com a extensão GD do PHP (sem ela, os perfis ficam sem logótipo). O portefólio usa 17 fotografias reais do Pexels guardadas em `database/seeders/demo/portfolio/` (origem e licença em `THIRD_PARTY_NOTICES.md`); ao correr outra vez, as imagens de demonstração antigas do portefólio são substituídas e as que o membro enviou ficam.
 
 Password de todas as contas: `Demo#2026`
 

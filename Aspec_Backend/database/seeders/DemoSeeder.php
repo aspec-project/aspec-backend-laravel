@@ -51,7 +51,7 @@ class DemoSeeder extends Seeder
     /** Password de todas as contas de demonstração (cumpre as regras de password da aplicação). */
     public const PASSWORD = 'Demo#2026';
 
-    /** Cores de fundo dos logótipos e do portefólio (RGB). */
+    /** Cores de fundo dos logótipos (RGB). */
     private const PALETTE = [
         [13, 31, 53],
         [49, 90, 121],
@@ -88,7 +88,7 @@ class DemoSeeder extends Seeder
         $canDrawImages = extension_loaded('gd');
 
         if (! $canDrawImages) {
-            $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo e sem portefólio.');
+            $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo.');
         }
 
         $profileIds = [];
@@ -102,8 +102,9 @@ class DemoSeeder extends Seeder
 
             if ($canDrawImages) {
                 $this->seedLogo($profile, self::PALETTE[$index % count(self::PALETTE)]);
-                $this->seedPortfolio($profile, $member['portfolio'], $index);
             }
+
+            $this->seedPortfolio($profile, $member['portfolio']);
         }
 
         foreach ($this->applicants() as $applicant) {
@@ -246,28 +247,39 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Imagens do portefólio (1200×800, gradiente e "Projeto N"), em portfolios/{user_id}
-     * no disco public, como no upload do membro.
+     * Fotografias do portefólio, copiadas de database/seeders/demo/portfolio ({conjunto}-N.jpg) para
+     * portfolios/{user_id} no disco public, como no upload do membro. As imagens de demonstração
+     * antigas (demo-*) que já não fazem parte do conjunto são apagadas, com o ficheiro.
+     * Origem e licença das fotografias em THIRD_PARTY_NOTICES.md.
      *
-     * @param  int  $count  Número de imagens (0 = perfil sem portefólio).
+     * @param  string|null  $set  Prefixo das fotografias (ex.: "arquitetura"); null = perfil sem portefólio.
      */
-    private function seedPortfolio(MemberProfile $profile, int $count, int $paletteOffset): void
+    private function seedPortfolio(MemberProfile $profile, ?string $set): void
     {
-        for ($number = 1; $number <= $count; $number++) {
-            $path = "portfolios/{$profile->user_id}/demo-projeto-{$number}.png";
+        $sources = $set === null ? [] : glob(database_path("seeders/demo/portfolio/{$set}-*.jpg"));
+        sort($sources, SORT_NATURAL);
+
+        $paths = [];
+
+        foreach ($sources as $source) {
+            $path = "portfolios/{$profile->user_id}/demo-".basename($source);
+            $paths[] = $path;
 
             if (! Storage::disk('public')->exists($path)) {
-                $top = self::PALETTE[($paletteOffset + $number) % count(self::PALETTE)];
-                $bottom = self::PALETTE[($paletteOffset + $number + 3) % count(self::PALETTE)];
-
-                $image = $this->gradient(1200, 800, $top, $bottom);
-                $this->drawText($image, "Projeto {$number}", 8, 600, 360, [255, 255, 255]);
-                $this->drawText($image, Str::ascii($profile->business_name), 3, 600, 520, [255, 255, 255]);
-
-                Storage::disk('public')->put($path, $this->toPng($image));
+                Storage::disk('public')->put($path, file_get_contents($source));
             }
 
             $profile->portfolios()->firstOrCreate(['image_path' => $path]);
+        }
+
+        $stale = $profile->portfolios()
+            ->where('image_path', 'like', "portfolios/{$profile->user_id}/demo-%")
+            ->whereNotIn('image_path', $paths)
+            ->get();
+
+        foreach ($stale as $image) {
+            Storage::disk('public')->delete($image->image_path);
+            $image->delete();
         }
     }
 
@@ -921,7 +933,7 @@ class DemoSeeder extends Seeder
                 'phone' => '+351912000001',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/mendes-consultoria-gestao'],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Ricardo Mendes',
                     'business_name' => 'Mendes Consultoria de Gestão',
@@ -947,7 +959,7 @@ class DemoSeeder extends Seeder
                     'Instagram' => 'https://www.instagram.com/ferreira.arquitetura',
                     'Facebook' => 'https://www.facebook.com/ferreira.arquitetura',
                 ],
-                'portfolio' => 4,
+                'portfolio' => 'arquitetura',
                 'profile' => [
                     'name' => 'Ana Ferreira',
                     'business_name' => 'Ferreira Arquitetura e Interiores',
@@ -972,7 +984,7 @@ class DemoSeeder extends Seeder
                     'Facebook' => 'https://www.facebook.com/carvalhoefilhosconstrucoes',
                     'YouTube' => 'https://www.youtube.com/@carvalhoefilhos',
                 ],
-                'portfolio' => 3,
+                'portfolio' => 'construcao',
                 'profile' => [
                     'name' => 'João Carvalho',
                     'business_name' => 'Carvalho & Filhos Construções',
@@ -994,7 +1006,7 @@ class DemoSeeder extends Seeder
                 'phone' => '+351916000004',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/contas-certas-contabilidade'],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Marta Sousa',
                     'business_name' => 'Contas Certas Contabilidade',
@@ -1019,7 +1031,7 @@ class DemoSeeder extends Seeder
                     'Instagram' => 'https://www.instagram.com/saboresdoalgarve.faro',
                     'Facebook' => 'https://www.facebook.com/saboresdoalgarve.faro',
                 ],
-                'portfolio' => 3,
+                'portfolio' => 'restaurante',
                 'profile' => [
                     'name' => 'Pedro Almeida',
                     'business_name' => 'Sabores do Algarve Restaurante',
@@ -1044,7 +1056,7 @@ class DemoSeeder extends Seeder
                     'LinkedIn' => 'https://www.linkedin.com/company/ribeiro-digital',
                     'YouTube' => 'https://www.youtube.com/@ribeirodigital',
                 ],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Sofia Ribeiro',
                     'business_name' => 'Ribeiro Digital Soluções Informáticas',
@@ -1066,7 +1078,7 @@ class DemoSeeder extends Seeder
                 'phone' => '+351924000007',
                 'hours' => 'weekdays',
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/martins-advogados-associados'],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Tiago Martins',
                     'business_name' => 'Martins Advogados Associados',
@@ -1091,7 +1103,7 @@ class DemoSeeder extends Seeder
                     'Facebook' => 'https://www.facebook.com/clinicabemcuidar',
                     'Instagram' => 'https://www.instagram.com/clinicabemcuidar',
                 ],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Inês Costa',
                     'business_name' => 'Clínica Bem Cuidar',
@@ -1113,7 +1125,7 @@ class DemoSeeder extends Seeder
                 'phone' => '+5511912345678',
                 'hours' => null,
                 'social' => ['LinkedIn' => 'https://www.linkedin.com/company/rota-segura-transportes'],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Miguel Rodrigues',
                     'business_name' => 'Rota Segura Transportes',
@@ -1138,7 +1150,7 @@ class DemoSeeder extends Seeder
                     'Instagram' => 'https://www.instagram.com/casalusa.imobiliaria',
                     'Facebook' => 'https://www.facebook.com/casalusa.imobiliaria',
                 ],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Catarina Lopes',
                     'business_name' => 'Casa Lusa Imobiliária',
@@ -1164,7 +1176,7 @@ class DemoSeeder extends Seeder
                     'Instagram' => 'https://www.instagram.com/ideiaviva.comunicacao',
                     'YouTube' => 'https://www.youtube.com/@ideiaviva',
                 ],
-                'portfolio' => 4,
+                'portfolio' => 'comunicacao',
                 'profile' => [
                     'name' => 'Daniel Pereira',
                     'business_name' => 'Ideia Viva Comunicação',
@@ -1189,7 +1201,7 @@ class DemoSeeder extends Seeder
                     'LinkedIn' => 'https://www.linkedin.com/company/saber-mais-formacao',
                     'Facebook' => 'https://www.facebook.com/sabermais.formacao',
                 ],
-                'portfolio' => 0,
+                'portfolio' => null,
                 'profile' => [
                     'name' => 'Rita Gonçalves',
                     'business_name' => 'Saber Mais Centro de Formação',
@@ -1214,7 +1226,7 @@ class DemoSeeder extends Seeder
                     'Instagram' => 'https://www.instagram.com/quintavaleverde.evora',
                     'Facebook' => 'https://www.facebook.com/quintavaleverde.evora',
                 ],
-                'portfolio' => 3,
+                'portfolio' => 'quinta',
                 'profile' => [
                     'name' => 'Bruno Fernandes',
                     'business_name' => 'Quinta do Vale Verde',
