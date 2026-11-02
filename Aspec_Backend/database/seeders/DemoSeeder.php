@@ -3,9 +3,14 @@
 namespace Database\Seeders;
 
 use App\Enums\InactiveReason;
+use App\Enums\InvoiceStatus;
+use App\Enums\SubscriptionInterval;
+use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventSeries;
+use App\Models\Invoice;
 use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\PrayerCard;
@@ -16,23 +21,30 @@ use App\Models\Sector;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
+use App\Services\Events\EventSeriesSchedule;
+use Closure;
 use GdImage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Laravel\Cashier\Subscription;
 use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * avaliações entre perfis, eventos (presenciais, online e passados), inscrições e cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * avaliações entre perfis, eventos (presenciais, online e passados), uma série semanal, inscrições e
+ * cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
- * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
- * pelo nome e distrito, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
+ * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador, os eventos
+ * pelo nome e distrito e a série pelas suas sessões, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
  * e as inscrições e os cartões de oração desses eventos (útil para repetir a demonstração).
  * Os cartões de oração ficam encriptados com a APP_KEY de quem corre o seeder.
- * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ * Cria subscrições (trial, ativas, em carência, terminadas) e faturas de demonstração sem chamar o
+ * Stripe nem o InvoiceExpress: ids falsos com "_demo_" e PDFs do driver demo, apagados e criados de
+ * novo em cada execução.
  */
 class DemoSeeder extends Seeder
 {
@@ -98,8 +110,10 @@ class DemoSeeder extends Seeder
             $this->seedAccount($applicant);
         }
 
+        $this->seedPayments();
         $this->seedReviews($profileIds);
         $this->seedEvents();
+        $this->seedSeries();
 
         $this->printSummary();
     }
@@ -116,7 +130,11 @@ class DemoSeeder extends Seeder
 
     /**
      * Cria ou repõe a conta (papel, estado, motivo, telefone e password) e o respetivo perfil.
-     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana.
+     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana,
+     * e as datas de trial e carência e a sessão de Checkout (o seedPayments() repõe as do cenário).
+     * Nunca toca no stripe_id (um cliente real de um ensaio fica) nem na isenção de subscrição.
+     * Numa conta com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio) também
+     * não toca no estado, no motivo, no trial, na carência nem na sessão de Checkout: são do Stripe.
      *
      * @param  array<string, mixed>  $data  Uma entrada de activeMembers() ou applicants().
      */
@@ -124,13 +142,20 @@ class DemoSeeder extends Seeder
     {
         $user = User::firstOrNew(['email' => $data['email']]);
 
+        $paymentState = [
+            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
+            'inactive_reason' => $data['reason'] ?? null,
+            'trial_ends_at' => null,
+            'grace_ends_at' => null,
+            'stripe_checkout_session_id' => null,
+        ];
+
         // Papel, estado e motivo não são fillable (só o admin e os pagamentos os mudam), daí o forceFill.
         $user->forceFill([
+            ...($this->hasRealRunningSubscription($user) ? [] : $paymentState),
             'password' => self::PASSWORD,
             'phone' => $data['phone'],
             'role_id' => $this->lookupId(Role::class, $data['role'] ?? 'Member'),
-            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
-            'inactive_reason' => $data['reason'] ?? null,
             'email_verified_at' => $user->email_verified_at ?? now(),
             'weekly_agenda_sent_at' => null,
         ])->save();
@@ -250,7 +275,8 @@ class DemoSeeder extends Seeder
      * Eventos (futuros, online e passados) com datas relativas ao dia de hoje em Lisboa, e as
      * respetivas inscrições. Procura pelo nome e distrito (e não pela data): correr noutro dia
      * atualiza as datas em vez de duplicar os eventos. O prazo de inscrição fica às 23:59 (hora de
-     * Lisboa) do dia indicado, por omissão a véspera, como o backoffice o guarda.
+     * Lisboa) do dia indicado, por omissão a véspera, como o backoffice o guarda. As coordenadas
+     * ficam sempre a null, para limpar as de uma base de dados semeada antes do mapa só com place_id.
      */
     private function seedEvents(): void
     {
@@ -275,8 +301,8 @@ class DemoSeeder extends Seeder
                     'address' => $event['address'] ?? null,
                     'venue_name' => $event['venue'] ?? null,
                     'place_id' => $event['place_id'] ?? null,
-                    'latitude' => $event['latitude'] ?? null,
-                    'longitude' => $event['longitude'] ?? null,
+                    'latitude' => null,
+                    'longitude' => null,
                     'max_attendees' => $event['max_attendees'],
                     'registration_deadline' => $today->copy()->addDays($deadlineDays)->setTime(23, 59)->format('Y-m-d H:i:s'),
                     'organizer_notes' => $event['notes'] ?? null,
@@ -288,6 +314,92 @@ class DemoSeeder extends Seeder
             $this->syncRegistrations($instance, $event['registrants'] ?? []);
             $this->syncPrayerCards($instance, $event['prayer_cards'] ?? null);
         }
+    }
+
+    /**
+     * Série semanal de demonstração, com as datas geradas pelo mesmo serviço do backoffice
+     * (EventSeriesSchedule) e os mesmos campos que o backoffice grava em cada sessão: prazo de
+     * inscrição N dias antes da sessão às 23:59 (Lisboa), sem cartões de oração e sem anúncio
+     * (o anúncio só sai na criação de eventos únicos no backoffice).
+     *
+     * Não pode procurar pelo nome e distrito como os eventos únicos (as sessões partilham os dois):
+     * encontra a série pela sessão com esse nome e distrito e atualiza as sessões por ordem de data,
+     * para os ids (e os links do frontend) se manterem entre execuções. Volta a criar as sessões que
+     * faltem (ex.: apagada à mão "só nesta sessão") e apaga as que sobrem.
+     */
+    private function seedSeries(): void
+    {
+        $data = $this->series();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $locationId = $this->lookupId(Location::class, $data['location']);
+
+        $firstDate = now($timezone)->startOfDay()->addDays($data['days_from_now']);
+        $endsOn = $firstDate->copy()->addWeeks($data['sessions'] - 1);
+        $dates = app(EventSeriesSchedule::class)->generate($firstDate->toDateString(), $endsOn->toDateString(), 'weekly');
+
+        $seriesId = EventInstance::where('name', $data['name'])
+            ->where('location_id', $locationId)
+            ->whereNotNull('series_id')
+            ->value('series_id');
+
+        $series = EventSeries::findOrNew($seriesId);
+        $series->fill([
+            'frequency' => 'weekly',
+            'ends_on' => $endsOn->toDateString(),
+            'registration_deadline_days_before' => $data['deadline_days_before'],
+        ])->save();
+
+        $sessions = $series->eventInstances()->orderBy('event_date')->get();
+
+        foreach ($sessions->slice(count($dates)) as $extra) {
+            $extra->registrations()->delete();
+            $this->syncPrayerCards($extra, null);
+            $extra->delete();
+        }
+
+        foreach ($dates as $index => $date) {
+            $session = $sessions->get($index) ?? new EventInstance;
+
+            $session->fill([
+                'series_id' => $series->id,
+                'category_id' => $this->lookupId(EventCategory::class, $data['category']),
+                'location_id' => $locationId,
+                'name' => $data['name'],
+                'event_date' => $date,
+                'event_start_time' => $data['start'].':00',
+                'event_end_time' => $data['end'].':00',
+                'description' => $data['description'],
+                'is_online' => false,
+                'online_url' => null,
+                'address' => $data['address'],
+                'venue_name' => null,
+                'place_id' => $data['place_id'],
+                'latitude' => null,
+                'longitude' => null,
+                'max_attendees' => $data['max_attendees'],
+                'registration_deadline' => Carbon::createFromFormat('!Y-m-d', $date, $timezone)
+                    ->subDays($data['deadline_days_before'])
+                    ->setTime(23, 59)
+                    ->format('Y-m-d H:i:s'),
+                'organizer_notes' => $data['notes'],
+                'prayer_cards_enabled' => false,
+                'prayer_verse' => null,
+            ])->save();
+
+            $this->syncRegistrations($session, $this->seriesRegistrants($data['registrants'], $index + 1));
+            $this->syncPrayerCards($session, null);
+        }
+    }
+
+    /**
+     * Emails inscritos numa sessão da série.
+     *
+     * @param  array<string, list<int>>  $registrants  Email => números das sessões (a partir de 1).
+     * @return list<string>
+     */
+    private function seriesRegistrants(array $registrants, int $session): array
+    {
+        return array_keys(array_filter($registrants, fn (array $sessions) => in_array($session, $sessions, true)));
     }
 
     /**
@@ -419,13 +531,300 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Mostra as contas criadas, a password comum e o lembrete do storage:link.
+     * Dados de pagamento de demonstração, sem chamar o Stripe: por conta, apaga os da execução
+     * anterior, preenche a faturação e cria a subscrição e as faturas do cenário de payments().
+     * As contas Pending e Approved ficam sem faturação nem subscrição (ainda não ativaram).
+     * Uma conta demo com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio)
+     * fica como está: duas subscrições em curso fariam o webhook seguinte tratar a real como duplicada.
+     */
+    private function seedPayments(): void
+    {
+        $payments = $this->payments();
+
+        foreach (User::with('memberProfile')->whereIn('email', array_column($this->accountRows, 0))->get() as $user) {
+            $this->resetDemoPayments($user);
+
+            if ($this->hasRealRunningSubscription($user)) {
+                $this->command?->warn("A conta {$user->email} tem uma subscrição real do Stripe em curso: ficou sem dados de pagamento de demonstração.");
+                $this->command?->warn('Para os ter, cancele-a no dashboard de teste do Stripe e volte a correr o seeder.');
+
+                continue;
+            }
+
+            $payment = $payments[$user->email] ?? null;
+
+            $this->seedBilling($user, $payment['nif'] ?? null);
+
+            if ($payment !== null) {
+                $this->seedSubscription($user, $this->subscriptionDates($payment));
+            }
+        }
+    }
+
+    /**
+     * Apaga os dados de pagamento de demonstração da conta (linhas com o prefixo "_demo_" e os PDFs
+     * das faturas). Nunca toca em linhas reais. Exceção consciente à regra "as faturas nunca se
+     * apagam": são documentos de demonstração, sem validade fiscal.
+     */
+    private function resetDemoPayments(User $user): void
+    {
+        $invoices = $user->issuedInvoices()->where('stripe_invoice_id', 'like', 'in_demo_%')->get()
+            ->filter(fn (Invoice $invoice) => str_starts_with($invoice->stripe_invoice_id, 'in_demo_'));
+
+        foreach ($invoices as $invoice) {
+            $path = (string) $invoice->provider_invoice_id;
+
+            if ($invoice->provider === 'demo' && str_starts_with($path, "invoices/{$user->id}/") && ! str_contains($path, '..')) {
+                Storage::disk('local')->delete($path);
+            }
+
+            $invoice->delete();
+        }
+
+        $subscriptions = $user->subscriptions()->where('stripe_id', 'like', 'sub_demo_%')->get()
+            ->filter(fn (Subscription $subscription) => str_starts_with($subscription->stripe_id, 'sub_demo_'));
+
+        foreach ($subscriptions as $subscription) {
+            $subscription->items()->delete();
+            $subscription->delete();
+        }
+    }
+
+    /**
+     * Se a conta (já existente) tem uma subscrição real do Stripe em curso, que o seeder não pode tocar.
+     */
+    private function hasRealRunningSubscription(User $user): bool
+    {
+        return $user->exists
+            && $user->subscriptions()->where('stripe_id', 'not like', 'sub_demo_%')->active()->exists();
+    }
+
+    /**
+     * Dados de faturação da conta (os pedidos na ativação): a empresa e a morada do perfil e um NIF
+     * de demonstração. Null em quem ainda não ativou. Sem cartão guardado (pm_type, pm_last_four).
+     */
+    private function seedBilling(User $user, ?string $nif): void
+    {
+        $profile = $user->memberProfile;
+        $activated = $nif !== null;
+
+        $user->forceFill([
+            'billing_name' => $activated ? $profile->business_name : null,
+            'nif' => $nif,
+            'billing_address' => $activated ? $profile->address : null,
+            'billing_postal_code' => $activated ? $profile->postal_code : null,
+            'billing_city' => $activated ? $profile->city : null,
+            'pm_type' => null,
+            'pm_last_four' => null,
+        ])->save();
+    }
+
+    /**
+     * Datas e estado da subscrição de um cenário, relativos a agora e à configuração (trial, carência
+     * e periodicidade da quota). O trial começa quando a subscrição é criada; o primeiro período
+     * pago começa quando o trial acaba, e os seguintes seguem-se sem intervalos.
+     *
+     * @param  array{type: string, days: int, invoices?: int}  $payment  Uma entrada de payments().
+     * @return array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function subscriptionDates(array $payment): array
+    {
+        $trialDays = (int) config('subscription.trial_days');
+        $graceDays = (int) config('subscription.grace_days');
+        $keyDate = now()->addDays($payment['days']);
+
+        $dates = match ($payment['type']) {
+            'paid' => $this->paidDates($keyDate, $payment['invoices']),
+            'grace' => $this->graceDates($keyDate, $graceDays),
+            'trial', 'cancel_scheduled' => [
+                'status' => 'trialing',
+                'trial_ends_at' => $keyDate,
+                'ends_at' => $payment['type'] === 'cancel_scheduled' ? $keyDate->copy() : null,
+            ],
+            'unpaid' => [
+                'status' => 'canceled',
+                'trial_ends_at' => $keyDate,
+                'ends_at' => $keyDate->copy()->addDays($graceDays),
+            ],
+            'blocked' => [
+                'status' => 'canceled',
+                'created_at' => $keyDate,
+                'trial_ends_at' => $keyDate->copy()->addDays($trialDays),
+                'ends_at' => $keyDate->copy()->addDays(10),
+            ],
+        };
+
+        return [
+            'created_at' => $dates['trial_ends_at']->copy()->subDays($trialDays),
+            'ends_at' => null,
+            'grace_ends_at' => null,
+            'periods' => [],
+            ...$dates,
+        ];
+    }
+
+    /**
+     * Subscrição em carência: um período pago que terminou em $failedRenewalAt, a renovação falhou
+     * (past_due) e a carência termina grace_days depois.
+     *
+     * @return array{status: string, trial_ends_at: Carbon, grace_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function graceDates(Carbon $failedRenewalAt, int $graceDays): array
+    {
+        $dates = $this->paidDates($this->previousPeriodStart($failedRenewalAt), 1);
+        $periodEnd = $dates['periods'][0][1];
+
+        return [...$dates, 'status' => 'past_due', 'grace_ends_at' => $periodEnd->copy()->addDays($graceDays)];
+    }
+
+    /**
+     * Subscrição ativa com N períodos pagos seguidos, o último a começar em $currentPeriodStart.
+     * Os períodos são construídos para a frente a partir do primeiro (fim = início + 1 período),
+     * como o Stripe os renova.
+     *
+     * @return array{status: string, trial_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function paidDates(Carbon $currentPeriodStart, int $paidPeriods): array
+    {
+        $interval = SubscriptionInterval::configured();
+        $start = $currentPeriodStart->copy();
+
+        for ($period = 1; $period < $paidPeriods; $period++) {
+            $start = $this->previousPeriodStart($start);
+        }
+
+        $trialEndsAt = $start->copy();
+        $periods = [];
+
+        for ($period = 0; $period < $paidPeriods; $period++) {
+            $end = Carbon::instance($interval->addTo($start));
+            $periods[] = [$start, $end];
+            $start = $end->copy();
+        }
+
+        return ['status' => 'active', 'trial_ends_at' => $trialEndsAt, 'periods' => $periods];
+    }
+
+    /**
+     * Recua um período da quota configurada, sem transbordar (31/03 − 1 mês = 28/02).
+     */
+    private function previousPeriodStart(Carbon $date): Carbon
+    {
+        return match (SubscriptionInterval::configured()) {
+            SubscriptionInterval::Month => $date->copy()->subMonthNoOverflow(),
+            SubscriptionInterval::Year => $date->copy()->subYearNoOverflow(),
+        };
+    }
+
+    /**
+     * Grava a subscrição e o item como o Cashier os grava no customer.subscription.created, as
+     * datas de trial e carência na conta (como o webhook) e emite as faturas dos períodos pagos.
+     *
+     * @param  array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}  $dates
+     */
+    private function seedSubscription(User $user, array $dates): void
+    {
+        $subscription = $user->subscriptions()->create([
+            'type' => 'default',
+            'stripe_id' => $this->demoStripeId($user, 'sub'),
+            'stripe_status' => $dates['status'],
+            'stripe_price' => 'price_demo',
+            'quantity' => 1,
+            'trial_ends_at' => $dates['trial_ends_at'],
+            'ends_at' => $dates['ends_at'],
+            'created_at' => $dates['created_at'],
+            'updated_at' => $dates['created_at'],
+        ]);
+
+        $subscription->items()->create([
+            'stripe_id' => $this->demoStripeId($user, 'si'),
+            'stripe_product' => 'prod_demo',
+            'stripe_price' => 'price_demo',
+            'quantity' => 1,
+        ]);
+
+        $user->forceFill([
+            'trial_ends_at' => $dates['trial_ends_at'],
+            'grace_ends_at' => $dates['grace_ends_at'],
+        ])->save();
+
+        foreach ($dates['periods'] as $index => [$start, $end]) {
+            $this->issueDemoInvoice($user, $index + 1, $start, $end);
+        }
+    }
+
+    /**
+     * Fatura de um período pago pelo mesmo caminho do webhook: linha pending e IssueInvoiceJob,
+     * aqui síncrono e com as trocas de withDemoInvoicing() (driver demo, sem email, data do pagamento).
+     */
+    private function issueDemoInvoice(User $user, int $number, Carbon $periodStart, Carbon $periodEnd): void
+    {
+        $this->withDemoInvoicing($periodStart, function () use ($user, $number, $periodStart, $periodEnd) {
+            $invoice = $user->issuedInvoices()->create([
+                'stripe_invoice_id' => $this->demoStripeId($user, 'in')."_{$number}",
+                'provider' => config('services.invoicing.driver'),
+                'amount' => (int) round(config('subscription.price_amount') * 100),
+                'currency' => config('subscription.currency'),
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'status' => InvoiceStatus::Pending,
+            ]);
+
+            IssueInvoiceJob::dispatchSync($invoice->id);
+        });
+    }
+
+    /**
+     * Corre a emissão com três trocas, repostas num finally (também se a emissão falhar):
+     * driver de faturação demo (o seeder nunca chama a InvoiceExpress e o PDF existe mesmo com
+     * INVOICING_DRIVER=log), mailer array (o PDF tem NIF e morada e não pode sair por email nem ficar
+     * no laravel.log) e relógio no dia do pagamento (o job usa "agora" como data de emissão, que dá
+     * a data e o ano do número da fatura).
+     */
+    private function withDemoInvoicing(Carbon $paidAt, Closure $issue): void
+    {
+        $driver = config('services.invoicing.driver');
+        $mailer = config('mail.default');
+        $testNow = Carbon::getTestNow();
+
+        config(['services.invoicing.driver' => 'demo', 'mail.default' => 'array']);
+        Carbon::setTestNow($paidAt->copy());
+
+        try {
+            $issue();
+        } finally {
+            config(['services.invoicing.driver' => $driver, 'mail.default' => $mailer]);
+            Carbon::setTestNow($testNow);
+        }
+    }
+
+    /**
+     * Id falso do Stripe para a conta (ex.: sub_demo_ seguido dos 32 hex do id): o "_demo_" mostra que não vem do
+     * Stripe e marca as linhas que o seeder apaga; derivar do id da conta evita repetir o id quando
+     * uma conta demo anonimizada (cujas linhas ficam) é criada de novo.
+     */
+    private function demoStripeId(User $user, string $prefix): string
+    {
+        return "{$prefix}_demo_".str_replace('-', '', $user->id);
+    }
+
+    /**
+     * Mostra as contas criadas com o estado da subscrição (como no backoffice), a password comum,
+     * o lembrete do storage:link e o que não funciona com as subscrições de demonstração.
      */
     private function printSummary(): void
     {
-        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa'], $this->accountRows);
+        $states = User::with('accountStatus')
+            ->whereIn('email', array_column($this->accountRows, 0))
+            ->get()
+            ->mapWithKeys(fn (User $user) => [$user->email => $user->subscriptionState()->label()]);
+
+        $rows = array_map(fn (array $row) => [...$row, $states[$row[0]] ?? ''], $this->accountRows);
+
+        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa', 'Subscrição'], $rows);
         $this->command?->info('Password de todas as contas: '.self::PASSWORD);
         $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');
+        $this->command?->warn('As subscrições de demonstração não existem no Stripe: o portal de faturação, cancelar e retomar não funcionam com elas (use uma conta ativada pelo Checkout).');
     }
 
     /**
@@ -940,10 +1339,44 @@ class DemoSeeder extends Seeder
     }
 
     /**
+     * Cenários de pagamento por conta (as contas que já ativaram), com um NIF de demonstração com
+     * dígito de controlo válido. "days" é a data-chave do cenário em dias a partir de agora:
+     * - paid: início do período pago atual (invoices = n.º de períodos pagos, um por fatura);
+     * - grace: fim do último período pago, quando a renovação falhou (1 fatura; carência a seguir);
+     * - trial / cancel_scheduled: fim do trial (com cancelamento agendado para essa data);
+     * - unpaid: fim do trial, quando a cobrança falhou (nunca pagou; terminou depois da carência);
+     * - blocked: ativação (bloqueado ainda em trial, 10 dias depois).
+     * Os trials terminam pelo menos uma semana depois de agora: sem webhooks, um trial que passe o
+     * fim ficava "trialing" com data no passado (voltar a correr o seeder antes de cada demonstração).
+     *
+     * @return array<string, array{type: string, days: int, invoices?: int, nif: string}>
+     */
+    private function payments(): array
+    {
+        return [
+            'demo.membro@aspec.test' => ['type' => 'paid', 'days' => -5, 'invoices' => 2, 'nif' => '509000010'],
+            'demo.admin@aspec.test' => ['type' => 'paid', 'days' => -20, 'invoices' => 1, 'nif' => '509000029'],
+            'demo.membro07@aspec.test' => ['type' => 'grace', 'days' => -2, 'invoices' => 1, 'nif' => '509000037'],
+            'demo.membro02@aspec.test' => ['type' => 'cancel_scheduled', 'days' => 10, 'nif' => '509000045'],
+            'demo.membro01@aspec.test' => ['type' => 'trial', 'days' => 7, 'nif' => '509000053'],
+            'demo.membro03@aspec.test' => ['type' => 'trial', 'days' => 9, 'nif' => '509000061'],
+            'demo.membro04@aspec.test' => ['type' => 'trial', 'days' => 12, 'nif' => '509000070'],
+            'demo.membro05@aspec.test' => ['type' => 'trial', 'days' => 14, 'nif' => '509000088'],
+            'demo.membro06@aspec.test' => ['type' => 'trial', 'days' => 17, 'nif' => '509000096'],
+            'demo.membro08@aspec.test' => ['type' => 'trial', 'days' => 20, 'nif' => '509000100'],
+            'demo.membro09@aspec.test' => ['type' => 'trial', 'days' => 23, 'nif' => '509000118'],
+            'demo.membro10@aspec.test' => ['type' => 'trial', 'days' => 26, 'nif' => '509000126'],
+            'demo.membro11@aspec.test' => ['type' => 'trial', 'days' => 28, 'nif' => '509000134'],
+            'demo.inativo.pagamento@aspec.test' => ['type' => 'unpaid', 'days' => -17, 'nif' => '509000142'],
+            'demo.bloqueado@aspec.test' => ['type' => 'blocked', 'days' => -15, 'nif' => '509000150'],
+        ];
+    }
+
+    /**
      * Dezasseis eventos: onze presenciais futuros (o pequeno-almoço e o jantar repetem-se em várias
      * cidades, um esgotado e outro quase), três online e dois já passados. Os online cobrem os três
      * casos do link: inscrições abertas (link ainda escondido), prazo terminado com o demo.membro
-     * inscrito (vê o link) e prazo terminado sem ele (não vê). Coordenadas no centro de cada cidade.
+     * inscrito (vê o link) e prazo terminado sem ele (não vê).
      * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
      *
      * Cartões de oração em dois eventos: a formação de Aveiro é hoje (já começou, por isso não aparece
@@ -952,8 +1385,8 @@ class DemoSeeder extends Seeder
      * já foi distribuído e o demo.membro recebeu o cartão do demo.membro02.
      *
      * Os presenciais têm o place_id da Google da morada (obtido uma vez com o GoogleGeocoder; os
-     * termos da Google permitem guardá-lo), para o mapa Google da página do evento. As coordenadas
-     * são nossas, não da Google, e ficam para o mapa antigo enquanto o frontend não usa o place_id.
+     * termos da Google permitem guardá-lo), para o mapa Google da página do evento, e não têm
+     * coordenadas: a API nunca grava place_id e coordenadas juntos.
      *
      * @return list<array<string, mixed>>
      */
@@ -975,7 +1408,6 @@ class DemoSeeder extends Seeder
                 'venue' => 'Hotel Tivoli Oriente',
                 'address' => 'Avenida D. João II 27, 1990-083 Lisboa',
                 'place_id' => 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k',
-                'latitude' => 38.7676, 'longitude' => -9.0973,
                 'registrants' => [$demoMember, ...$this->demoMembers(1, 6)],
             ],
             [
@@ -984,7 +1416,6 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
                 'place_id' => 'Ei1Bdi4gZG9zIEFsaWFkb3MgMTIwLCA0MDAwLTA2NyBQb3J0bywgUG9ydHVnYWwiMBIuChQKEgkLQ3Be42QkDREzxCX1feNMXxB4KhQKEgmP_UBZ42QkDREQ0m1U5syNcw',
-                'latitude' => 41.1486, 'longitude' => -8.6110,
                 'registrants' => $this->demoMembers(7, 9),
             ],
             [
@@ -993,7 +1424,6 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
                 'place_id' => 'ChIJz2iE28H-JA0R2oEkaaewzME',
-                'latitude' => 41.5512, 'longitude' => -8.4229,
                 'registrants' => $this->demoMembers(1, 11),
             ],
             [
@@ -1002,7 +1432,6 @@ class DemoSeeder extends Seeder
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
                 'place_id' => 'ChIJr7Xg63EzGQ0Rm8LgeMFJfpQ',
-                'latitude' => 38.7290, 'longitude' => -9.1560,
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, ...$this->demoMembers(2, 8)],
             ],
@@ -1012,7 +1441,6 @@ class DemoSeeder extends Seeder
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
                 'place_id' => 'EixSdWEgZGEgU29maWEgMTIwLCAzMDAwLTM5MCBDb2ltYnJhLCBQb3J0dWdhbCIwEi4KFAoSCQffjZ8F-SINEbdWcj5j3bFVEHgqFAoSCQtDsAoF-SINEY0Z8kdZQA8q',
-                'latitude' => 40.2115, 'longitude' => -8.4290,
                 'notes' => $dinnerNotes,
                 'registrants' => $this->demoMembers(4, 5),
             ],
@@ -1022,7 +1450,6 @@ class DemoSeeder extends Seeder
                 'description' => $dinnerDescription,
                 'address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro',
                 'place_id' => 'ChIJ9y1z1sZSBQ0RS0zUXIu14FA',
-                'latitude' => 37.0153, 'longitude' => -7.9352,
             ],
             [
                 'name' => 'Almoço de Negócios ASPEC', 'category' => 'Almoço', 'location' => 'Viseu',
@@ -1030,7 +1457,6 @@ class DemoSeeder extends Seeder
                 'description' => 'Almoço entre empresários da região, com uma breve apresentação de cada participante e tempo para conversar e criar parcerias.',
                 'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
                 'place_id' => 'ChIJ-VK4d1I2Iw0RBstTicF8-28',
-                'latitude' => 40.6566, 'longitude' => -7.9125,
                 'notes' => 'Custo de participação: 18 € (pago no local).',
                 'registrants' => $this->demoMembers(10, 11),
             ],
@@ -1041,7 +1467,6 @@ class DemoSeeder extends Seeder
                 'venue' => 'Centro de Congressos de Aveiro',
                 'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
                 'place_id' => 'Ei1DYWlzIGRhIEZvbnRlIE5vdmEsIDM4MTAtMjAwIEF2ZWlybywgUG9ydHVnYWwiLiosChQKEgm_8TFeCZgjDREuH0xpIAU3QxIUChIJxdSxZAmYIw0R6bcGCHI5Zj8',
-                'latitude' => 40.6380, 'longitude' => -8.6440,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
                 'prayer_verse' => 'Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)',
                 'prayer_cards' => ['authors' => ['demo.membro01@aspec.test', 'demo.membro03@aspec.test']],
@@ -1052,7 +1477,6 @@ class DemoSeeder extends Seeder
                 'description' => 'Como usar as redes sociais e o Google para atrair clientes da sua zona, com um plano simples para aplicar no dia seguinte.',
                 'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
                 'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
-                'latitude' => 39.7445, 'longitude' => -8.8070,
                 'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
             ],
             [
@@ -1062,7 +1486,6 @@ class DemoSeeder extends Seeder
                 'venue' => 'Fórum Municipal Luísa Todi',
                 'address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal',
                 'place_id' => 'ChIJv0-wxQdDGQ0RypZhgbJrUks',
-                'latitude' => 38.5225, 'longitude' => -8.8920,
                 'registrants' => $this->demoMembers(6, 6),
             ],
             [
@@ -1071,7 +1494,6 @@ class DemoSeeder extends Seeder
                 'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno para todos treinarem.',
                 'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
                 'place_id' => 'EjFSdWEgZGUgSsO6bGlvIERpbmlzIDc1MCwgNDA1MC0wMTIgUG9ydG8sIFBvcnR1Z2FsIjESLwoUChIJJ9OqgQhlJA0Rd8tz-E9VUKEQ7gUqFAoSCT-ZVf4FZSQNEQM0UeGusGGV',
-                'latitude' => 41.1580, 'longitude' => -8.6290,
                 'registrants' => $this->demoMembers(1, 10),
             ],
             [
@@ -1102,7 +1524,6 @@ class DemoSeeder extends Seeder
                 'description' => $breakfastDescription,
                 'address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria',
                 'place_id' => 'ChIJ0aliKvRzIg0R30hY7E0CvTE',
-                'latitude' => 39.7436, 'longitude' => -8.8071,
                 'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
                 'prayer_verse' => 'Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)',
                 'prayer_cards' => [
@@ -1116,9 +1537,42 @@ class DemoSeeder extends Seeder
                 'description' => $dinnerDescription,
                 'address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro',
                 'place_id' => 'ChIJNbMUggOYIw0RZ_7oCGcXLLo',
-                'latitude' => 40.6412, 'longitude' => -8.6537,
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
+            ],
+        ];
+    }
+
+    /**
+     * Série semanal de formação em Leiria: seis sessões a partir de depois de amanhã, no auditório
+     * (e com o place_id) da formação de marketing. Inscrições por sessão (as sessões são
+     * independentes): o demo.membro está nas sessões 2 a 6 (o que "nesta e nas seguintes" dá a partir
+     * da 2; na 1 pode inscrever-se ao vivo), dois membros em todas, um só na 3 e outro nas duas primeiras.
+     *
+     * @return array<string, mixed>
+     */
+    private function series(): array
+    {
+        return [
+            'name' => 'Ciclo de Formação: Liderar Pequenas Equipas',
+            'category' => 'Formação',
+            'location' => 'Leiria',
+            'days_from_now' => 2,
+            'sessions' => 6,
+            'deadline_days_before' => 1,
+            'start' => '18:30',
+            'end' => '20:30',
+            'max_attendees' => 20,
+            'description' => 'Ciclo de seis sessões semanais para quem lidera equipas pequenas: delegar, dar feedback, conduzir reuniões curtas e resolver conflitos. Cada sessão é independente e tem inscrição própria.',
+            'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
+            'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
+            'notes' => 'Pode inscrever-se só numa sessão ou nesta e nas seguintes.',
+            'registrants' => [
+                'demo.membro@aspec.test' => [2, 3, 4, 5, 6],
+                'demo.membro01@aspec.test' => [1, 2, 3, 4, 5, 6],
+                'demo.membro04@aspec.test' => [1, 2, 3, 4, 5, 6],
+                'demo.membro09@aspec.test' => [3],
+                'demo.membro10@aspec.test' => [1, 2],
             ],
         ];
     }
