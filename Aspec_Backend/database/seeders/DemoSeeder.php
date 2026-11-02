@@ -6,6 +6,7 @@ use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventSeries;
 use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\PrayerCard;
@@ -16,20 +17,23 @@ use App\Models\Sector;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
+use App\Services\Events\EventSeriesSchedule;
 use GdImage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
  * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * avaliações entre perfis, eventos (presenciais, online e passados), inscrições e cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * avaliações entre perfis, eventos (presenciais, online e passados), uma série semanal, inscrições e
+ * cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
- * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador e os eventos
- * pelo nome e distrito, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
+ * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador, os eventos
+ * pelo nome e distrito e a série pelas suas sessões, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
  * e as inscrições e os cartões de oração desses eventos (útil para repetir a demonstração).
  * Os cartões de oração ficam encriptados com a APP_KEY de quem corre o seeder.
  * Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
@@ -100,6 +104,7 @@ class DemoSeeder extends Seeder
 
         $this->seedReviews($profileIds);
         $this->seedEvents();
+        $this->seedSeries();
 
         $this->printSummary();
     }
@@ -289,6 +294,92 @@ class DemoSeeder extends Seeder
             $this->syncRegistrations($instance, $event['registrants'] ?? []);
             $this->syncPrayerCards($instance, $event['prayer_cards'] ?? null);
         }
+    }
+
+    /**
+     * Série semanal de demonstração, com as datas geradas pelo mesmo serviço do backoffice
+     * (EventSeriesSchedule) e os mesmos campos que o backoffice grava em cada sessão: prazo de
+     * inscrição N dias antes da sessão às 23:59 (Lisboa), sem cartões de oração e sem anúncio
+     * (o anúncio só sai na criação de eventos únicos no backoffice).
+     *
+     * Não pode procurar pelo nome e distrito como os eventos únicos (as sessões partilham os dois):
+     * encontra a série pela sessão com esse nome e distrito e atualiza as sessões por ordem de data,
+     * para os ids (e os links do frontend) se manterem entre execuções. Volta a criar as sessões que
+     * faltem (ex.: apagada à mão "só nesta sessão") e apaga as que sobrem.
+     */
+    private function seedSeries(): void
+    {
+        $data = $this->series();
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $locationId = $this->lookupId(Location::class, $data['location']);
+
+        $firstDate = now($timezone)->startOfDay()->addDays($data['days_from_now']);
+        $endsOn = $firstDate->copy()->addWeeks($data['sessions'] - 1);
+        $dates = app(EventSeriesSchedule::class)->generate($firstDate->toDateString(), $endsOn->toDateString(), 'weekly');
+
+        $seriesId = EventInstance::where('name', $data['name'])
+            ->where('location_id', $locationId)
+            ->whereNotNull('series_id')
+            ->value('series_id');
+
+        $series = EventSeries::findOrNew($seriesId);
+        $series->fill([
+            'frequency' => 'weekly',
+            'ends_on' => $endsOn->toDateString(),
+            'registration_deadline_days_before' => $data['deadline_days_before'],
+        ])->save();
+
+        $sessions = $series->eventInstances()->orderBy('event_date')->get();
+
+        foreach ($sessions->slice(count($dates)) as $extra) {
+            $extra->registrations()->delete();
+            $this->syncPrayerCards($extra, null);
+            $extra->delete();
+        }
+
+        foreach ($dates as $index => $date) {
+            $session = $sessions->get($index) ?? new EventInstance;
+
+            $session->fill([
+                'series_id' => $series->id,
+                'category_id' => $this->lookupId(EventCategory::class, $data['category']),
+                'location_id' => $locationId,
+                'name' => $data['name'],
+                'event_date' => $date,
+                'event_start_time' => $data['start'].':00',
+                'event_end_time' => $data['end'].':00',
+                'description' => $data['description'],
+                'is_online' => false,
+                'online_url' => null,
+                'address' => $data['address'],
+                'venue_name' => null,
+                'place_id' => $data['place_id'],
+                'latitude' => null,
+                'longitude' => null,
+                'max_attendees' => $data['max_attendees'],
+                'registration_deadline' => Carbon::createFromFormat('!Y-m-d', $date, $timezone)
+                    ->subDays($data['deadline_days_before'])
+                    ->setTime(23, 59)
+                    ->format('Y-m-d H:i:s'),
+                'organizer_notes' => $data['notes'],
+                'prayer_cards_enabled' => false,
+                'prayer_verse' => null,
+            ])->save();
+
+            $this->syncRegistrations($session, $this->seriesRegistrants($data['registrants'], $index + 1));
+            $this->syncPrayerCards($session, null);
+        }
+    }
+
+    /**
+     * Emails inscritos numa sessão da série.
+     *
+     * @param  array<string, list<int>>  $registrants  Email => números das sessões (a partir de 1).
+     * @return list<string>
+     */
+    private function seriesRegistrants(array $registrants, int $session): array
+    {
+        return array_keys(array_filter($registrants, fn (array $sessions) => in_array($session, $sessions, true)));
     }
 
     /**
@@ -1107,6 +1198,40 @@ class DemoSeeder extends Seeder
                 'place_id' => 'ChIJNbMUggOYIw0RZ_7oCGcXLLo',
                 'notes' => $dinnerNotes,
                 'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
+            ],
+        ];
+    }
+
+    /**
+     * Série semanal de formação em Leiria: seis sessões a partir de depois de amanhã, no auditório
+     * (e com o place_id) da formação de marketing. Inscrições por sessão (as sessões são
+     * independentes): o demo.membro está nas sessões 2 a 6 (o que "nesta e nas seguintes" dá a partir
+     * da 2; na 1 pode inscrever-se ao vivo), dois membros em todas, um só na 3 e outro nas duas primeiras.
+     *
+     * @return array<string, mixed>
+     */
+    private function series(): array
+    {
+        return [
+            'name' => 'Ciclo de Formação: Liderar Pequenas Equipas',
+            'category' => 'Formação',
+            'location' => 'Leiria',
+            'days_from_now' => 2,
+            'sessions' => 6,
+            'deadline_days_before' => 1,
+            'start' => '18:30',
+            'end' => '20:30',
+            'max_attendees' => 20,
+            'description' => 'Ciclo de seis sessões semanais para quem lidera equipas pequenas: delegar, dar feedback, conduzir reuniões curtas e resolver conflitos. Cada sessão é independente e tem inscrição própria.',
+            'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
+            'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
+            'notes' => 'Pode inscrever-se só numa sessão ou nesta e nas seguintes.',
+            'registrants' => [
+                'demo.membro@aspec.test' => [2, 3, 4, 5, 6],
+                'demo.membro01@aspec.test' => [1, 2, 3, 4, 5, 6],
+                'demo.membro04@aspec.test' => [1, 2, 3, 4, 5, 6],
+                'demo.membro09@aspec.test' => [3],
+                'demo.membro10@aspec.test' => [1, 2],
             ],
         ];
     }

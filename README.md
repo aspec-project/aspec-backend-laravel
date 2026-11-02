@@ -79,20 +79,23 @@ Na pasta `Aspec_Backend/`:
 2. `php artisan db:seed --class=DemoSeeder`
 3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
 
-Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 22 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
 
 - 11 presenciais futuros (um deles hoje), alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 1 **série semanal** "Ciclo de Formação: Liderar Pequenas Equipas" em Leiria: 6 sessões a partir de depois de amanhã, cada uma com inscrição própria e prazo na véspera às 23:59 (como o backoffice cria uma série);
 - 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
 - 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
 
-Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados.
+Os eventos presenciais só têm o `place_id` da Google (sem coordenadas), como os que o backoffice grava.
+
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, nas sessões 2 a 6 da série (o que "nesta e nas seguintes" dá a partir da sessão 2; a sessão 1 fica livre para mostrar a inscrição ao vivo), num online e nos 2 passados. Na série, `demo.membro01` e `demo.membro04` estão em todas as sessões, `demo.membro09` só na 3.ª e `demo.membro10` nas duas primeiras. A série não tem cartões de oração nem é anunciada por email (o anúncio só sai para eventos únicos criados no backoffice).
 
 Cartões de oração em dois eventos:
 
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
 - o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
 
 Password de todas as contas: `Demo#2026`
 

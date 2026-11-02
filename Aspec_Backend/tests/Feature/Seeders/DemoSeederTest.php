@@ -4,9 +4,11 @@ namespace Tests\Feature\Seeders;
 
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
+use App\Jobs\AnnounceNewEventJob;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
+use App\Models\EventSeries;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\Review;
@@ -16,6 +18,9 @@ use App\Rules\PortuguesePostalCode;
 use Database\Seeders\DemoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Sanctum\Sanctum;
@@ -29,6 +34,10 @@ use Tests\TestCase;
 class DemoSeederTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const SERIES = 'Ciclo de Formação: Liderar Pequenas Equipas';
+
+    private const SERIES_PLACE_ID = 'ChIJLfCNbWxzIg0RRw7VWELDhHQ';
 
     protected function setUp(): void
     {
@@ -69,6 +78,40 @@ class DemoSeederTest extends TestCase
         return EventInstance::where('name', $name)
             ->whereHas('location', fn ($query) => $query->where('name', $district))
             ->firstOrFail();
+    }
+
+    /**
+     * Sessões da série de demonstração, por ordem de data.
+     *
+     * @return Collection<int, EventInstance>
+     */
+    private function seriesSessions(): Collection
+    {
+        return EventInstance::where('name', self::SERIES)
+            ->whereHas('location', fn ($query) => $query->where('name', 'Leiria'))
+            ->orderBy('event_date')
+            ->get()
+            ->values();
+    }
+
+    /**
+     * Emails dos inscritos numa sessão, por ordem alfabética.
+     *
+     * @return list<string>
+     */
+    private function registrantEmails(EventInstance $event): array
+    {
+        return User::whereHas('eventRegistrations', fn ($query) => $query->where('event_instance_id', $event->id))
+            ->orderBy('email')
+            ->pluck('email')
+            ->all();
+    }
+
+    private function demoSeries(): EventSeries
+    {
+        $this->assertSame(1, EventSeries::count(), 'Séries de demonstração');
+
+        return EventSeries::sole();
     }
 
     #[Test]
@@ -224,8 +267,8 @@ class DemoSeederTest extends TestCase
         $today = $this->lisbonToday();
         $inPersonFuture = $events->filter(fn (EventInstance $event) => ! $event->is_online && $event->event_date->gte($today));
 
-        $this->assertCount(16, $events);
-        $this->assertCount(11, $inPersonFuture);
+        $this->assertCount(22, $events);
+        $this->assertCount(17, $inPersonFuture);
         $this->assertSame(EventCategory::count(), $events->pluck('category_id')->unique()->count());
         $this->assertGreaterThanOrEqual(6, $inPersonFuture->pluck('location_id')->unique()->count());
 
@@ -251,8 +294,9 @@ class DemoSeederTest extends TestCase
     }
 
     /**
-     * Cada evento presencial (futuro ou passado) tem o place_id da Google da sua morada, válido como
-     * o backoffice o aceita e diferente dos outros; os online não têm local.
+     * Cada evento presencial único (futuro ou passado) tem o place_id da Google da sua morada, válido
+     * como o backoffice o aceita e diferente dos outros; as sessões da série partilham o do auditório
+     * de Leiria; os online não têm local.
      */
     #[Test]
     public function in_person_events_have_a_distinct_google_place_id_and_online_events_have_none(): void
@@ -261,14 +305,19 @@ class DemoSeederTest extends TestCase
 
         $events = EventInstance::all();
         $inPerson = $events->where('is_online', false);
+        $oneOff = $inPerson->whereNull('series_id');
+        $sessions = $inPerson->whereNotNull('series_id');
 
-        $this->assertCount(13, $inPerson);
+        $this->assertCount(19, $inPerson);
+        $this->assertCount(13, $oneOff);
+        $this->assertCount(6, $sessions);
 
         foreach ($inPerson as $event) {
             $this->assertMatchesRegularExpression('/^[A-Za-z0-9_-]{1,512}$/D', (string) $event->place_id, $event->name);
         }
 
-        $this->assertCount(13, $inPerson->pluck('place_id')->unique());
+        $this->assertCount(13, $oneOff->pluck('place_id')->unique());
+        $this->assertSame([self::SERIES_PLACE_ID], $sessions->pluck('place_id')->unique()->values()->all());
 
         foreach ($events->where('is_online', true) as $event) {
             $this->assertNull($event->place_id, $event->name);
@@ -341,6 +390,7 @@ class DemoSeederTest extends TestCase
             'files' => count(Storage::disk('public')->allFiles()),
             'registrations' => EventRegistration::count(),
             'registrations_per_event' => EventInstance::withCount('registrations')->orderBy('id')->pluck('registrations_count', 'id')->all(),
+            'event_series' => EventSeries::count(),
         ];
 
         $first = $counts();
@@ -371,7 +421,7 @@ class DemoSeederTest extends TestCase
 
         $this->assertSame($expected, $lisbonBreakfast->registrations()->count());
         $this->assertTrue($otherEvent->registrations()->where('user_id', $otherUser->id)->exists());
-        $this->assertSame(17, EventInstance::count());
+        $this->assertSame(23, EventInstance::count());
     }
 
     /**
@@ -495,8 +545,8 @@ class DemoSeederTest extends TestCase
     }
 
     /**
-     * O demo.membro tem inscrições em 2 ou 3 eventos presenciais futuros, num online e em eventos
-     * passados, para a página "As minhas inscrições" mostrar todos os casos.
+     * O demo.membro tem inscrições em 2 ou 3 eventos presenciais futuros, em 5 sessões da série,
+     * num online e em eventos passados, para a página "As minhas inscrições" mostrar todos os casos.
      */
     #[Test]
     public function demo_member_has_upcoming_online_and_past_registrations(): void
@@ -512,10 +562,11 @@ class DemoSeederTest extends TestCase
                 ->json('data')
         )->pluck('event');
 
-        $inPersonUpcoming = $events->filter(fn (array $event) => ! $event['is_online'] && $event['event_date'] >= $today);
+        $inPersonUpcoming = $events->filter(fn (array $event) => ! $event['is_online'] && $event['event_date'] >= $today && $event['series_id'] === null);
 
         $this->assertGreaterThanOrEqual(2, $inPersonUpcoming->count());
         $this->assertLessThanOrEqual(3, $inPersonUpcoming->count());
+        $this->assertSame(5, $events->whereNotNull('series_id')->count());
         $this->assertSame(1, $events->where('is_online', true)->count());
         $this->assertGreaterThanOrEqual(1, $events->filter(fn (array $event) => $event['event_date'] < $today)->count());
     }
@@ -554,6 +605,7 @@ class DemoSeederTest extends TestCase
         $this->assertSame(0, User::where('email', 'like', 'demo.%')->count());
         $this->assertSame(0, MemberProfile::count());
         $this->assertSame(0, EventInstance::count());
+        $this->assertSame(0, EventSeries::count());
         $this->assertEmpty(Storage::disk('public')->allFiles());
     }
 
@@ -569,7 +621,7 @@ class DemoSeederTest extends TestCase
 
         $this->getJson('/api/events')
             ->assertOk()
-            ->assertJsonPath('data.pagination.total', 13);
+            ->assertJsonPath('data.pagination.total', 19);
 
         $today = EventInstance::where('name', 'Formação: Finanças para Pequenas Empresas')->sole();
         Sanctum::actingAs($this->demoUser('demo.membro@aspec.test'));
@@ -669,5 +721,167 @@ class DemoSeederTest extends TestCase
         $this->assertNull($event->latitude);
         $this->assertNull($event->longitude);
         $this->assertSame('ChIJJ8bvTYYxGQ0RoC1RSUhyz2k', $event->place_id);
+    }
+
+    /**
+     * Série semanal de formação em Leiria: seis sessões a partir de depois de amanhã, com os mesmos
+     * campos que o backoffice grava numa série (prazo na véspera às 23:59, sem anúncio).
+     */
+    #[Test]
+    public function creates_a_weekly_series_with_six_sessions_like_the_backoffice(): void
+    {
+        $this->runDemoSeeder();
+
+        $series = $this->demoSeries();
+        $sessions = $this->seriesSessions();
+        $firstDate = $this->lisbonToday()->addDays(2);
+
+        $this->assertSame('weekly', $series->frequency);
+        $this->assertSame(1, $series->registration_deadline_days_before);
+        $this->assertCount(6, $sessions);
+        $this->assertSame($sessions->last()->event_date->toDateString(), $series->ends_on->toDateString());
+
+        foreach ($sessions as $index => $session) {
+            $date = $firstDate->copy()->addWeeks($index);
+            $label = "sessão {$index}";
+
+            $this->assertSame($series->id, $session->series_id, $label);
+            $this->assertSame($date->toDateString(), $session->event_date->toDateString(), $label);
+            $this->assertSame($date->copy()->subDay()->toDateString().' 23:59', $session->registration_deadline->format('Y-m-d H:i'), $label);
+            $this->assertSame('18:30', substr($session->event_start_time, 0, 5), $label);
+            $this->assertSame('20:30', substr($session->event_end_time, 0, 5), $label);
+            $this->assertSame(20, $session->max_attendees, $label);
+            $this->assertSame('Formação', $session->category->name, $label);
+            $this->assertFalse($session->is_online, $label);
+            $this->assertSame('Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria', $session->address, $label);
+            $this->assertSame(self::SERIES_PLACE_ID, $session->place_id, $label);
+            $this->assertNull($session->latitude, $label);
+            $this->assertNull($session->longitude, $label);
+            $this->assertFalse($session->prayer_cards_enabled, $label);
+            $this->assertNull($session->announced_at, $label);
+            $this->assertSame(0, $session->prayerCards()->withTrashed()->count(), $label);
+        }
+    }
+
+    #[Test]
+    public function public_agenda_lists_the_six_series_sessions(): void
+    {
+        $this->runDemoSeeder();
+
+        $seriesId = $this->demoSeries()->id;
+        $items = collect($this->getJson('/api/events?per_page=100')->assertOk()->json('data.items'));
+
+        $sessions = $items->where('name', self::SERIES);
+
+        $this->assertCount(6, $sessions);
+        $this->assertSame([$seriesId], $sessions->pluck('series_id')->unique()->values()->all());
+    }
+
+    /**
+     * O demo.membro está inscrito "nesta e nas seguintes" a partir da sessão 2 (a 1 fica para se
+     * inscrever ao vivo); outros membros cobrem a série toda, uma sessão só e as duas primeiras.
+     */
+    #[Test]
+    public function series_registrations_cover_every_case(): void
+    {
+        $this->runDemoSeeder();
+
+        $sessions = $this->seriesSessions();
+        $member = fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number);
+        $demoMember = 'demo.membro@aspec.test';
+
+        $expected = [
+            [$member(1), $member(4), $member(10)],
+            [$demoMember, $member(1), $member(4), $member(10)],
+            [$demoMember, $member(1), $member(4), $member(9)],
+            [$demoMember, $member(1), $member(4)],
+            [$demoMember, $member(1), $member(4)],
+            [$demoMember, $member(1), $member(4)],
+        ];
+
+        $this->assertCount(6, $sessions);
+
+        foreach ($sessions as $index => $session) {
+            $emails = $expected[$index];
+            sort($emails);
+
+            $this->assertSame($emails, $this->registrantEmails($session), "sessão {$index}");
+            $this->assertLessThanOrEqual($session->max_attendees, $session->registrations()->count());
+        }
+    }
+
+    /**
+     * A série nasce sem anúncio (o anúncio só sai do backoffice e nunca para séries) e o seeder
+     * não envia notificações.
+     */
+    #[Test]
+    public function seeding_never_announces_events_nor_sends_notifications(): void
+    {
+        Queue::fake([AnnounceNewEventJob::class]);
+        Notification::fake();
+
+        $this->runDemoSeeder();
+
+        $this->assertCount(6, $this->seriesSessions());
+        Queue::assertNotPushed(AnnounceNewEventJob::class);
+        Notification::assertNothingSent();
+    }
+
+    /**
+     * Repetir a demonstração mantém a série e os ids das sessões (links do frontend), repõe as
+     * inscrições mexidas à mão e volta a criar uma sessão apagada "só nesta sessão".
+     */
+    #[Test]
+    public function running_again_keeps_the_series_and_restores_its_sessions_and_registrations(): void
+    {
+        $this->runDemoSeeder();
+
+        $seriesId = $this->demoSeries()->id;
+        $sessions = $this->seriesSessions();
+        $originalIds = $sessions->pluck('id')->all();
+        $originalDates = $sessions->map(fn (EventInstance $session) => $session->event_date->toDateString())->all();
+        $firstSessionEmails = $this->registrantEmails($sessions[0]);
+        $thirdSessionEmails = $this->registrantEmails($sessions[2]);
+
+        $sessions[0]->registrations()->create(['user_id' => $this->demoUser('demo.membro11@aspec.test')->id]);
+        $sessions[2]->registrations()->where('user_id', $this->demoUser('demo.membro@aspec.test')->id)->delete();
+        $sessions[5]->registrations()->delete();
+        $sessions[5]->delete();
+
+        $this->runDemoSeeder();
+
+        $after = $this->seriesSessions();
+
+        $this->assertSame($seriesId, $this->demoSeries()->id);
+        $this->assertCount(6, $after);
+        $this->assertSame(array_slice($originalIds, 0, 5), $after->take(5)->pluck('id')->all());
+        $this->assertSame($originalDates, $after->map(fn (EventInstance $session) => $session->event_date->toDateString())->all());
+        $this->assertSame([$seriesId], $after->pluck('series_id')->unique()->values()->all());
+        $this->assertSame($firstSessionEmails, $this->registrantEmails($after[0]));
+        $this->assertSame($thirdSessionEmails, $this->registrantEmails($after[2]));
+        $this->assertSame(3, $after[5]->registrations()->count());
+    }
+
+    #[Test]
+    public function running_on_another_day_moves_the_series_dates_and_keeps_the_ids(): void
+    {
+        $this->runDemoSeeder();
+
+        $originalIds = $this->seriesSessions()->pluck('id')->all();
+
+        $this->travel(3)->days();
+        $this->runDemoSeeder();
+
+        $sessions = $this->seriesSessions();
+        $firstDate = $this->lisbonToday()->addDays(2);
+
+        $this->assertSame(1, EventSeries::count());
+        $this->assertSame($originalIds, $sessions->pluck('id')->all());
+
+        foreach ($sessions as $index => $session) {
+            $this->assertSame($firstDate->copy()->addWeeks($index)->toDateString(), $session->event_date->toDateString(), "sessão {$index}");
+        }
+
+        $this->assertSame($sessions->last()->event_date->toDateString(), $this->demoSeries()->ends_on->toDateString());
     }
 }
