@@ -11530,7 +11530,7 @@
                 "dashboard"
               ]
             },
-            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial, ativos ou em carência (os mesmos estados da lista de utilizadores, admins incluídos; o admin técnico, isento, não conta); `new_this_month` = os que fizeram a 1.ª subscrição este mês. `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário)."
+            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial ou ativos (os mesmos estados dos *chips* 'Em trial' e 'Ativos' da lista, admins incluídos; o admin técnico, isento, não conta; as contas em carência contam só em `overdue_payments`); `new_this_month` = destes, os que fizeram a 1.ª subscrição este mês. `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). `stats.event_registrations.events_with_registrations` = eventos distintos da semana com pelo menos uma inscrição (cada sessão de uma série conta como um evento). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (= página 1 de 'Dashboard — candidaturas pendentes'; mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário)."
           },
           "response": [
             {
@@ -11569,7 +11569,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 320,\n        \"new_this_month\": 12\n      },\n      \"pending_applications\": {\n        \"total\": 3\n      },\n      \"events\": {\n        \"this_month\": 8,\n        \"this_week\": 2\n      },\n      \"reviews\": {\n        \"flagged\": 2,\n        \"new_this_week\": 5\n      },\n      \"overdue_payments\": {\n        \"total\": 7,\n        \"grace\": 4,\n        \"unpaid\": 3\n      },\n      \"event_registrations\": {\n        \"this_week\": 23\n      }\n    },\n    \"pending_applications\": [\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000001\",\n        \"email\": \"filipa.rodrigues@example.pt\",\n        \"created_at\": \"2026-10-29T10:32:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Filipa Rodrigues\",\n          \"business_name\": \"Design Studio FiR\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Design\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000002\",\n        \"email\": \"tiago.marques@example.pt\",\n        \"created_at\": \"2026-10-28T16:05:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Tiago Marques\",\n          \"business_name\": \"Marques Contabilidade\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Contabilidade\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000003\",\n        \"email\": \"ines.costa@example.pt\",\n        \"created_at\": \"2026-10-27T09:47:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Inês Costa\",\n          \"business_name\": \"Costa Fotografia\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Fotografia\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Coimbra\"\n          }\n        }\n      }\n    ],\n    \"recent_reviews\": [\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000001\",\n        \"rating\": 5,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"TechBless Solutions\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000002\",\n        \"rating\": 1,\n        \"status\": \"Flagged\",\n        \"reviewed\": {\n          \"business_name\": \"Padaria São João\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Casa Moderna Decorações\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000003\",\n        \"rating\": 4,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"TechBless Solutions\"\n        }\n      }\n    ]\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 320,\n        \"new_this_month\": 12\n      },\n      \"pending_applications\": {\n        \"total\": 3\n      },\n      \"events\": {\n        \"this_month\": 8,\n        \"this_week\": 2\n      },\n      \"reviews\": {\n        \"flagged\": 2,\n        \"new_this_week\": 5\n      },\n      \"overdue_payments\": {\n        \"total\": 7,\n        \"grace\": 4,\n        \"unpaid\": 3\n      },\n      \"event_registrations\": {\n        \"this_week\": 23,\n        \"events_with_registrations\": 2\n      }\n    },\n    \"pending_applications\": [\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000001\",\n        \"email\": \"filipa.rodrigues@example.pt\",\n        \"created_at\": \"2026-10-29T10:32:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Filipa Rodrigues\",\n          \"business_name\": \"Design Studio FiR\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Design\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000002\",\n        \"email\": \"tiago.marques@example.pt\",\n        \"created_at\": \"2026-10-28T16:05:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Tiago Marques\",\n          \"business_name\": \"Marques Contabilidade\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Contabilidade\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000003\",\n        \"email\": \"ines.costa@example.pt\",\n        \"created_at\": \"2026-10-27T09:47:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Inês Costa\",\n          \"business_name\": \"Costa Fotografia\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Fotografia\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Coimbra\"\n          }\n        }\n      }\n    ],\n    \"recent_reviews\": [\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000001\",\n        \"rating\": 5,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"TechBless Solutions\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000002\",\n        \"rating\": 1,\n        \"status\": \"Flagged\",\n        \"reviewed\": {\n          \"business_name\": \"Padaria São João\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Casa Moderna Decorações\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000003\",\n        \"rating\": 4,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"TechBless Solutions\"\n        }\n      }\n    ]\n  }\n}"
             },
             {
               "name": "200 Painel sem dados",
@@ -11607,7 +11607,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 0,\n        \"new_this_month\": 0\n      },\n      \"pending_applications\": {\n        \"total\": 0\n      },\n      \"events\": {\n        \"this_month\": 0,\n        \"this_week\": 0\n      },\n      \"reviews\": {\n        \"flagged\": 0,\n        \"new_this_week\": 0\n      },\n      \"overdue_payments\": {\n        \"total\": 0,\n        \"grace\": 0,\n        \"unpaid\": 0\n      },\n      \"event_registrations\": {\n        \"this_week\": 0\n      }\n    },\n    \"pending_applications\": [],\n    \"recent_reviews\": []\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 0,\n        \"new_this_month\": 0\n      },\n      \"pending_applications\": {\n        \"total\": 0\n      },\n      \"events\": {\n        \"this_month\": 0,\n        \"this_week\": 0\n      },\n      \"reviews\": {\n        \"flagged\": 0,\n        \"new_this_week\": 0\n      },\n      \"overdue_payments\": {\n        \"total\": 0,\n        \"grace\": 0,\n        \"unpaid\": 0\n      },\n      \"event_registrations\": {\n        \"this_week\": 0,\n        \"events_with_registrations\": 0\n      }\n    },\n    \"pending_applications\": [],\n    \"recent_reviews\": []\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -11696,6 +11696,289 @@
                     "api",
                     "admin",
                     "dashboard"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Dashboard — candidaturas pendentes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=1",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "dashboard",
+                "pending-applications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Opcional. Número da página, inteiro de 1 a 10000 (omisso ou vazio = 1)."
+                }
+              ]
+            },
+            "description": "Lista paginada das candidaturas pendentes do painel. Só admins ativos; 3 por página (tamanho fixo, `per_page` é ignorado), da mais recente para a mais antiga (data de registo; desempate pelo id); contas apagadas nunca aparecem. A página 1 é sempre igual a `pending_applications` do 'Dashboard'. Página para lá da última → 200 com lista vazia e a paginação verdadeira. `page` não inteiro, menor que 1 ou maior que 10000 → 422. Limite de 60 pedidos/minuto por admin, **partilhado** com o 'Dashboard'; sem cache (`Cache-Control: private, no-store`). Cada item tem a mesma forma da lista de utilizadores (com o email, para os diálogos de aprovar e recusar)."
+          },
+          "response": [
+            {
+              "name": "200 Página 1",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Página 1"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Candidaturas pendentes obtidas com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000001\",\n        \"email\": \"filipa.rodrigues@example.pt\",\n        \"created_at\": \"2026-10-29T10:32:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Filipa Rodrigues\",\n          \"business_name\": \"Design Studio FiR\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Design\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000002\",\n        \"email\": \"tiago.marques@example.pt\",\n        \"created_at\": \"2026-10-28T16:05:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Tiago Marques\",\n          \"business_name\": \"Marques Contabilidade\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Contabilidade\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000003\",\n        \"email\": \"ines.costa@example.pt\",\n        \"created_at\": \"2026-10-27T09:47:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Inês Costa\",\n          \"business_name\": \"Costa Fotografia\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Fotografia\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Coimbra\"\n          }\n        }\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 3,\n      \"total\": 7,\n      \"last_page\": 3\n    }\n  }\n}"
+            },
+            {
+              "name": "200 Página para lá da última",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Página para lá da última"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=4",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "4"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"Candidaturas pendentes obtidas com sucesso.\",\n  \"data\": {\n    \"items\": [],\n    \"pagination\": {\n      \"current_page\": 4,\n      \"per_page\": 3,\n      \"total\": 7,\n      \"last_page\": 3\n    }\n  }\n}"
+            },
+            {
+              "name": "422 Página inválida",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Página inválida"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=0",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "0"
+                    }
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"page\": [\n      \"O campo página tem de estar entre 1 e 10000.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "401 Não autenticado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "401 Não autenticado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não autenticado.\"\n}"
+            },
+            {
+              "name": "403 Sem permissão",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "403 Sem permissão"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
+                  ]
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para realizar esta ação.\"\n}"
+            },
+            {
+              "name": "429 Demasiados pedidos",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "429 Demasiados pedidos"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/dashboard/pending-applications?page=1",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "dashboard",
+                    "pending-applications"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    }
                   ]
                 }
               },

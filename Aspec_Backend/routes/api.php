@@ -127,7 +127,8 @@ Route::prefix('admin')
             ->whereUuid('eventInstance')
             ->middleware('throttle:admin-prayer-distribute');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
-        Route::get('/dashboard', AdminDashboardController::class)->middleware('throttle:admin-dashboard');
+        Route::get('/dashboard', [AdminDashboardController::class, 'index'])->middleware('throttle:admin-dashboard');
+        Route::get('/dashboard/pending-applications', [AdminDashboardController::class, 'pendingApplications'])->middleware('throttle:admin-dashboard');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
