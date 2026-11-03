@@ -104,6 +104,94 @@ class EventInstanceAgendaTest extends TestCase
     }
 
     #[Test]
+    public function public_agenda_series_filter_includes_past_and_future_sessions_only_from_that_series(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $now = now($timezone)->setTime(12, 0, 0);
+        $this->travelTo($now);
+
+        $category = EventCategory::factory()->create();
+
+        $pastDate = $now->copy()->subDay()->toDateString();
+        $firstFutureDate = $now->copy()->addWeek()->toDateString();
+        $secondFutureDate = $now->copy()->addWeeks(2)->toDateString();
+
+        $pastSession = $this->createEvent(
+            $category,
+            $pastDate,
+            '10:00',
+            'Sessão passada da série'
+        );
+
+        $firstFutureSession = $this->createEvent(
+            $category,
+            $firstFutureDate,
+            '10:00',
+            'Primeira sessão futura da série'
+        );
+
+        $secondFutureSession = $this->createEvent(
+            $category,
+            $secondFutureDate,
+            '10:00',
+            'Segunda sessão futura da série'
+        );
+
+        $pastEventOutsideSeries = $this->createEvent(
+            $category,
+            $pastDate,
+            '11:00',
+            'Evento passado fora da série'
+        );
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => $secondFutureDate,
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        foreach ([$pastSession, $firstFutureSession, $secondFutureSession] as $session) {
+            $session->update(['series_id' => $series->id]);
+        }
+
+        $response = $this->getJson(self::URL.'?series_id='.$series->id);
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonCount(3, 'data.items');
+
+        $returnedIds = array_column($response->json('data.items'), 'id');
+
+        $this->assertSame(
+            [
+                $pastSession->id,
+                $firstFutureSession->id,
+                $secondFutureSession->id,
+            ],
+            $returnedIds
+        );
+
+        $this->assertNotContains($pastEventOutsideSeries->id, $returnedIds);
+    }
+
+    #[Test]
+    public function series_filter_must_be_a_valid_existing_uuid(): void
+    {
+        $this->getJson(self::URL.'?series_id=invalid')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['series_id'],
+            ]);
+
+        $this->getJson(self::URL.'?series_id=00000000-0000-4000-8000-000000000000')
+            ->assertUnprocessable()
+            ->assertJsonStructure([
+                'errors' => ['series_id'],
+            ]);
+    }
+
+    #[Test]
     public function public_agenda_can_be_filtered_by_category(): void
     {
         $category = EventCategory::factory()->create();
