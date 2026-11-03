@@ -80,7 +80,7 @@ class MediaOnR2Test extends TestCase
 
         $path = $user->memberProfile->fresh()->logo_path;
         $this->assertIsString($path);
-        $this->assertStringStartsWith('logos/', $path);
+        $this->assertStringStartsWith("logos/{$user->memberProfile->id}/", $path);
         Storage::disk('r2')->assertExists($path);
         $this->assertPublicDiskIsEmpty();
     }
@@ -102,7 +102,7 @@ class MediaOnR2Test extends TestCase
     public function replacing_the_logo_deletes_the_old_file_on_the_media_disk(): void
     {
         $user = $this->member();
-        $oldPath = $this->storedOnR2("logos/{$user->id}/".Str::random(40).'.png');
+        $oldPath = $this->storedOnR2("logos/{$user->memberProfile->id}/".Str::random(40).'.png');
         $user->memberProfile->update(['logo_path' => $oldPath]);
         Sanctum::actingAs($user);
 
@@ -125,7 +125,7 @@ class MediaOnR2Test extends TestCase
         $this->postJson(self::PORTFOLIO_URL, ['image' => UploadedFile::fake()->image('foto.jpg')])->assertCreated();
 
         $image = $user->memberProfile->portfolios()->sole();
-        $this->assertStringStartsWith('portfolios/', $image->image_path);
+        $this->assertStringStartsWith("portfolios/{$user->memberProfile->id}/", $image->image_path);
         Storage::disk('r2')->assertExists($image->image_path);
         $this->assertPublicDiskIsEmpty();
     }
@@ -148,7 +148,7 @@ class MediaOnR2Test extends TestCase
     public function deleting_a_portfolio_image_deletes_the_file_on_the_media_disk(): void
     {
         $user = $this->member();
-        $path = $this->storedOnR2("portfolios/{$user->id}/".Str::random(40).'.jpg');
+        $path = $this->storedOnR2("portfolios/{$user->memberProfile->id}/".Str::random(40).'.jpg');
         $image = Portfolio::create(['profile_id' => $user->memberProfile->id, 'image_path' => $path]);
         Sanctum::actingAs($user);
 
@@ -164,8 +164,8 @@ class MediaOnR2Test extends TestCase
     public function anonymization_deletes_the_member_folders_on_the_media_disk(): void
     {
         $user = $this->member();
-        $logo = $this->storedOnR2("logos/{$user->id}/logo.png");
-        $photo = $this->storedOnR2("portfolios/{$user->id}/a.jpg");
+        $logo = $this->storedOnR2("logos/{$user->memberProfile->id}/logo.png");
+        $photo = $this->storedOnR2("portfolios/{$user->memberProfile->id}/a.jpg");
 
         $this->assertTrue($user->fresh()->anonymizeAndDelete());
 
@@ -178,8 +178,8 @@ class MediaOnR2Test extends TestCase
     {
         $user = $this->member();
         $other = $this->member();
-        $otherLogo = $this->storedOnR2("logos/{$other->id}/logo.png");
-        $otherPhoto = $this->storedOnR2("portfolios/{$other->id}/a.jpg");
+        $otherLogo = $this->storedOnR2("logos/{$other->memberProfile->id}/logo.png");
+        $otherPhoto = $this->storedOnR2("portfolios/{$other->memberProfile->id}/a.jpg");
 
         $user->fresh()->anonymizeAndDelete();
 
