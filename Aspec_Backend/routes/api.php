@@ -101,6 +101,12 @@ Route::prefix('admin')
             ->whereUuid('user')
             ->middleware('throttle:admin-payment-link');
         Route::get('/reviews', [AdminReviewController::class, 'index']);
+        Route::patch('/reviews/{review}/hide', [AdminReviewController::class, 'hide'])
+            ->whereUuid('review');
+        Route::patch('/reviews/{review}/show', [AdminReviewController::class, 'show'])
+            ->whereUuid('review');
+        Route::patch('/reviews/{review}/unflag', [AdminReviewController::class, 'unflag'])
+            ->whereUuid('review');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
