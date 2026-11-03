@@ -19,6 +19,7 @@ class Review extends Model
         'rating',
         'comment',
         'status_id',
+        'hidden_reason',
     ];
 
     public function reviewerProfile(): BelongsTo

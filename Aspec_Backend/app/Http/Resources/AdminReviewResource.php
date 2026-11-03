@@ -17,6 +17,7 @@ class AdminReviewResource extends JsonResource
             'rating' => (int) $this->rating,
             'comment' => $this->comment,
             'status' => $this->status?->name,
+            'hidden_reason' => $this->hidden_reason,
             'reviewed' => [
                 'business_name' => $this->reviewedProfile?->business_name,
             ],
