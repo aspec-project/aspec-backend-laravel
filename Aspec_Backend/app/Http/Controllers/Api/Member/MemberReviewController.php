@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexMemberReviewsRequest;
+use App\Http\Requests\IndexMyReviewsRequest;
 use App\Http\Requests\StoreMemberReviewRequest;
+use App\Http\Resources\MyReviewResource;
 use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
 use App\Models\Review;
@@ -151,6 +153,96 @@ class MemberReviewController extends Controller
             $data,
             'Avaliações obtidas com sucesso.'
         )
+            ->header('Cache-Control', 'private, no-store')
+            ->header('Vary', 'Cookie, Authorization');
+    }
+
+    public function mine(IndexMyReviewsRequest $request): JsonResponse
+    {
+        $profile = $request->user()->memberProfile;
+
+        if ($profile === null) {
+            return $this->errorResponse(
+                'Perfil de membro não encontrado.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $validated = $request->validated();
+        $direction = $validated['direction'] ?? 'all';
+        $status = $validated['status'] ?? 'all';
+
+        $statusNames = [
+            'visible' => 'Visible',
+            'hidden' => 'Hidden',
+            'flagged' => 'Flagged',
+        ];
+
+        $statusName = $statusNames[$status] ?? null;
+        $profileId = $profile->getKey();
+
+        $reviews = Review::query()
+            ->with([
+                'status',
+                'reviewerProfile' => fn ($query) => $query->withTrashed(),
+                'reviewedProfile' => fn ($query) => $query->withTrashed(),
+            ])
+            ->where(function (Builder $query) use ($direction, $profileId): void {
+                if ($direction === 'received') {
+                    $query->where('reviewed_profile_id', $profileId);
+
+                    return;
+                }
+
+                if ($direction === 'written') {
+                    $query->where('reviewer_profile_id', $profileId);
+
+                    return;
+                }
+
+                $query
+                    ->where('reviewer_profile_id', $profileId)
+                    ->orWhere('reviewed_profile_id', $profileId);
+            })
+            ->when(
+                $statusName !== null,
+                fn (Builder $query) => $query->whereHas(
+                    'status',
+                    fn (Builder $statusQuery) => $statusQuery
+                        ->where('name', $statusName)
+                )
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(
+                (int) ($validated['per_page'] ?? 10),
+                ['*'],
+                'page',
+                (int) ($validated['page'] ?? 1)
+            );
+
+        $reviews->getCollection()->each(
+            function (Review $review) use ($profileId): void {
+                $review->setAttribute(
+                    'direction',
+                    (string) $review->reviewer_profile_id === (string) $profileId
+                        ? 'written'
+                        : 'received'
+                );
+            }
+        );
+
+        return $this->successResponse([
+            'items' => MyReviewResource::collection(
+                $reviews->getCollection()
+            )->resolve($request),
+            'pagination' => [
+                'current_page' => $reviews->currentPage(),
+                'per_page' => $reviews->perPage(),
+                'total' => $reviews->total(),
+                'last_page' => $reviews->lastPage(),
+            ],
+        ], 'As suas avaliações foram obtidas com sucesso.')
             ->header('Cache-Control', 'private, no-store')
             ->header('Vary', 'Cookie, Authorization');
     }

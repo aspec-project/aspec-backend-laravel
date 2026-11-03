@@ -175,6 +175,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
         ->whereUuid('eventInstance');
     Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
+    Route::get('/me/reviews', [MemberReviewController::class, 'mine']);
     Route::middleware('throttle:prayer-cards')->group(function () {
         Route::get('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'show'])->whereUuid('eventInstance');
         Route::put('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'update'])->whereUuid('eventInstance');
