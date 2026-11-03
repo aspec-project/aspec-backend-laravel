@@ -588,7 +588,7 @@ class DemoSeeder extends Seeder
             $path = (string) $invoice->provider_invoice_id;
 
             if ($invoice->provider === 'demo' && str_starts_with($path, "invoices/{$user->id}/") && ! str_contains($path, '..')) {
-                Storage::disk('local')->delete($path);
+                Storage::disk(config('filesystems.invoices_disk'))->delete($path);
             }
 
             $invoice->delete();
