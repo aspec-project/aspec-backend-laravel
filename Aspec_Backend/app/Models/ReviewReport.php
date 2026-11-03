@@ -14,6 +14,24 @@ class ReviewReport extends Model
 
     public const SOURCE_AUTOMATIC = 'automatic';
 
+    public const REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT = 'offensive_or_disrespectful_content';
+
+    public const REASON_FALSE_OR_UNSUBSTANTIATED_CLAIMS = 'false_or_unsubstantiated_claims';
+
+    public const REASON_NO_BUSINESS_RELATIONSHIP = 'no_business_relationship';
+
+    public const REASON_SPAM_OR_ADVERTISING = 'spam_or_advertising';
+
+    public const REASON_OTHER = 'other';
+
+    public const REASONS = [
+        self::REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT,
+        self::REASON_FALSE_OR_UNSUBSTANTIATED_CLAIMS,
+        self::REASON_NO_BUSINESS_RELATIONSHIP,
+        self::REASON_SPAM_OR_ADVERTISING,
+        self::REASON_OTHER,
+    ];
+
     protected $fillable = [
         'review_id',
         'reporter_profile_id',

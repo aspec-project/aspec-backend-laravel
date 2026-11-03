@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\Lists\WeekDayController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\MemberReviewController;
+use App\Http\Controllers\Api\Member\MemberReviewReportController;
 use App\Http\Controllers\Api\Member\PortfolioController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
@@ -154,6 +155,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         ->whereUuid('member')->middleware('throttle:review-submit');
     Route::delete('/members/{member}/reviews', [MemberReviewController::class, 'destroy'])
         ->whereUuid('member')->middleware('throttle:review-delete');
+    Route::post('/reviews/{review}/reports', [MemberReviewReportController::class, 'store'])
+        ->whereUuid('review');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
     Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
     Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])
