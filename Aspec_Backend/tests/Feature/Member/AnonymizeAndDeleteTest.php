@@ -46,22 +46,32 @@ class AnonymizeAndDeleteTest extends TestCase
         Storage::fake('public');
     }
 
+    /**
+     * Membro com logótipo e portfólio nas pastas do perfil (logos/{profile_id}, portfolios/{profile_id}).
+     */
     private function memberWithFullProfile(): User
     {
         $user = User::factory()->create();
-        $profile = MemberProfile::factory()->create([
-            'user_id' => $user->id,
-            'logo_path' => "logos/{$user->id}/logo.png",
-        ]);
+        $profile = MemberProfile::factory()->create(['user_id' => $user->id]);
+        $profile->update(['logo_path' => "logos/{$profile->id}/logo.png"]);
 
         $profile->weekDays()->attach(WeekDay::find(1), ['open_time' => '09:00', 'close_time' => '18:00']);
         $profile->socialPlatforms()->attach(SocialPlatform::first(), ['url' => 'https://example.com/perfil']);
-        Portfolio::create(['profile_id' => $profile->id, 'image_path' => "portfolios/{$user->id}/a.jpg"]);
+        Portfolio::create(['profile_id' => $profile->id, 'image_path' => "portfolios/{$profile->id}/a.jpg"]);
 
-        Storage::disk('public')->put("logos/{$user->id}/logo.png", 'conteudo');
-        Storage::disk('public')->put("portfolios/{$user->id}/a.jpg", 'conteudo');
+        Storage::disk('public')->put("logos/{$profile->id}/logo.png", 'conteudo');
+        Storage::disk('public')->put("portfolios/{$profile->id}/a.jpg", 'conteudo');
 
         return $user;
+    }
+
+    /**
+     * Ficheiros ainda nas pastas antigas por id do utilizador (máquina onde o comando de migração não correu).
+     */
+    private function putLegacyUserFolders(User $user): void
+    {
+        Storage::disk('public')->put("logos/{$user->id}/antigo.png", 'conteudo');
+        Storage::disk('public')->put("portfolios/{$user->id}/antigo.jpg", 'conteudo');
     }
 
     private function insertSession(?string $userId): string
@@ -110,16 +120,42 @@ class AnonymizeAndDeleteTest extends TestCase
     }
 
     #[Test]
-    public function logo_and_portfolio_folders_are_removed(): void
+    public function profile_logo_and_portfolio_folders_are_removed(): void
     {
         $user = $this->memberWithFullProfile();
+        $profileId = $user->memberProfile->id;
 
         $user->anonymizeAndDelete();
 
-        Storage::disk('public')->assertMissing("logos/{$user->id}/logo.png");
-        Storage::disk('public')->assertMissing("portfolios/{$user->id}/a.jpg");
+        Storage::disk('public')->assertMissing("logos/{$profileId}/logo.png");
+        Storage::disk('public')->assertMissing("portfolios/{$profileId}/a.jpg");
+        $this->assertFalse(Storage::disk('public')->directoryExists("logos/{$profileId}"));
+        $this->assertFalse(Storage::disk('public')->directoryExists("portfolios/{$profileId}"));
+    }
+
+    #[Test]
+    public function legacy_user_id_folders_are_also_removed(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $this->putLegacyUserFolders($user);
+
+        $user->anonymizeAndDelete();
+
         $this->assertFalse(Storage::disk('public')->directoryExists("logos/{$user->id}"));
         $this->assertFalse(Storage::disk('public')->directoryExists("portfolios/{$user->id}"));
+    }
+
+    #[Test]
+    public function soft_deleted_profile_folders_are_removed(): void
+    {
+        $user = $this->memberWithFullProfile();
+        $profileId = $user->memberProfile->id;
+        $user->memberProfile->delete();
+
+        $user->refresh()->anonymizeAndDelete();
+
+        $this->assertFalse(Storage::disk('public')->directoryExists("logos/{$profileId}"));
+        $this->assertFalse(Storage::disk('public')->directoryExists("portfolios/{$profileId}"));
     }
 
     #[Test]
@@ -127,11 +163,15 @@ class AnonymizeAndDeleteTest extends TestCase
     {
         $user = $this->memberWithFullProfile();
         $other = $this->memberWithFullProfile();
+        $this->putLegacyUserFolders($other);
+        $otherProfileId = $other->memberProfile->id;
 
         $user->anonymizeAndDelete();
 
-        Storage::disk('public')->assertExists("logos/{$other->id}/logo.png");
-        Storage::disk('public')->assertExists("portfolios/{$other->id}/a.jpg");
+        Storage::disk('public')->assertExists("logos/{$otherProfileId}/logo.png");
+        Storage::disk('public')->assertExists("portfolios/{$otherProfileId}/a.jpg");
+        Storage::disk('public')->assertExists("logos/{$other->id}/antigo.png");
+        Storage::disk('public')->assertExists("portfolios/{$other->id}/antigo.jpg");
     }
 
     #[Test]
@@ -223,14 +263,15 @@ class AnonymizeAndDeleteTest extends TestCase
     }
 
     #[Test]
-    public function user_without_profile_has_logo_folder_removed(): void
+    public function user_without_profile_has_legacy_user_folders_removed(): void
     {
         $admin = User::factory()->admin()->create();
-        Storage::disk('public')->put("logos/{$admin->id}/logo.png", 'conteudo');
+        $this->putLegacyUserFolders($admin);
 
-        $admin->anonymizeAndDelete();
+        $this->assertTrue($admin->anonymizeAndDelete());
 
-        Storage::disk('public')->assertMissing("logos/{$admin->id}/logo.png");
+        Storage::disk('public')->assertMissing("logos/{$admin->id}/antigo.png");
+        Storage::disk('public')->assertMissing("portfolios/{$admin->id}/antigo.jpg");
     }
 
     #[Test]
@@ -312,12 +353,17 @@ class AnonymizeAndDeleteTest extends TestCase
     {
         $user = $this->memberWithFullProfile();
 
+        $profileId = $user->memberProfile->id;
+        $this->putLegacyUserFolders($user);
+
         DB::beginTransaction();
         $user->anonymizeAndDelete();
         DB::rollBack();
 
-        Storage::disk('public')->assertExists("logos/{$user->id}/logo.png");
-        Storage::disk('public')->assertExists("portfolios/{$user->id}/a.jpg");
+        Storage::disk('public')->assertExists("logos/{$profileId}/logo.png");
+        Storage::disk('public')->assertExists("portfolios/{$profileId}/a.jpg");
+        Storage::disk('public')->assertExists("logos/{$user->id}/antigo.png");
+        Storage::disk('public')->assertExists("portfolios/{$user->id}/antigo.jpg");
         $this->assertNotSoftDeleted('users', ['id' => $user->id]);
     }
 
@@ -853,13 +899,18 @@ class AnonymizeAndDeleteTest extends TestCase
     public function already_deleted_account_keeps_its_folders(): void
     {
         $user = $this->memberWithFullProfile();
+        $profileId = $user->memberProfile->id;
         $staleCopy = User::find($user->id);
         $user->anonymizeAndDelete();
+        Storage::disk('public')->put("logos/{$profileId}/novo.png", 'conteudo');
+        Storage::disk('public')->put("portfolios/{$profileId}/novo.jpg", 'conteudo');
         Storage::disk('public')->put("logos/{$user->id}/novo.png", 'conteudo');
         Storage::disk('public')->put("portfolios/{$user->id}/novo.jpg", 'conteudo');
 
         $this->assertFalse($staleCopy->anonymizeAndDelete());
 
+        Storage::disk('public')->assertExists("logos/{$profileId}/novo.png");
+        Storage::disk('public')->assertExists("portfolios/{$profileId}/novo.jpg");
         Storage::disk('public')->assertExists("logos/{$user->id}/novo.png");
         Storage::disk('public')->assertExists("portfolios/{$user->id}/novo.jpg");
     }

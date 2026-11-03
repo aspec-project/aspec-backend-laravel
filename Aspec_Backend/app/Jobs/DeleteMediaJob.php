@@ -22,7 +22,7 @@ class DeleteMediaJob implements ShouldQueue
 
     /**
      * @param  string  $path  Caminho no disco das imagens (gerado pelo servidor, nunca pelo cliente).
-     * @param  bool  $directory  true para apagar a pasta inteira (ex.: logos/{user_id}).
+     * @param  bool  $directory  true para apagar a pasta inteira (ex.: logos/{profile_id}).
      */
     public function __construct(public string $path, public bool $directory = false) {}
 

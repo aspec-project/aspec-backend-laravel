@@ -3,6 +3,7 @@
 namespace Tests\Feature\Storage;
 
 use App\Jobs\DeleteMediaJob;
+use App\Models\MemberProfile;
 use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -98,7 +99,7 @@ class DeleteMediaJobTest extends TestCase
     }
 
     #[Test]
-    public function anonymisation_queues_the_deletion_of_both_member_folders(): void
+    public function anonymisation_of_an_account_without_profile_queues_only_the_user_folders(): void
     {
         Queue::fake([DeleteMediaJob::class]);
         $user = User::factory()->create();
@@ -108,5 +109,51 @@ class DeleteMediaJobTest extends TestCase
         Queue::assertPushed(DeleteMediaJob::class, 2);
         Queue::assertPushed(DeleteMediaJob::class, fn (DeleteMediaJob $job) => $job->path === "logos/{$user->id}" && $job->directory);
         Queue::assertPushed(DeleteMediaJob::class, fn (DeleteMediaJob $job) => $job->path === "portfolios/{$user->id}" && $job->directory);
+    }
+
+    #[Test]
+    public function anonymisation_queues_the_profile_folders_and_the_legacy_user_folders(): void
+    {
+        Queue::fake([DeleteMediaJob::class]);
+        $user = User::factory()->create();
+        $profile = MemberProfile::factory()->create(['user_id' => $user->id]);
+
+        $user->anonymizeAndDelete();
+
+        Queue::assertPushed(DeleteMediaJob::class, 4);
+
+        foreach (["logos/{$profile->id}", "portfolios/{$profile->id}", "logos/{$user->id}", "portfolios/{$user->id}"] as $path) {
+            Queue::assertPushed(DeleteMediaJob::class, fn (DeleteMediaJob $job) => $job->path === $path && $job->directory);
+        }
+    }
+
+    #[Test]
+    public function anonymisation_queues_the_folders_of_a_soft_deleted_profile(): void
+    {
+        Queue::fake([DeleteMediaJob::class]);
+        $user = User::factory()->create();
+        $profile = MemberProfile::factory()->create(['user_id' => $user->id]);
+        $profile->delete();
+
+        $user->refresh()->anonymizeAndDelete();
+
+        Queue::assertPushed(DeleteMediaJob::class, fn (DeleteMediaJob $job) => $job->path === "logos/{$profile->id}" && $job->directory);
+        Queue::assertPushed(DeleteMediaJob::class, fn (DeleteMediaJob $job) => $job->path === "portfolios/{$profile->id}" && $job->directory);
+    }
+
+    #[Test]
+    public function profile_folders_are_deleted_on_the_r2_disk(): void
+    {
+        $user = User::factory()->create();
+        $profile = MemberProfile::factory()->create(['user_id' => $user->id]);
+        Storage::disk('r2')->put("logos/{$profile->id}/logo.png", 'x');
+        Storage::disk('r2')->put("portfolios/{$profile->id}/1.jpg", 'x');
+        Storage::disk('r2')->put("logos/{$user->id}/antigo.png", 'x');
+
+        $user->anonymizeAndDelete();
+
+        $this->assertSame([], Storage::disk('r2')->allFiles("logos/{$profile->id}"));
+        $this->assertSame([], Storage::disk('r2')->allFiles("portfolios/{$profile->id}"));
+        $this->assertSame([], Storage::disk('r2')->allFiles("logos/{$user->id}"));
     }
 }

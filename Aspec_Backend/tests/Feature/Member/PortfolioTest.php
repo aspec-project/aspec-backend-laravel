@@ -50,7 +50,7 @@ class PortfolioTest extends TestCase
 
     private function addStoredImage(User $user, ?string $name = null): Portfolio
     {
-        $path = "portfolios/{$user->id}/".($name ?? Str::random(40).'.jpg');
+        $path = $this->portfolioDir($user).'/'.($name ?? Str::random(40).'.jpg');
         Storage::disk('public')->put($path, 'conteudo');
 
         return Portfolio::create(['profile_id' => $user->memberProfile->id, 'image_path' => $path]);
@@ -63,9 +63,21 @@ class PortfolioTest extends TestCase
         }
     }
 
+    /**
+     * Pasta do portfólio do perfil: o caminho usa o id do perfil (já público) e nunca o do utilizador.
+     */
+    private function portfolioDir(User $user): string
+    {
+        return 'portfolios/'.$user->memberProfile->id;
+    }
+
     private function assertNothingStored(User $user): void
     {
         $this->assertSame([], Storage::disk('public')->allFiles("portfolios/{$user->id}"));
+
+        if ($user->memberProfile) {
+            $this->assertSame([], Storage::disk('public')->allFiles($this->portfolioDir($user)));
+        }
     }
 
     // ---- POST /api/member-portfolio ----
@@ -91,7 +103,7 @@ class PortfolioTest extends TestCase
     }
 
     #[Test]
-    public function uploaded_file_is_stored_in_user_portfolio_folder(): void
+    public function uploaded_file_is_stored_in_profile_portfolio_folder(): void
     {
         $user = $this->memberWithProfile();
         Sanctum::actingAs($user);
@@ -99,8 +111,24 @@ class PortfolioTest extends TestCase
         $this->postJson(self::URL, ['image' => UploadedFile::fake()->image('foto.jpg')])->assertCreated();
 
         $image = Portfolio::where('profile_id', $user->memberProfile->id)->sole();
-        $this->assertStringStartsWith("portfolios/{$user->id}/", $image->image_path);
+        $this->assertStringStartsWith($this->portfolioDir($user).'/', $image->image_path);
         Storage::disk('public')->assertExists($image->image_path);
+    }
+
+    #[Test]
+    public function image_path_and_url_never_contain_the_user_id(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $imageUrl = $this->postJson(self::URL, ['image' => UploadedFile::fake()->image('foto.jpg')])
+            ->assertCreated()
+            ->json('data.image_url');
+
+        $image = Portfolio::where('profile_id', $user->memberProfile->id)->sole();
+        $this->assertStringNotContainsString($user->id, $image->image_path);
+        $this->assertStringNotContainsString($user->id, $imageUrl);
+        $this->assertSame([], Storage::disk('public')->allFiles("portfolios/{$user->id}"));
     }
 
     #[Test]
@@ -114,7 +142,7 @@ class PortfolioTest extends TestCase
         $image = Portfolio::where('profile_id', $user->memberProfile->id)->sole();
         $this->assertNotSame('a-minha-foto.png', basename($image->image_path));
         $this->assertStringNotContainsString('a-minha-foto', $image->image_path);
-        Storage::disk('public')->assertMissing("portfolios/{$user->id}/a-minha-foto.png");
+        Storage::disk('public')->assertMissing($this->portfolioDir($user).'/a-minha-foto.png');
     }
 
     public static function acceptedImages(): array
@@ -210,7 +238,7 @@ class PortfolioTest extends TestCase
     {
         $user = $this->memberWithProfile();
         $this->addImages($user, 10);
-        $filesBefore = Storage::disk('public')->allFiles("portfolios/{$user->id}");
+        $filesBefore = Storage::disk('public')->allFiles($this->portfolioDir($user));
         Sanctum::actingAs($user);
 
         $this->postJson(self::URL, ['image' => UploadedFile::fake()->image('decima-primeira.jpg')])
@@ -220,7 +248,7 @@ class PortfolioTest extends TestCase
             ->assertJsonMissingPath('errors');
 
         $this->assertSame(10, $user->memberProfile->portfolios()->count());
-        $this->assertSame($filesBefore, Storage::disk('public')->allFiles("portfolios/{$user->id}"));
+        $this->assertSame($filesBefore, Storage::disk('public')->allFiles($this->portfolioDir($user)));
     }
 
     #[Test]

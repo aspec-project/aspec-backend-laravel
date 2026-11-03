@@ -512,7 +512,7 @@ class DemoSeederTest extends TestCase
 
         foreach ($this->activeProfiles() as $profile) {
             $this->assertNotNull($profile->logo_path, $profile->business_name);
-            $this->assertStringStartsWith("logos/{$profile->user_id}/", $profile->logo_path);
+            $this->assertStringStartsWith("logos/{$profile->id}/", $profile->logo_path);
             Storage::disk('public')->assertExists($profile->logo_path);
         }
 
@@ -523,8 +523,28 @@ class DemoSeederTest extends TestCase
             $this->assertGreaterThanOrEqual(3, $profile->portfolios->count());
 
             foreach ($profile->portfolios as $image) {
-                $this->assertStringStartsWith("portfolios/{$profile->user_id}/", $image->image_path);
+                $this->assertStringStartsWith("portfolios/{$profile->id}/", $image->image_path);
                 Storage::disk('public')->assertExists($image->image_path);
+            }
+        }
+    }
+
+    #[Test]
+    #[RequiresPhpExtension('gd')]
+    public function demo_media_is_never_stored_under_the_user_id(): void
+    {
+        $this->runDemoSeeder();
+
+        foreach (MemberProfile::with('portfolios')->get() as $profile) {
+            $this->assertSame([], Storage::disk('public')->allFiles("logos/{$profile->user_id}"), $profile->business_name);
+            $this->assertSame([], Storage::disk('public')->allFiles("portfolios/{$profile->user_id}"), $profile->business_name);
+
+            if ($profile->logo_path !== null) {
+                $this->assertStringNotContainsString($profile->user_id, $profile->logo_path);
+            }
+
+            foreach ($profile->portfolios as $image) {
+                $this->assertStringNotContainsString($profile->user_id, $image->image_path);
             }
         }
     }
@@ -1782,7 +1802,7 @@ class DemoSeederTest extends TestCase
             $profile = $this->profileByBusinessName($businessName);
 
             $expected = array_map(
-                fn (int $number) => "portfolios/{$profile->user_id}/demo-{$set}-{$number}.jpg",
+                fn (int $number) => "portfolios/{$profile->id}/demo-{$set}-{$number}.jpg",
                 range(1, $count),
             );
 
@@ -1811,7 +1831,7 @@ class DemoSeederTest extends TestCase
             $profile = $this->profileByBusinessName($businessName);
 
             for ($number = 1; $number <= $count; $number++) {
-                $path = "portfolios/{$profile->user_id}/demo-{$set}-{$number}.jpg";
+                $path = "portfolios/{$profile->id}/demo-{$set}-{$number}.jpg";
                 $source = database_path("seeders/demo/portfolio/{$set}-{$number}.jpg");
 
                 $disk->assertExists($path);
@@ -1837,8 +1857,8 @@ class DemoSeederTest extends TestCase
         $this->runDemoSeeder();
 
         $profile = $this->profileByBusinessName('Ferreira Arquitetura e Interiores');
-        $oldDemo = "portfolios/{$profile->user_id}/demo-projeto-1.png";
-        $memberUpload = "portfolios/{$profile->user_id}/abc.jpg";
+        $oldDemo = "portfolios/{$profile->id}/demo-projeto-1.png";
+        $memberUpload = "portfolios/{$profile->id}/abc.jpg";
 
         Storage::disk('public')->put($oldDemo, 'old demo image');
         Storage::disk('public')->put($memberUpload, 'member upload');
@@ -1856,8 +1876,46 @@ class DemoSeederTest extends TestCase
         $this->assertSame(5, $profile->portfolios()->count());
 
         foreach (range(1, 4) as $number) {
-            Storage::disk('public')->assertExists("portfolios/{$profile->user_id}/demo-arquitetura-{$number}.jpg");
+            Storage::disk('public')->assertExists("portfolios/{$profile->id}/demo-arquitetura-{$number}.jpg");
         }
+    }
+
+    /**
+     * Numa máquina semeada antes das pastas por perfil (e onde media:move-to-profile-folders não
+     * correu), repetir o seeder troca as imagens de demonstração da pasta antiga pelas da pasta do
+     * perfil, sem duplicar o portefólio nem deixar ficheiros na pasta do utilizador.
+     */
+    #[Test]
+    #[RequiresPhpExtension('gd')]
+    public function running_again_replaces_demo_media_left_in_the_old_user_folders(): void
+    {
+        $this->runDemoSeeder();
+
+        $disk = Storage::disk('public');
+        $profile = $this->profileByBusinessName('Ferreira Arquitetura e Interiores');
+
+        $oldLogo = "logos/{$profile->user_id}/demo-logo.png";
+        $disk->move($profile->logo_path, $oldLogo);
+        $profile->update(['logo_path' => $oldLogo]);
+
+        foreach ($profile->portfolios as $image) {
+            $oldPath = "portfolios/{$profile->user_id}/".basename($image->image_path);
+            $disk->move($image->image_path, $oldPath);
+            $image->update(['image_path' => $oldPath]);
+        }
+
+        $this->runDemoSeeder();
+
+        $profile->refresh();
+        $this->assertSame("logos/{$profile->id}/demo-logo.png", $profile->logo_path);
+        $disk->assertExists($profile->logo_path);
+        $this->assertSame([], $disk->allFiles("logos/{$profile->user_id}"));
+
+        $this->assertSame(
+            array_map(fn (int $number) => "portfolios/{$profile->id}/demo-arquitetura-{$number}.jpg", range(1, 4)),
+            $profile->portfolios()->orderBy('image_path')->pluck('image_path')->all(),
+        );
+        $this->assertSame([], $disk->allFiles("portfolios/{$profile->user_id}"));
     }
 
     #[Test]
@@ -1868,7 +1926,7 @@ class DemoSeederTest extends TestCase
         $profile = $this->profileByBusinessName('Quinta do Vale Verde');
 
         $expected = array_map(
-            fn (int $number) => Storage::disk('public')->url("portfolios/{$profile->user_id}/demo-quinta-{$number}.jpg"),
+            fn (int $number) => Storage::disk('public')->url("portfolios/{$profile->id}/demo-quinta-{$number}.jpg"),
             range(1, 3),
         );
 

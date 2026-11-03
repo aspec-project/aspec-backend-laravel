@@ -7,8 +7,10 @@ use App\Models\MemberProfile;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Testing\TestResponse;
+use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\BuildsDirectoryMembers;
@@ -135,13 +137,13 @@ class MemberDataExposureTest extends TestCase
             'commercial_phone' => self::COMMERCIAL_PHONE,
             'congregation' => self::CONGREGATION,
             'role_in_congregation' => self::ROLE_IN_CONGREGATION,
-            'logo_path' => "logos/{$owner->id}/logo.png",
             'website_url' => self::WEBSITE,
             'address' => self::ADDRESS,
             'postal_code' => self::POSTAL_CODE,
             'city' => self::CITY,
         ]);
-        $profile->portfolios()->create(['image_path' => "portfolios/{$owner->id}/foto.jpg"]);
+        $profile->update(['logo_path' => "logos/{$profile->id}/logo.png"]);
+        $profile->portfolios()->create(['image_path' => "portfolios/{$profile->id}/foto.jpg"]);
         $profile->socialPlatforms()->attach([
             SocialPlatform::where('name', 'LinkedIn')->value('id') => ['url' => self::LINKEDIN_URL],
             SocialPlatform::where('name', 'Instagram')->value('id') => ['url' => self::INSTAGRAM_URL],
@@ -206,6 +208,23 @@ class MemberDataExposureTest extends TestCase
         }
 
         return $this;
+    }
+
+    /**
+     * Dono com logótipo e uma imagem do portfólio enviados pelos endpoints reais, para o caminho
+     * gravado ser o que a aplicação gera (e não um escrito à mão no teste).
+     */
+    private function ownerWithUploadedMedia(): MemberProfile
+    {
+        $profile = $this->listedMember(['business_name' => 'Empresa Com Imagens']);
+        Sanctum::actingAs($profile->user);
+
+        $this->postJson('/api/member-profile/logo', ['logo' => UploadedFile::fake()->image('logo.png')])->assertOk();
+        $this->postJson('/api/member-portfolio', ['image' => UploadedFile::fake()->image('foto.jpg')])->assertCreated();
+
+        $this->app['auth']->forgetGuards();
+
+        return $profile->fresh();
     }
 
     private function assertNoForbiddenKeys(TestResponse $response): void
@@ -321,6 +340,57 @@ class MemberDataExposureTest extends TestCase
             ->assertJsonPath('data.pagination.total', $viewer === 'active' ? 2 : 1);
 
         $this->assertDontSeeAny($response, [...self::MEMBERS_ONLY_VALUES, ...self::NEVER_VALUES]);
+    }
+
+    #[Test]
+    #[DataProvider('listViewers')]
+    public function list_never_contains_the_owner_user_id_after_uploads(string $viewer): void
+    {
+        $profile = $this->ownerWithUploadedMedia();
+
+        $response = $this->asViewer($viewer)->listMembers()->assertOk();
+
+        $this->assertContains($profile->id, $this->listedIds($response));
+        $this->assertNotNull($response->json('data.items.0.logo_url'));
+        $response->assertDontSee($profile->user_id, false);
+    }
+
+    #[Test]
+    #[DataProvider('allViewers')]
+    public function public_profile_never_contains_the_owner_user_id_after_uploads(string $viewer): void
+    {
+        $profile = $this->ownerWithUploadedMedia();
+
+        $response = $this->asViewer($viewer, $profile)->showMember($profile->id)->assertOk();
+
+        $this->assertNotNull($response->json('data.logo_url'));
+        $this->assertCount(1, $response->json('data.portfolio'));
+        $response->assertDontSee($profile->user_id, false);
+    }
+
+    #[Test]
+    public function own_profile_never_contains_the_owner_user_id_after_uploads(): void
+    {
+        $profile = $this->ownerWithUploadedMedia();
+        Sanctum::actingAs($profile->user);
+
+        $response = $this->getJson('/api/member-profile')->assertOk();
+
+        $this->assertNotNull($response->json('data.logo_url'));
+        $this->assertCount(1, $response->json('data.portfolio'));
+        $response->assertDontSee($profile->user_id, false);
+    }
+
+    #[Test]
+    #[DataProvider('allViewers')]
+    public function public_profile_media_urls_use_the_profile_id(string $viewer): void
+    {
+        $profile = $this->ownerWithUploadedMedia();
+
+        $response = $this->asViewer($viewer, $profile)->showMember($profile->id)->assertOk();
+
+        $this->assertStringContainsString("/logos/{$profile->id}/", $response->json('data.logo_url'));
+        $this->assertStringContainsString("/portfolios/{$profile->id}/", $response->json('data.portfolio.0.image_url'));
     }
 
     /**

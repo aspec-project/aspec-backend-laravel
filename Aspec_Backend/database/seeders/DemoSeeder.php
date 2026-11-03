@@ -227,14 +227,15 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Logótipo 400×400 com as iniciais da empresa, em logos/{user_id} no disco de media
+     * Logótipo 400×400 com as iniciais da empresa, em logos/{profile_id} no disco de media
      * (a mesma pasta do upload do membro). Nome fixo para não criar ficheiros repetidos.
+     * Apaga o logótipo de demonstração da pasta antiga (logos/{user_id}) de uma execução anterior.
      *
      * @param  array{int, int, int}  $background  Cor de fundo (RGB).
      */
     private function seedLogo(MemberProfile $profile, array $background): void
     {
-        $path = "logos/{$profile->user_id}/demo-logo.png";
+        $path = "logos/{$profile->id}/demo-logo.png";
 
         if (! MediaStorage::disk()->exists($path)) {
             $image = imagecreatetruecolor(400, 400);
@@ -245,12 +246,14 @@ class DemoSeeder extends Seeder
         }
 
         $profile->update(['logo_path' => $path]);
+        MediaStorage::disk()->delete("logos/{$profile->user_id}/demo-logo.png");
     }
 
     /**
      * Fotografias do portefólio, copiadas de database/seeders/demo/portfolio ({conjunto}-N.jpg) para
-     * portfolios/{user_id} no disco de media, como no upload do membro. As imagens de demonstração
-     * antigas (demo-*) que já não fazem parte do conjunto são apagadas, com o ficheiro.
+     * portfolios/{profile_id} no disco de media, como no upload do membro. As imagens de demonstração
+     * antigas (demo-*) que já não fazem parte do conjunto são apagadas, com o ficheiro, também na pasta
+     * antiga portfolios/{user_id} (base de dados semeada antes das pastas por perfil).
      * Origem e licença das fotografias em THIRD_PARTY_NOTICES.md.
      *
      * @param  string|null  $set  Prefixo das fotografias (ex.: "arquitetura"); null = perfil sem portefólio.
@@ -263,7 +266,7 @@ class DemoSeeder extends Seeder
         $paths = [];
 
         foreach ($sources as $source) {
-            $path = "portfolios/{$profile->user_id}/demo-".basename($source);
+            $path = "portfolios/{$profile->id}/demo-".basename($source);
             $paths[] = $path;
 
             if (! MediaStorage::disk()->exists($path)) {
@@ -274,7 +277,9 @@ class DemoSeeder extends Seeder
         }
 
         $stale = $profile->portfolios()
-            ->where('image_path', 'like', "portfolios/{$profile->user_id}/demo-%")
+            ->where(fn ($query) => $query
+                ->where('image_path', 'like', "portfolios/{$profile->id}/demo-%")
+                ->orWhere('image_path', 'like', "portfolios/{$profile->user_id}/demo-%"))
             ->whereNotIn('image_path', $paths)
             ->get();
 

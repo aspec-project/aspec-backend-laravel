@@ -49,7 +49,7 @@ class MemberLogoTest extends TestCase
 
     private function giveStoredLogo(User $user): string
     {
-        $path = "logos/{$user->id}/".Str::random(40).'.png';
+        $path = $this->logoDir($user).'/'.Str::random(40).'.png';
         Storage::disk('public')->put($path, 'logo-antigo');
         $user->memberProfile->update(['logo_path' => $path]);
 
@@ -61,9 +61,17 @@ class MemberLogoTest extends TestCase
         return $user->memberProfile->fresh()->logo_path;
     }
 
+    /**
+     * Pasta dos logótipos do perfil: o caminho usa o id do perfil (já público) e nunca o do utilizador.
+     */
+    private function logoDir(User $user): string
+    {
+        return 'logos/'.$user->memberProfile->id;
+    }
+
     private function assertNothingStored(User $user): void
     {
-        $this->assertSame([], Storage::disk('public')->allFiles("logos/{$user->id}"));
+        $this->assertSame([], Storage::disk('public')->allFiles('logos'));
     }
 
     // ---- Sucesso ----
@@ -87,7 +95,7 @@ class MemberLogoTest extends TestCase
     }
 
     #[Test]
-    public function logo_is_stored_in_user_logos_folder_and_logo_path_is_filled(): void
+    public function logo_is_stored_in_profile_logos_folder_and_logo_path_is_filled(): void
     {
         $user = $this->memberWithProfile();
         Sanctum::actingAs($user);
@@ -95,9 +103,24 @@ class MemberLogoTest extends TestCase
         $this->postJson(self::URL, ['logo' => UploadedFile::fake()->image('logo.png')])->assertOk();
 
         $path = $this->logoPathOf($user);
-        $this->assertStringStartsWith("logos/{$user->id}/", $path);
+        $this->assertStringStartsWith($this->logoDir($user).'/', $path);
         Storage::disk('public')->assertExists($path);
-        $this->assertCount(1, Storage::disk('public')->allFiles("logos/{$user->id}"));
+        $this->assertCount(1, Storage::disk('public')->allFiles($this->logoDir($user)));
+    }
+
+    #[Test]
+    public function logo_path_and_url_never_contain_the_user_id(): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $logoUrl = $this->postJson(self::URL, ['logo' => UploadedFile::fake()->image('logo.png')])
+            ->assertOk()
+            ->json('data.logo_url');
+
+        $this->assertStringNotContainsString($user->id, $this->logoPathOf($user));
+        $this->assertStringNotContainsString($user->id, $logoUrl);
+        $this->assertSame([], Storage::disk('public')->allFiles("logos/{$user->id}"));
     }
 
     #[Test]
@@ -109,7 +132,7 @@ class MemberLogoTest extends TestCase
         $this->postJson(self::URL, ['logo' => UploadedFile::fake()->image('o-meu-logo.png')])->assertOk();
 
         $this->assertStringNotContainsString('o-meu-logo', $this->logoPathOf($user));
-        Storage::disk('public')->assertMissing("logos/{$user->id}/o-meu-logo.png");
+        Storage::disk('public')->assertMissing($this->logoDir($user).'/o-meu-logo.png');
     }
 
     #[Test]
@@ -175,7 +198,7 @@ class MemberLogoTest extends TestCase
         $this->assertNotSame($oldPath, $newPath);
         Storage::disk('public')->assertMissing($oldPath);
         Storage::disk('public')->assertExists($newPath);
-        $this->assertSame([$newPath], Storage::disk('public')->allFiles("logos/{$user->id}"));
+        $this->assertSame([$newPath], Storage::disk('public')->allFiles($this->logoDir($user)));
     }
 
     #[Test]
@@ -222,7 +245,7 @@ class MemberLogoTest extends TestCase
             ->assertExactJson(['success' => false, 'message' => 'Ocorreu um erro interno. Tente novamente mais tarde.']);
 
         $this->assertSame($oldPath, $this->logoPathOf($user));
-        $this->assertSame([$oldPath], Storage::disk('public')->allFiles("logos/{$user->id}"));
+        $this->assertSame([$oldPath], Storage::disk('public')->allFiles($this->logoDir($user)));
     }
 
     // ---- Validação ----
@@ -268,7 +291,7 @@ class MemberLogoTest extends TestCase
             ->assertJsonValidationErrors(['logo'], 'errors');
 
         $this->assertSame($oldPath, $this->logoPathOf($user));
-        $this->assertSame([$oldPath], Storage::disk('public')->allFiles("logos/{$user->id}"));
+        $this->assertSame([$oldPath], Storage::disk('public')->allFiles($this->logoDir($user)));
     }
 
     // ---- Throttle: 120 pedidos/min e 2000/hora (logo-upload), como no portfólio ----
