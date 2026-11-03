@@ -7,7 +7,7 @@ Na pasta `Aspec_Backend/`:
 1. Copiar `.env.example` para `.env`. O `APP_URL` já vem como `http://localhost:8000`, o endereço do `php artisan serve` e o que o frontend usa por omissão (`VITE_API_URL`). Se a API correr noutro endereço (ex. domínio do Laragon), mudar o `APP_URL` e o `VITE_API_URL` do frontend para o mesmo valor. Os URLs das imagens (logótipos e portfólio) são gerados a partir do `APP_URL`, com a porta incluída; se estiver errado, as imagens não abrem no frontend.
 2. `php artisan key:generate`
 3. `php artisan migrate:fresh --seed` — cria as tabelas e os dados de referência (roles, estados de conta, setores, distritos, dias da semana, redes sociais). **Apaga todos os dados da base de dados local.**
-4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{user_id}`, `portfolios/{user_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**. Só é preciso com as imagens guardadas na máquina (`MEDIA_DISK=public`, o valor por omissão); com o Cloudflare R2 não se usa (ver "Armazenamento de ficheiros").
+4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{profile_id}`, `portfolios/{profile_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**. Só é preciso com as imagens guardadas na máquina (`MEDIA_DISK=public`, o valor por omissão); com o Cloudflare R2 não se usa (ver "Armazenamento de ficheiros").
 5. `php artisan serve` — a API fica em `http://localhost:8000/api`.
 
 No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão de browser.
@@ -218,6 +218,13 @@ Os logótipos e o portefólio vão para o disco de media (`MEDIA_DISK`) e os PDF
   4. `php artisan db:seed --class=DemoSeeder` (recria logótipos, portefólio e PDFs demo no R2; o que foi enviado à mão em local fica partido).
   5. O `storage:link` deixa de ser preciso.
 - **Nunca `INVOICES_DISK=public`** (nem `r2`, nem o mesmo disco das imagens): os PDFs têm NIF e morada. O driver `demo` recusa emitir e servir faturas nesse caso e deixa um erro crítico no log.
+- **Pastas por perfil:** os ficheiros ficam em `logos/{profile_id}/` e `portfolios/{profile_id}/`. O id do perfil já é público (`/api/members/{id}`); o id do utilizador (usado em links assinados e rotas de admin) nunca aparece nos URLs das imagens.
+- **Depois do `git pull` que trouxe as pastas por perfil** (uma vez por máquina, com o `MEDIA_DISK` que a máquina usa):
+  1. `php artisan media:move-to-profile-folders --dry-run` (mostra o que vai mudar, sem mexer em nada);
+  2. `php artisan media:move-to-profile-folders` (move os ficheiros das pastas antigas `logos/{user_id}`/`portfolios/{user_id}` e atualiza `logo_path`/`image_path`);
+  3. correr outra vez: deve dizer `Movidos: 0`.
+  - Por ficheiro, o comando move primeiro e só depois atualiza a linha; se parar a meio, voltar a correr retoma (um ficheiro já movido só atualiza a linha). Um ficheiro que não existe em nenhuma das pastas fica com um aviso "Em falta" e a linha não muda; o comando termina com sucesso na mesma. Termina com erro só se o disco recusar mover um ficheiro (ex.: falha de rede do R2): basta voltar a correr.
+  - Quem só usa os dados demo pode, em vez disso, voltar a correr o `DemoSeeder` (também limpa as imagens demo das pastas antigas).
 - **Testes:** usam sempre os discos locais (o `phpunit.xml` força `MEDIA_DISK=public`, `INVOICES_DISK=local` e chaves R2 falsas com um endpoint numa porta local fechada), mesmo com o R2 no `.env`. Nenhum teste grava nos buckets.
 
 ## Email
