@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
 use App\Http\Controllers\Api\Admin\AdminPrayerCardController;
+use App\Http\Controllers\Api\Admin\AdminReviewController;
 use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
@@ -99,6 +100,7 @@ Route::prefix('admin')
         Route::post('/users/{user}/payment-link', [AdminUserPaymentLinkController::class, 'store'])
             ->whereUuid('user')
             ->middleware('throttle:admin-payment-link');
+        Route::get('/reviews', [AdminReviewController::class, 'index']);
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
