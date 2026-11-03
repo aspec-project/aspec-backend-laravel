@@ -6,6 +6,7 @@ use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
 use App\Jobs\CancelStripeSubscriptionJob;
+use App\Jobs\DeleteMediaJob;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
@@ -21,7 +22,6 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription;
@@ -505,10 +505,11 @@ class User extends Authenticatable
             return false;
         }
 
-        DB::afterCommit(function () {
-            Storage::disk('public')->deleteDirectory("logos/{$this->id}");
-            Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
-        });
+        // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.
+        rescue(function () {
+            DeleteMediaJob::dispatch("logos/{$this->id}", directory: true)->afterCommit();
+            DeleteMediaJob::dispatch("portfolios/{$this->id}", directory: true)->afterCommit();
+        }, report: true);
 
         if ($checkoutSessionId !== null) {
             // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.

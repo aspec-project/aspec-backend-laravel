@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class MemberSummaryResource extends JsonResource
 {
@@ -29,7 +29,7 @@ class MemberSummaryResource extends JsonResource
                 'id' => $this->location->id,
                 'name' => $this->location->name,
             ],
-            'logo_url' => $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null,
+            'logo_url' => MediaStorage::url($this->logo_path),
             'average_rating' => isset($this->average_rating) ? round((float) $this->average_rating, 1) : null,
             'reviews_count' => (int) ($this->reviews_count ?? 0),
         ];

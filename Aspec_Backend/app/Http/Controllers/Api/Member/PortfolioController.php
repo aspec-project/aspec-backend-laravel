@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\Member;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StorePortfolioRequest;
 use App\Http\Resources\PortfolioResource;
+use App\Jobs\DeleteMediaJob;
 use App\Models\MemberProfile;
+use App\Support\MediaStorage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
@@ -20,9 +22,9 @@ class PortfolioController extends Controller
 
     /**
      * Adiciona uma imagem ao portfólio do membro autenticado (máximo de 10).
-     * O ficheiro fica em portfolios/{user_id} no disco public, com nome gerado; é apagado se a BD falhar.
+     * O ficheiro fica em portfolios/{user_id} no disco de media, com nome gerado; é apagado se a BD falhar.
      *
-     * @throws Throwable quando a escrita na BD falha (resposta 500 pelo handler global)
+     * @throws Throwable quando a gravação do ficheiro ou a escrita na BD falham (resposta 500 pelo handler global)
      */
     public function store(StorePortfolioRequest $request): JsonResponse
     {
@@ -44,14 +46,19 @@ class PortfolioController extends Controller
                     return null;
                 }
 
-                $path = $request->file('image')->store("portfolios/{$user->id}", 'public');
+                $path = MediaStorage::disk()->putFile("portfolios/{$user->id}", $request->file('image'));
+
+                // Com 'throw' => false o disco devolve false numa falha (ex. rede do R2) em vez de lançar.
+                if ($path === false) {
+                    throw new RuntimeException('Não foi possível gravar a imagem do portfólio no disco de media.');
+                }
 
                 return $profile->portfolios()->create(['image_path' => $path]);
             });
         } catch (Throwable $e) {
             // Rollback da BD não apaga ficheiros: sem isto ficaria um ficheiro órfão no disco.
             if ($path) {
-                Storage::disk('public')->delete($path);
+                MediaStorage::disk()->delete($path);
             }
 
             throw $e;
@@ -88,7 +95,7 @@ class PortfolioController extends Controller
         }
 
         $image->delete();
-        Storage::disk('public')->delete($image->image_path);
+        rescue(fn () => DeleteMediaJob::dispatch($image->image_path), report: true);
 
         return $this->successResponse(null, 'Imagem removida do portfólio.', Response::HTTP_OK);
     }

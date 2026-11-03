@@ -10,6 +10,8 @@ use App\Services\Invoicing\Data\InvoiceData;
 use App\Services\Invoicing\Data\IssuedInvoice;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Closure;
+use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -19,15 +21,15 @@ use Throwable;
 
 /**
  * Driver de faturação de demonstração: gera um PDF "sem validade fiscal", guarda-o no disco privado
- * (`local`) e envia-o por email ao cliente. Mostra o fluxo completo da fatura sem conta InvoiceExpress.
+ * das faturas (filesystems.invoices_disk: `local` ou `r2-invoices`) e envia-o por email ao cliente.
+ * Mostra o fluxo completo da fatura sem conta InvoiceExpress.
  *
- * Nunca usa o disco `public`: esse é servido em /storage sem autenticação e o PDF tem NIF e morada.
- * No demo, o "id do documento no serviço" é o caminho do PDF no disco (invoices/{user_id}/{número}.pdf).
+ * O PDF tem NIF e morada: recusa qualquer disco que possa ser servido sem autenticação (ver
+ * privateDisk()). No demo, o "id do documento no serviço" é o caminho do PDF no disco
+ * (invoices/{user_id}/{número}.pdf).
  */
 class DemoInvoiceService implements InvoiceService
 {
-    private const DISK = 'local';
-
     private const FOLDER = 'invoices/';
 
     /**
@@ -37,7 +39,7 @@ class DemoInvoiceService implements InvoiceService
      * repetir sem criar outro documento (reescreve o mesmo ficheiro). Ignora o $draftId e o $onDraftCreated: não há rascunhos.
      * Uma falha no email não lança exceção (o PDF já existe): devolve ISSUED_NOT_SENT.
      *
-     * @throws InvoiceIssuingFailed Se a moeda não for EUR ou o PDF não puder ser gravado.
+     * @throws InvoiceIssuingFailed Se a moeda não for EUR, o disco das faturas não for privado ou o PDF não puder ser gravado.
      * @throws InvalidArgumentException Se o código do cliente não for um UUID (entra no caminho do ficheiro).
      */
     public function issue(#[\SensitiveParameter] InvoiceCustomerData $customer, InvoiceData $invoice, ?string $draftId = null, ?Closure $onDraftCreated = null): IssuedInvoice
@@ -50,10 +52,16 @@ class DemoInvoiceService implements InvoiceService
             throw new InvalidArgumentException('Código de cliente inválido para a fatura demo.');
         }
 
+        $disk = $this->privateDisk();
+
+        if ($disk === null) {
+            throw InvoiceIssuingFailed::storageFailed();
+        }
+
         $number = $this->numberFor($invoice);
         $path = self::FOLDER."{$customer->code}/{$number}.pdf";
 
-        if (! Storage::disk(self::DISK)->put($path, $this->renderPdf($customer, $invoice, $number))) {
+        if (! $disk->put($path, $this->renderPdf($customer, $invoice, $number))) {
             throw InvoiceIssuingFailed::storageFailed();
         }
 
@@ -67,12 +75,12 @@ class DemoInvoiceService implements InvoiceService
     }
 
     /**
-     * Devolve o PDF guardado no disco privado.
+     * Devolve o PDF guardado no disco privado das faturas.
      *
      * Só aceita caminhos dentro de invoices/ e sem "..", verificados antes de tocar no disco: mesmo
      * sendo um valor gravado por nós, nunca serve outro ficheiro do disco (ex. logos/ ou .env).
      *
-     * @return string|null null se o caminho for inválido ou o ficheiro não existir.
+     * @return string|null null se o caminho for inválido, o disco das faturas não for privado ou o ficheiro não existir.
      */
     public function pdf(string $providerInvoiceId): ?string
     {
@@ -80,13 +88,49 @@ class DemoInvoiceService implements InvoiceService
             return null;
         }
 
-        $contents = Storage::disk(self::DISK)->get($providerInvoiceId);
+        $disk = $this->privateDisk();
+
+        if ($disk === null) {
+            return null;
+        }
+
+        $contents = $disk->get($providerInvoiceId);
 
         if ($contents === null) {
             Log::warning('PDF da fatura demo em falta no disco.', ['path' => $providerInvoiceId]);
         }
 
         return $contents;
+    }
+
+    /**
+     * Disco das faturas (INVOICES_DISK), ou null (com log crítico) se a configuração o puder tornar público: o disco
+     * `public` (servido em /storage), o mesmo disco das imagens, um disco com `url` na definição, ou um disco
+     * S3 no mesmo bucket do disco das imagens (que é público).
+     * Um .env errado (ex. INVOICES_DISK=public ou r2) deixava PDFs com NIF e morada acessíveis sem
+     * autenticação; mais vale não emitir nem servir a fatura.
+     */
+    private function privateDisk(): ?Filesystem
+    {
+        $name = (string) config('filesystems.invoices_disk');
+        $disk = Storage::disk($name);
+
+        $hasUrl = filled(config("filesystems.disks.{$name}.url"))
+            || ($disk instanceof FilesystemAdapter && filled($disk->getConfig()['url'] ?? null));
+
+        $mediaName = (string) config('filesystems.media_disk');
+        $bucket = config("filesystems.disks.{$name}.bucket");
+        $sharesMediaBucket = config("filesystems.disks.{$name}.driver") === 's3'
+            && filled($bucket)
+            && $bucket === config("filesystems.disks.{$mediaName}.bucket");
+
+        if ($name === 'public' || $name === $mediaName || $hasUrl || $sharesMediaBucket) {
+            Log::critical('Disco das faturas recusado: pode ser servido sem autenticação. Corrija INVOICES_DISK.', ['disk' => $name]);
+
+            return null;
+        }
+
+        return $disk;
     }
 
     /**
