@@ -22,6 +22,7 @@ use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
 use App\Services\Events\EventSeriesSchedule;
+use App\Support\MediaStorage;
 use Closure;
 use GdImage;
 use Illuminate\Database\Eloquent\Model;
@@ -226,7 +227,7 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Logótipo 400×400 com as iniciais da empresa, em logos/{user_id} no disco public
+     * Logótipo 400×400 com as iniciais da empresa, em logos/{user_id} no disco de media
      * (a mesma pasta do upload do membro). Nome fixo para não criar ficheiros repetidos.
      *
      * @param  array{int, int, int}  $background  Cor de fundo (RGB).
@@ -235,12 +236,12 @@ class DemoSeeder extends Seeder
     {
         $path = "logos/{$profile->user_id}/demo-logo.png";
 
-        if (! Storage::disk('public')->exists($path)) {
+        if (! MediaStorage::disk()->exists($path)) {
             $image = imagecreatetruecolor(400, 400);
             imagefill($image, 0, 0, imagecolorallocate($image, ...$background));
             $this->drawText($image, $this->initials($profile->business_name), 12, 200, 200, [255, 255, 255]);
 
-            Storage::disk('public')->put($path, $this->toPng($image));
+            MediaStorage::disk()->put($path, $this->toPng($image));
         }
 
         $profile->update(['logo_path' => $path]);
@@ -248,7 +249,7 @@ class DemoSeeder extends Seeder
 
     /**
      * Fotografias do portefólio, copiadas de database/seeders/demo/portfolio ({conjunto}-N.jpg) para
-     * portfolios/{user_id} no disco public, como no upload do membro. As imagens de demonstração
+     * portfolios/{user_id} no disco de media, como no upload do membro. As imagens de demonstração
      * antigas (demo-*) que já não fazem parte do conjunto são apagadas, com o ficheiro.
      * Origem e licença das fotografias em THIRD_PARTY_NOTICES.md.
      *
@@ -265,8 +266,8 @@ class DemoSeeder extends Seeder
             $path = "portfolios/{$profile->user_id}/demo-".basename($source);
             $paths[] = $path;
 
-            if (! Storage::disk('public')->exists($path)) {
-                Storage::disk('public')->put($path, file_get_contents($source));
+            if (! MediaStorage::disk()->exists($path)) {
+                MediaStorage::disk()->put($path, file_get_contents($source));
             }
 
             $profile->portfolios()->firstOrCreate(['image_path' => $path]);
@@ -278,7 +279,7 @@ class DemoSeeder extends Seeder
             ->get();
 
         foreach ($stale as $image) {
-            Storage::disk('public')->delete($image->image_path);
+            MediaStorage::disk()->delete($image->image_path);
             $image->delete();
         }
     }
@@ -822,7 +823,7 @@ class DemoSeeder extends Seeder
 
     /**
      * Mostra as contas criadas com o estado da subscrição (como no backoffice), a password comum,
-     * o lembrete do storage:link e o que não funciona com as subscrições de demonstração.
+     * o lembrete do storage:link (só com o disco public) e o que não funciona com as subscrições de demonstração.
      */
     private function printSummary(): void
     {
@@ -835,7 +836,11 @@ class DemoSeeder extends Seeder
 
         $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa', 'Subscrição'], $rows);
         $this->command?->info('Password de todas as contas: '.self::PASSWORD);
-        $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');
+
+        if (config('filesystems.media_disk') === 'public') {
+            $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');
+        }
+
         $this->command?->warn('As subscrições de demonstração não existem no Stripe: o portal de faturação, cancelar e retomar não funcionam com elas (use uma conta ativada pelo Checkout).');
     }
 

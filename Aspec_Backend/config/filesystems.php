@@ -17,6 +17,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Discos de media e de faturas
+    |--------------------------------------------------------------------------
+    |
+    | O código nunca escolhe o disco à mão: as imagens dos membros (logótipos e
+    | portefólio) vão para o media_disk e os PDFs das faturas para o
+    | invoices_disk. Mudar de fornecedor (local, Cloudflare R2) é só o .env.
+    | O disco das faturas tem de ser privado (os PDFs têm NIF e morada).
+    |
+    */
+
+    'media_disk' => env('MEDIA_DISK', 'public'),
+
+    'invoices_disk' => env('INVOICES_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -59,6 +75,35 @@ return [
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => false,
             'report' => false,
+        ],
+
+        // Cloudflare R2 (compatível com S3). Sem visibility: o R2 não usa ACLs por objeto e o acesso
+        // público é do bucket inteiro. Cache de 1 ano porque cada upload tem um nome novo.
+        'r2' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('R2_MEDIA_BUCKET'),
+            'endpoint' => env('R2_ENDPOINT'),
+            'url' => env('R2_MEDIA_URL'),
+            'use_path_style_endpoint' => true,
+            'options' => ['CacheControl' => 'public, max-age=31536000, immutable'],
+            'throw' => false,
+            'report' => true,
+        ],
+
+        // Bucket privado das faturas: nunca tem url, por isso não há forma de gerar um link para lá.
+        'r2-invoices' => [
+            'driver' => 's3',
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => 'auto',
+            'bucket' => env('R2_INVOICES_BUCKET'),
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'throw' => false,
+            'report' => true,
         ],
 
     ],

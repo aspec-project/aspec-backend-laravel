@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources;
 
+use App\Support\MediaStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class MemberProfileResource extends JsonResource
 {
@@ -40,7 +40,7 @@ class MemberProfileResource extends JsonResource
                 'id' => $this->location->id,
                 'name' => $this->location->name,
             ],
-            'logo_url' => $this->logo_path ? Storage::disk('public')->url($this->logo_path) : null,
+            'logo_url' => MediaStorage::url($this->logo_path),
             'business_hours' => BusinessHourResource::collection($this->weekDays),
             'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             'portfolio' => PortfolioResource::collection($this->portfolios),
