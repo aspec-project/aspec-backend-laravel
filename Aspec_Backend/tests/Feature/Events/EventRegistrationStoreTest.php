@@ -182,6 +182,42 @@ class EventRegistrationStoreTest extends TestCase
     }
 
     #[Test]
+    public function user_cannot_register_for_a_past_session_in_a_series(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $now = now($timezone)->setTime(12, 0, 0);
+        $this->travelTo($now);
+
+        $sessionDate = $now->copy()->subDay()->toDateString();
+        $registrationDeadline = $now->copy()
+            ->subDays(2)
+            ->setTime(23, 59, 0);
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDate,
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        $pastSession = EventInstance::factory()->create([
+            'series_id' => $series->id,
+            'event_date' => $sessionDate,
+            'event_start_time' => '10:00',
+            'event_end_time' => '11:00',
+            'registration_deadline' => $registrationDeadline->format('Y-m-d H:i:s'),
+        ]);
+
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->postJson($this->url($pastSession))
+            ->assertConflict();
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $pastSession->id,
+        ]);
+    }
+
+    #[Test]
     public function user_can_register_at_the_exact_registration_deadline(): void
     {
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
