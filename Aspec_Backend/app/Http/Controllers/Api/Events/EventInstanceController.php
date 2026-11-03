@@ -42,7 +42,7 @@ class EventInstanceController extends Controller
                 ])
             )
             ->when(
-                // Only show upcoming events if series_id is not specified
+                // Mostrar apenas eventos futuros quando não é indicado o parâmetro series_id
                 ! isset($filters['series_id']),
                 fn (Builder $query) => $query->where(function (Builder $query) use ($today, $currentTime) {
                     $query
@@ -54,7 +54,7 @@ class EventInstanceController extends Controller
                         });
                 })
             )
-            // Filter by series_id if provided
+            // Filtrar pelo series_id quando este é indicado
             ->when(
                 isset($filters['series_id']),
                 fn (Builder $query) => $query->where('series_id', $filters['series_id'])
