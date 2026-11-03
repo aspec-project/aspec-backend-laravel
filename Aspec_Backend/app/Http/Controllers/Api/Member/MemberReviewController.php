@@ -8,6 +8,7 @@ use App\Http\Requests\StoreMemberReviewRequest;
 use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
 use App\Models\Review;
+use App\Models\ReviewReport;
 use App\Models\ReviewStatus;
 use App\Services\Reviews\ReviewContentModerator;
 use Illuminate\Database\Eloquent\Builder;
@@ -197,11 +198,19 @@ class MemberReviewController extends Controller
         $shouldFlag = $this->reviewContentModerator
             ->containsFlaggedLanguage($validated['comment']);
 
+        $automaticReportAttributes = [
+            'reporter_profile_id' => null,
+            'reason' => 'language_filter',
+            'comment' => null,
+            'source' => ReviewReport::SOURCE_AUTOMATIC,
+        ];
+
         [$review, $created] = DB::transaction(function () use (
             $reviewerProfile,
             $reviewedProfile,
             $validated,
             $shouldFlag,
+            $automaticReportAttributes,
         ): array {
             // Serializa as submissões para este perfil; a unique key da BD continua
             // a ser a proteção final contra avaliações duplicadas.
@@ -225,17 +234,20 @@ class MemberReviewController extends Controller
                 ->firstOrFail();
 
             if ($review !== null) {
-                $statusId = $review->status_id;
-
-                if ($shouldFlag && $review->status_id === $visibleStatus->id) {
-                    $statusId = $flaggedStatus->id;
-                }
+                $wasVisible = $review->status_id === $visibleStatus->id;
+                $shouldCreateAutomaticReport = $shouldFlag && $wasVisible;
 
                 $review->update([
                     'rating' => $validated['rating'],
                     'comment' => $validated['comment'],
-                    'status_id' => $statusId,
+                    'status_id' => $shouldCreateAutomaticReport
+                        ? $flaggedStatus->id
+                        : $review->status_id,
                 ]);
+
+                if ($shouldCreateAutomaticReport) {
+                    $review->reports()->create($automaticReportAttributes);
+                }
 
                 return [$review, false];
             }
@@ -249,6 +261,10 @@ class MemberReviewController extends Controller
                     ? $flaggedStatus->id
                     : $visibleStatus->id,
             ]);
+
+            if ($shouldFlag) {
+                $review->reports()->create($automaticReportAttributes);
+            }
 
             return [$review, true];
         });
