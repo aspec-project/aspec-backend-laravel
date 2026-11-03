@@ -7,7 +7,7 @@ Na pasta `Aspec_Backend/`:
 1. Copiar `.env.example` para `.env`. O `APP_URL` já vem como `http://localhost:8000`, o endereço do `php artisan serve` e o que o frontend usa por omissão (`VITE_API_URL`). Se a API correr noutro endereço (ex. domínio do Laragon), mudar o `APP_URL` e o `VITE_API_URL` do frontend para o mesmo valor. Os URLs das imagens (logótipos e portfólio) são gerados a partir do `APP_URL`, com a porta incluída; se estiver errado, as imagens não abrem no frontend.
 2. `php artisan key:generate`
 3. `php artisan migrate:fresh --seed` — cria as tabelas e os dados de referência (roles, estados de conta, setores, distritos, dias da semana, redes sociais). **Apaga todos os dados da base de dados local.**
-4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{user_id}`, `portfolios/{user_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**.
+4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{user_id}`, `portfolios/{user_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**. Só é preciso com as imagens guardadas na máquina (`MEDIA_DISK=public`, o valor por omissão); com o Cloudflare R2 não se usa (ver "Armazenamento de ficheiros").
 5. `php artisan serve` — a API fica em `http://localhost:8000/api`.
 
 No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão de browser.
@@ -119,7 +119,7 @@ npm run dev
 
 | Problema | Causa provável |
 |---|---|
-| Imagens partidas no frontend | Falta `php artisan storage:link`, ou o `APP_URL` não é `http://localhost:8000` (depois de mudar: `php artisan config:clear`) |
+| Imagens partidas no frontend | Falta `php artisan storage:link`, ou o `APP_URL` não é `http://localhost:8000` (depois de mudar: `php artisan config:clear`). Com `MEDIA_DISK=r2`: falta o `R2_MEDIA_URL`, o bucket `aspec-media` não tem o acesso público ligado, ou as imagens ainda estão só na máquina (voltar a correr o `DemoSeeder`) |
 | Login falha com 419 ou "Session store not set" | Frontend aberto noutro endereço que não `http://localhost:5173`, ou `SANCTUM_STATEFUL_DOMAINS` sem `localhost:5173` |
 | Erro 500 "no such table" | Falta `php artisan migrate:fresh --seed` |
 | Pedidos lentos (~2 s) | `php artisan serve` sem `--host=localhost` |
@@ -183,7 +183,7 @@ O seeder cria subscrições e faturas **sem chamar o Stripe nem o InvoiceExpress
 | `demo.bloqueado` | Bloqueado | bloqueado ainda em trial | 0 |
 | `demo.aprovado`, `demo.pendenteNN` | Por ativar / Pendente | sem subscrição nem faturação | — |
 
-As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `storage/app/private/invoices/{user_id}/`, com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 2 quotas em atraso (1 em carência, 1 por pagar).
+As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `invoices/{user_id}/` no disco das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket privado `aspec-invoices` no R2), com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 2 quotas em atraso (1 em carência, 1 por pagar).
 
 Cada execução apaga e cria de novo as subscrições, as faturas e os PDFs com `_demo_` das contas demo; nunca toca noutras linhas nem noutras contas. Se uma conta demo tiver uma subscrição **real** em curso (ex.: o `demo.inativo.pagamento` reativado pelo Checkout num ensaio), fica sem dados de demonstração e o seeder avisa: cancelar essa subscrição no dashboard de teste do Stripe e voltar a correr o seeder.
 
@@ -202,6 +202,23 @@ O que funciona com as subscrições de demonstração (o Stripe não as conhece)
 Para mostrar o portal, cancelar e retomar, usar uma conta ativada pelo Checkout (guião "Ativação da conta (demo ponta a ponta)").
 
 **Voltar a correr o seeder antes de cada demonstração:** não há webhooks para as subscrições demo, por isso as datas não avançam sozinhas. Com o `schedule:work` ligado vários dias, o `subscriptions:end-grace` passa o `demo.membro07` a inativo quando a carência acaba, e os trials terminam sem cobrança.
+
+## Armazenamento de ficheiros (local ou Cloudflare R2)
+
+Os logótipos e o portefólio vão para o disco de media (`MEDIA_DISK`) e os PDFs das faturas demo para o disco das faturas (`INVOICES_DISK`). O código nunca escolhe o disco: mudar de sítio é só o `.env`.
+
+- **Por omissão nada muda:** `MEDIA_DISK=public` (imagens em `storage/app/public`, servidas por `public/storage`, precisa de `php artisan storage:link`) e `INVOICES_DISK=local` (`storage/app/private`, nunca servido).
+- **Cloudflare R2** (compatível com S3; 10 GB grátis, sem custo de saída), dois buckets:
+  - `aspec-media`: imagens, com leitura pública pelo subdomínio `r2.dev` (`R2_MEDIA_URL`), sem listagem do bucket. As imagens já são públicas no diretório; cada upload tem um nome novo, por isso têm cache de 1 ano.
+  - `aspec-invoices`: PDFs das faturas, **privado** e sem URL. O download continua só por `GET /api/invoices/{id}/pdf`, com o dono verificado.
+- **Passar uma máquina para o R2:**
+  1. Pedir ao Mário, em privado, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT` e `R2_MEDIA_URL` (nunca no `.env.example`, no git nem em mensagens públicas).
+  2. No `.env`: `MEDIA_DISK=r2`, `INVOICES_DISK=r2-invoices` e as quatro variáveis acima.
+  3. `php artisan config:clear`
+  4. `php artisan db:seed --class=DemoSeeder` (recria logótipos, portefólio e PDFs demo no R2; o que foi enviado à mão em local fica partido).
+  5. O `storage:link` deixa de ser preciso.
+- **Nunca `INVOICES_DISK=public`** (nem `r2`, nem o mesmo disco das imagens): os PDFs têm NIF e morada. O driver `demo` recusa emitir e servir faturas nesse caso e deixa um erro crítico no log.
+- **Testes:** usam sempre os discos locais (o `phpunit.xml` força `MEDIA_DISK=public`, `INVOICES_DISK=local` e chaves R2 falsas com um endpoint numa porta local fechada), mesmo com o R2 no `.env`. Nenhum teste grava nos buckets.
 
 ## Email
 
@@ -351,7 +368,7 @@ Um cancelamento agendado para o fim do período não muda o estado (o membro man
 ### Faturas do membro
 
 - **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.
-- **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `storage/app/private/invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` (disco privado, nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
+- **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` no disco privado das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket `aspec-invoices` no R2; nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
 - **Email das faturas:** `MAIL_MAILER=log` é só para desenvolvimento local: o email da fatura (com o PDF, que tem NIF e morada) fica escrito no `storage/logs/laravel.log`, por isso limpar esse ficheiro depois de testar. Na apresentação usar um SMTP de teste (Mailpit, Mailtrap ou uma conta de email com password de aplicação).
 - **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 120 por minuto e 2000 por hora). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
 - **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
