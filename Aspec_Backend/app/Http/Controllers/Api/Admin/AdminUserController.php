@@ -469,7 +469,8 @@ class AdminUserController extends Controller
 
     /**
      * Detalhe de um utilizador para o backoffice: dados da conta e perfil de membro completo
-     * (horário, redes sociais e portfólio). Inclui admins e a própria conta, só para leitura.
+     * (horário, redes sociais e portfólio) e contagens das avaliações recebidas e feitas
+     * (só números). Inclui admins e a própria conta, só para leitura.
      *
      * @param  string  $id  Id (UUID) do utilizador.
      * @return JsonResponse 200 com o AdminUserDetailResource; 404 se não existir ou estiver apagado.
@@ -477,11 +478,30 @@ class AdminUserController extends Controller
     public function show(string $id): JsonResponse
     {
         $user = $this->loadUserRelations(User::findOrFail($id));
+        $this->loadReviewCounts($user);
 
         return $this->successResponse(
             new AdminUserDetailResource($user),
             'Utilizador obtido com sucesso.'
         );
+    }
+
+    /**
+     * Carrega no perfil do utilizador as contagens de avaliações recebidas e feitas
+     * (total, ocultas e sinalizadas) numa só consulta. Sem perfil não faz nada.
+     *
+     * @param  User  $user  Utilizador com a relação memberProfile já carregada.
+     */
+    private function loadReviewCounts(User $user): void
+    {
+        $user->memberProfile?->loadCount([
+            'reviewsReceived as reviews_received_count',
+            'reviewsReceived as reviews_received_hidden_count' => fn (Builder $query) => $query->whereRelation('status', 'name', 'Hidden'),
+            'reviewsReceived as reviews_received_flagged_count' => fn (Builder $query) => $query->whereRelation('status', 'name', 'Flagged'),
+            'reviewsWritten as reviews_given_count',
+            'reviewsWritten as reviews_given_hidden_count' => fn (Builder $query) => $query->whereRelation('status', 'name', 'Hidden'),
+            'reviewsWritten as reviews_given_flagged_count' => fn (Builder $query) => $query->whereRelation('status', 'name', 'Flagged'),
+        ]);
     }
 
     /**
