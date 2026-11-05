@@ -15,6 +15,7 @@ use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\PrayerCard;
 use App\Models\Review;
+use App\Models\ReviewReport;
 use App\Models\ReviewStatus;
 use App\Models\Role;
 use App\Models\Sector;
@@ -538,12 +539,44 @@ class DemoSeeder extends Seeder
             ->delete();
 
         foreach ($this->reviews() as [$reviewer, $reviewed, $rating, $status, $comment]) {
-            Review::create([
+            $review = Review::create([
                 'reviewer_profile_id' => $profileIds[$reviewer],
                 'reviewed_profile_id' => $profileIds[$reviewed],
                 'rating' => $rating,
                 'comment' => $comment,
                 'status_id' => $this->lookupId(ReviewStatus::class, $status),
+            ]);
+
+            $this->seedReviewModeration($review, $status, $profileIds[$reviewed]);
+        }
+    }
+
+    /**
+     * Dados de moderação das avaliações fora da média, como a API os grava: a sinalizada tem a sinalização
+     * automática do filtro de linguagem e outra da empresa avaliada; a oculta tem a justificação do admin e
+     * a sinalização automática já resolvida. As linhas antigas saem com as avaliações (cascadeOnDelete).
+     */
+    private function seedReviewModeration(Review $review, string $status, string $reviewedProfileId): void
+    {
+        if ($status === 'Flagged') {
+            $review->reports()->create([
+                'reason' => 'language_filter',
+                'source' => ReviewReport::SOURCE_AUTOMATIC,
+            ]);
+            $review->reports()->create([
+                'reporter_profile_id' => $reviewedProfileId,
+                'reason' => ReviewReport::REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT,
+                'comment' => 'Nunca trabalhámos com esta empresa e a avaliação é ofensiva para a nossa equipa.',
+                'source' => ReviewReport::SOURCE_MEMBER,
+            ]);
+        }
+
+        if ($status === 'Hidden') {
+            $review->forceFill(['hidden_reason' => 'Linguagem desrespeitosa e sem relação comercial demonstrada.'])->save();
+            $review->reports()->create([
+                'reason' => 'language_filter',
+                'source' => ReviewReport::SOURCE_AUTOMATIC,
+                'resolved_at' => now(),
             ]);
         }
     }
