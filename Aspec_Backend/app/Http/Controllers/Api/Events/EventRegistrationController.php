@@ -16,6 +16,14 @@ class EventRegistrationController extends Controller
 {
     public function store(Request $request, EventInstance $eventInstance): JsonResponse
     {
+        $user = $request->user();
+
+        if ($user->memberProfile === null) {
+            return $this->errorResponse(
+                'Perfil de membro não encontrado.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
         $request->validate([
             'scope' => $eventInstance->series_id === null
                 ? ['prohibited']
@@ -23,7 +31,7 @@ class EventRegistrationController extends Controller
         ]);
 
         $registerThisAndFollowing = $request->input('scope') === 'this_and_following';
-        $userId = $request->user()->getAuthIdentifier();
+        $userId = $user->getAuthIdentifier();
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
 
         return DB::transaction(function () use (
