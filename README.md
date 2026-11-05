@@ -155,7 +155,7 @@ Cartões de oração em dois eventos:
 
  Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. Os logótipos são gerados com a extensão GD do PHP (sem ela, os perfis ficam sem logótipo). O portefólio usa 17 fotografias reais do Pexels guardadas em `database/seeders/demo/portfolio/` (origem e licença em `THIRD_PARTY_NOTICES.md`); ao correr outra vez, as imagens de demonstração antigas do portefólio são substituídas e as que o membro enviou ficam.
 
-Password de todas as contas: `Demo#2026`
+Password de todas as contas: `Demo#2026` (em local; noutros ambientes, a definida em `DEMO_PASSWORD`, ver [Deploy](#deploy-render--vercel--tidb))
 
 O seeder não cria o administrador técnico: para mostrar o estado "Isento" no backoffice, correr também `php artisan aspec:create-admin`.
 
@@ -245,6 +245,8 @@ Para receber emails de várias contas de teste num só endereço, usar aliases d
 Erros comuns: `535 Username and Password not accepted` → palavra-passe de aplicação errada (são sempre 16 letras minúsculas; confirmar que nenhuma ficou de fora), criada noutra conta Google, ou verificação em dois passos desligada; mudar a palavra-passe da conta Google revoga as palavras-passe de aplicação. `Connection could not be established` → a porta 587 está bloqueada (firewall ou antivírus).
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
+
+**Brevo (deploy):** no Render o SMTP de saída está bloqueado, por isso o deploy envia pela API HTTP do Brevo: `MAIL_MAILER=brevo` e `BREVO_API_KEY` (chave *Restricted*, só *Transactional email*, sem bloqueio por IP). O remetente continua a ser o Gmail do projeto, verificado no Brevo; como o domínio `gmail.com` não é nosso, os emails não levam DKIM/DMARC do remetente e o primeiro pode cair no spam. Plano grátis: 300 emails por dia.
 
 ### Emails de eventos
 
@@ -415,14 +417,14 @@ Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite
 | Cancelar / retomar a subscrição | 120/min e 10/dia por utilizador (partilhado pelas duas) | Ação rara que chama o Stripe e envia um email: sem limite diário, alternar as duas esgotava a quota de email da plataforma (o Gmail de demonstração tem ~500 destinatários/dia; um serviço de email de produção tem mais, mas o envio em massa continuaria a ser abuso) |
 | Diretório e eventos públicos | 120/min por utilizador ou IP | Visitantes por IP travam a recolha automática; membros pelo seu id não se bloqueiam atrás do mesmo IP (escritório, evento) |
 | Registo | 20/min por IP | Um grupo pode inscrever-se da mesma rede num evento; bots continuam travados |
-| Login e token | 5/min por email + IP | Valor habitual do Laravel; OWASP Authentication Cheat Sheet |
+| Login e token | 5/min por email + IP e 20 em 15 min por email | Valor habitual do Laravel; o limite por email não depende do IP, que atrás de um proxy pode ser forjado (OWASP Authentication Cheat Sheet: limite por conta e por IP) |
 | Falhas da password atual | 5 em 15 min por utilizador | NIST SP 800-63B e OWASP (limitar tentativas falhadas) |
-| Recuperar / redefinir password | 5/min (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
+| Recuperar / redefinir password | 5/min por email + IP e 20 em 15 min por email (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
 | Ativação; reenvio do link | 20/min por IP; 3 em 15 min por email + IP, 10/hora por IP, 5/dia por email | Cada pedido chama o Stripe ou envia um email |
 | Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação, distribuir cartões de oração | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min; 10/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
 | Webhook do Stripe | sem limite | Autenticado pela assinatura; o Stripe envia em rajada e repete após erro |
 
-Em produção atrás de um proxy ou balanceador é preciso configurar os proxies de confiança (`$middleware->trustProxies(at: [...])` com os IPs do proxy), senão todos os visitantes contam com o IP do proxy. Nunca usar `at: '*'` com a API exposta diretamente: o header `X-Forwarded-For` passaria a ser falsificável e cada pedido teria um contador novo, também no login.
+**Atrás de um proxy** (ex. Render, ver [Deploy](#deploy-render--vercel--tidb)) é preciso `TRUSTED_PROXIES`, senão todos os visitantes contam com o IP do proxy. Com `TRUSTED_PROXIES=*` o Laravel aceita o `X-Forwarded-For`, que um pedido direto à API pode forjar: os limites só por IP (registo, diretório, geral) ficam contornáveis, e por isso o login, o token e a recuperação de password têm também um limite só por email. Vazio (local, testes) = os cabeçalhos `X-Forwarded-*` são ignorados.
 
 ## Mapas (Google)
 
@@ -430,6 +432,53 @@ A localização dos eventos está a passar do OpenStreetMap para o Google Maps (
 
 - **Projeto Google Cloud:** `aspec-plataforma`, na conta do projeto (`geral.teste.aspec@gmail.com`), em período experimental (crédito de teste, sem cobranças no cartão) e com alerta de orçamento de 1 €. As chaves são pedidas ao Mário e passadas em privado; nunca no `.env.example`, no git nem em mensagens públicas.
 - **Chave do backend** (`GOOGLE_MAPS_GEOCODING_KEY` no `.env` do backend): restrita só à **Geocoding API**. Para a usar: `GEOCODING_DRIVER=google`, depois `php artisan config:clear`.
-- **Chave do frontend** (`VITE_GOOGLE_MAPS_EMBED_KEY` no `.env` do frontend): restrita só à **Maps Embed API** e ao site `http://localhost:5173/*`. Abrir sempre o frontend em `localhost`, não em 127.0.0.1.
+- **Chave do frontend** (`VITE_GOOGLE_MAPS_EMBED_KEY` no `.env` do frontend): restrita só à **Maps Embed API** e aos sites `http://localhost:5173/*` e `https://aspec-plataforma.vercel.app/*` (deploy). Abrir sempre o frontend em `localhost`, não em 127.0.0.1.
 - **Termos do Google (confirmados a 27/10/2026):** a Geocoding API tem 10 000 pedidos grátis por mês; **só se guarda o `place_id`** (a latitude e a longitude só podem ficar em cache 30 dias); os resultados só podem ser mostrados em **mapas do Google** (por isso o Leaflet/OpenStreetMap sai do frontend); a Maps Embed API é gratuita e sem limite.
 - **Erros comuns:** `REQUEST_DENIED` → chave errada, API não ativada ou restrição de API errada; mapa em branco com `RefererNotAllowedMapError` → o frontend não está a correr em `http://localhost:5173`.
+
+## Deploy (Render + Vercel + TiDB)
+
+Plataforma online e gratuita, sem domínio próprio, para demonstração e avaliação: https://aspec-plataforma.vercel.app. **Não é produção**: Stripe em modo de teste, faturas com o driver `demo`, dados de demonstração.
+
+```
+browser → aspec-plataforma.vercel.app (React, Vercel)
+            ├─ /api/*, /sanctum/* → rewrite → aspec-api.onrender.com (Laravel, Docker, Render Free)
+            └─ resto → index.html (React Router)
+Render → TiDB Cloud Starter (MySQL, Frankfurt, TLS) · Cloudflare R2 (imagens e faturas) · Brevo (email) · Stripe (teste)
+```
+
+**Porquê o rewrite no Vercel:** o login usa o cookie de sessão do Sanctum e o cookie `XSRF-TOKEN`. Com o frontend em `vercel.app` e a API em `onrender.com` (domínios diferentes, ambos na Public Suffix List), o frontend não consegue ler o `XSRF-TOKEN` da API e os pedidos com CSRF davam 419. Com o rewrite, para o browser é tudo o mesmo site e a autenticação não muda. Configuração no `vercel.json` do repositório do frontend.
+
+### Ficheiros (pasta `Aspec_Backend/`)
+- `Dockerfile`: PHP 8.5 + Apache, extensões `intl`, `bcmath`, `gd`, `pdo_mysql`, `zip`; `composer install --no-dev` e `composer check-platform-reqs`.
+- `docker/start.sh`: no arranque corre `migrate --force` e `optimize`, põe `queue:work` e `schedule:work` a correr em segundo plano (o Render Free não tem worker nem cron) e arranca o Apache.
+- `docker/apache/000-default.conf`: `DocumentRoot public/`, porta `${PORT}` do Render, 6 processos (512 MB); o log não grava a query string (links de ativação assinados).
+- `docker/php.ini`: `upload_max_filesize` 6M (imagens até 5 MB).
+- `.dockerignore`: a imagem não leva `.env*`, `vendor/`, `tests/`, nem `storage/app/` (PDFs de faturas com NIF).
+
+### Variáveis
+- **Render** (Environment): as do `.env.example`, com `APP_ENV=staging`, `APP_DEBUG=false`, `APP_URL=https://aspec-api.onrender.com`, `FRONTEND_URL=https://aspec-plataforma.vercel.app`, `SANCTUM_STATEFUL_DOMAINS=aspec-plataforma.vercel.app`, `SESSION_DOMAIN=null`, `SESSION_SECURE_COOKIE=true`, `TRUSTED_PROXIES=*`, `LOG_CHANNEL=stderr`, base de dados da TiDB (`DB_PORT=4000`, `MYSQL_ATTR_SSL_CA=/etc/ssl/certs/ca-certificates.crt`), `MAIL_MAILER=brevo` + `BREVO_API_KEY`, `MEDIA_DISK=r2`, `INVOICES_DISK=r2-invoices` + chaves do R2, `INVOICING_DRIVER=demo`, chaves de teste do Stripe com o `STRIPE_WEBHOOK_SECRET` **do endpoint do Render** e `STRIPE_BILLING_PORTAL_CONFIGURATION` (obrigatória fora de local/testing), `GEOCODING_DRIVER=google`. A `APP_KEY` é a mesma de quem correu o DemoSeeder (os cartões de oração de demonstração ficam encriptados com ela).
+- **Vercel**: Root Directory `Aspec_Frontend`, `VITE_API_URL=https://aspec-plataforma.vercel.app` (o próprio site, para os pedidos passarem pelo rewrite) e `VITE_GOOGLE_MAPS_EMBED_KEY`.
+- **Stripe** (modo de teste): endpoint `https://aspec-api.onrender.com/api/stripe/webhook` com os eventos do `stripe listen` (ver [Pagamentos](#pagamentos-stripe-modo-de-teste)); o `stripe listen` local continua a funcionar em paralelo.
+- **Google Cloud**: site `https://aspec-plataforma.vercel.app/*` na chave do Maps Embed; quota diária baixa na chave do Geocoding (o Render não tem IP fixo, por isso a chave não pode ser restrita por IP).
+
+### Base de dados e dados de demonstração
+O Render Free não tem consola, por isso a base de dados é preparada a partir do PC, com um `Aspec_Backend/.env.tidb`: cópia do `.env` com `APP_ENV=staging`, os dados da TiDB, `MYSQL_ATTR_SSL_CA` com o `cacert.pem` local (ex. `C:\laragon\etc\ssl\cacert.pem`) e `DEMO_PASSWORD`. O ficheiro está ignorado pelo git (`.env.*`).
+
+```
+php artisan migrate --env=tidb
+php artisan db:seed --env=tidb
+php artisan db:seed --class=DemoSeeder --env=tidb
+```
+
+Fora de local/testing o DemoSeeder **recusa correr** sem `DEMO_PASSWORD` ou com `Demo#2026` (a password por omissão está no repositório público) e não a imprime no fim. As migrações novas também correm sozinhas no arranque do Render.
+
+### Atualizar o deploy
+O Render e o Vercel fazem deploy a cada push no branch de produção (`main`). Atualizar a demonstração = PR `dev → main` nos dois repositórios.
+
+### Limitações (plano grátis)
+- O Render adormece após 15 min sem pedidos e demora até ~1 min a acordar; o rewrite do Vercel desiste aos 30 s, por isso o primeiro pedido pode falhar e o seguinte funciona. Antes de uma demonstração, abrir https://aspec-api.onrender.com/up.
+- Enquanto dorme, a fila e o scheduler param: tarefas agendadas nesse intervalo perdem-se (ex. agenda semanal de sábado; o fim da carência volta a correr na hora seguinte).
+- Limites só por IP contornáveis com `X-Forwarded-For` forjado num pedido direto ao Render (ver [Limites de pedidos](#limites-de-pedidos)).
+- Brevo: 300 emails por dia; remetente Gmail sem DKIM próprio (spam possível).
+- Os deploys de pré-visualização do Vercel têm outro endereço: aí o login (Sanctum) e o mapa (restrição da chave) não funcionam. Só o endereço de produção.
