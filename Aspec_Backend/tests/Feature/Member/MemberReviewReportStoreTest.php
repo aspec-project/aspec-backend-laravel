@@ -279,4 +279,45 @@ class MemberReviewReportStoreTest extends TestCase
 
         $this->assertDatabaseCount('review_reports', 0);
     }
+
+    #[Test]
+    public function active_admin_with_profile_can_report_a_visible_review(): void
+    {
+        [, $reviewerProfile] = $this->memberWithProfile();
+        [, $reviewedProfile] = $this->memberWithProfile();
+
+        $admin = User::factory()->admin()->create();
+
+        $adminProfile = MemberProfile::factory()->create([
+            'user_id' => $admin->id,
+        ]);
+
+        $review = $this->createReview($reviewerProfile, $reviewedProfile);
+
+        Sanctum::actingAs($admin);
+
+        $this->postJson($this->url($review), [
+            'reason' => ReviewReport::REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT,
+            'comment' => 'A avaliação contém linguagem ofensiva.',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.review_id', $review->id)
+            ->assertJsonPath('data.source', ReviewReport::SOURCE_MEMBER);
+
+        $this->assertDatabaseHas('review_reports', [
+            'review_id' => $review->id,
+            'reporter_profile_id' => $adminProfile->id,
+            'reason' => ReviewReport::REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT,
+            'comment' => 'A avaliação contém linguagem ofensiva.',
+            'source' => ReviewReport::SOURCE_MEMBER,
+            'resolved_at' => null,
+        ]);
+
+        $this->assertDatabaseHas('reviews', [
+            'id' => $review->id,
+            'status_id' => ReviewStatus::query()
+                ->where('name', 'Flagged')
+                ->valueOrFail('id'),
+        ]);
+    }
 }

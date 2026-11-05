@@ -19,9 +19,9 @@ class MemberReviewReportController extends Controller
     ): JsonResponse {
         $user = $request->user();
 
-        if ($user->role?->name !== 'Member') {
+        if (! in_array($user->role?->name, ['Member', 'Admin'], true)) {
             return $this->errorResponse(
-                'Só membros podem sinalizar avaliações.',
+                'Só membros e administradores podem sinalizar avaliações.',
                 Response::HTTP_FORBIDDEN
             );
         }
