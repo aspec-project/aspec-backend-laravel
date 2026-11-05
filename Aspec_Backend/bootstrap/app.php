@@ -26,6 +26,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
 
+        // Proxies em config/trustedproxy.php. Sem X-Forwarded-Host: nada depende do host e aceitá-lo abriria host header injection.
+        $middleware->trustProxies(
+            headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT
+        );
+
         // Limite geral (limitador api) em todas as rotas api/*; o webhook do Stripe sai em routes/api.php.
         $middleware->throttleApi();
 
