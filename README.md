@@ -146,6 +146,8 @@ Os eventos presenciais só têm o `place_id` da Google (sem coordenadas), como o
 
 Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, nas sessões 2 a 6 da série (o que "nesta e nas seguintes" dá a partir da sessão 2; a sessão 1 fica livre para mostrar a inscrição ao vivo), num online e nos 2 passados. Na série, `demo.membro01` e `demo.membro04` estão em todas as sessões, `demo.membro09` só na 3.ª e `demo.membro10` nas duas primeiras. A série não tem cartões de oração nem é anunciada por email (o anúncio só sai para eventos únicos criados no backoffice).
 
+Avaliações: 17 entre perfis de demonstração, quase todas visíveis (para a média e o filtro por estrelas). A página de moderação começa com dois exemplos, que não contam para a média: uma avaliação **sinalizada**, com a sinalização automática do filtro de linguagem e a da empresa avaliada (motivo e comentário), e uma **oculta**, com a justificação do admin e a sinalização automática já resolvida.
+
 Cartões de oração em dois eventos:
 
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;

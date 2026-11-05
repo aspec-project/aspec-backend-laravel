@@ -16,6 +16,7 @@ use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
 use App\Models\Review;
+use App\Models\ReviewReport;
 use App\Models\User;
 use App\Rules\InternationalPhone;
 use App\Rules\PortugueseNif;
@@ -855,6 +856,57 @@ class DemoSeederTest extends TestCase
         $this->assertSame($demoCount + 1, Review::count());
         $this->assertModelExists($other);
         $this->assertSame(4, Review::where('reviewed_profile_id', $demoMemberProfileId)->count());
+    }
+
+    /**
+     * A moderação começa com exemplos: a sinalizada tem a sinalização automática e a da empresa avaliada;
+     * a oculta tem a justificação do admin e a sinalização automática resolvida.
+     */
+    #[Test]
+    public function flagged_and_hidden_demo_reviews_have_moderation_data(): void
+    {
+        $this->runDemoSeeder();
+
+        $flagged = Review::with('reports')->whereHas('status', fn ($q) => $q->where('name', 'Flagged'))->sole();
+        $this->assertEqualsCanonicalizing(
+            [ReviewReport::SOURCE_AUTOMATIC, ReviewReport::SOURCE_MEMBER],
+            $flagged->reports->pluck('source')->all()
+        );
+        $memberReport = $flagged->reports->firstWhere('source', ReviewReport::SOURCE_MEMBER);
+        $this->assertSame($flagged->reviewed_profile_id, $memberReport->reporter_profile_id);
+        $this->assertContains($memberReport->reason, ReviewReport::REASONS);
+        $this->assertNotEmpty($memberReport->comment);
+        $this->assertNull($memberReport->resolved_at);
+
+        $hidden = Review::with('reports')->whereHas('status', fn ($q) => $q->where('name', 'Hidden'))->sole();
+        $this->assertNotEmpty($hidden->hidden_reason);
+        $this->assertCount(1, $hidden->reports);
+        $this->assertSame(ReviewReport::SOURCE_AUTOMATIC, $hidden->reports->first()->source);
+        $this->assertNotNull($hidden->reports->first()->resolved_at);
+
+        $this->assertSame(0, ReviewReport::whereHas('review.status', fn ($q) => $q->where('name', 'Visible'))->count());
+    }
+
+    #[Test]
+    public function running_again_does_not_duplicate_review_reports(): void
+    {
+        $this->runDemoSeeder();
+        $this->runDemoSeeder();
+
+        $this->assertSame(3, ReviewReport::count());
+    }
+
+    #[Test]
+    public function admin_moderation_list_shows_where_the_flag_came_from(): void
+    {
+        $this->runDemoSeeder();
+        Sanctum::actingAs($this->demoUser('demo.admin@aspec.test'));
+
+        $items = collect($this->getJson('/api/admin/reviews?per_page=50')->assertOk()->json('data.items'));
+
+        $flagged = $items->firstWhere('status', 'Flagged');
+        $this->assertNotNull($flagged, 'Sem avaliação sinalizada na lista de moderação');
+        $this->assertEqualsCanonicalizing([ReviewReport::SOURCE_AUTOMATIC, ReviewReport::SOURCE_MEMBER], $flagged['flagging_sources']);
     }
 
     #[Test]
