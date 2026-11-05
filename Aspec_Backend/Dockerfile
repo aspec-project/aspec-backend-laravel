@@ -1,6 +1,6 @@
 # Imagem do backend para o Render (runtime Docker, Root Directory Aspec_Backend).
 # PHP 8.5: o composer.lock exige PHP >= 8.4.1 e é a versão usada localmente e nos testes.
-FROM php:8.5-apache
+FROM php:8.5.12-apache
 
 # Extensões em falta na imagem oficial: bcmath, intl (Collator, Normalizer), gd com JPEG/PNG/WebP/FreeType
 # (dompdf e validação de imagens), pdo_mysql (TiDB) e zip. fileinfo, mbstring e openssl já vêm na imagem.
