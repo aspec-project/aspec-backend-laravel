@@ -925,6 +925,80 @@ class DemoSeederTest extends TestCase
     }
 
     /**
+     * O repositório é público e a password Demo#2026 está no código: fora de local/testing (ex. a demo
+     * publicada no Render, ambiente staging) as contas demo só podem ter a password de DEMO_PASSWORD.
+     */
+    private function runDemoSeederInStaging(?string $password): void
+    {
+        config(['aspec.demo_password' => $password]);
+        $this->app->detectEnvironment(fn () => 'staging');
+
+        try {
+            $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--force' => true])->run();
+        } finally {
+            $this->app->detectEnvironment(fn () => 'testing');
+        }
+    }
+
+    private function assertNoDemoDataWasCreated(): void
+    {
+        $this->assertSame(0, User::where('email', 'like', 'demo.%')->count());
+        $this->assertSame(0, MemberProfile::count());
+        $this->assertSame(0, EventInstance::count());
+        $this->assertSame(0, Subscription::count());
+        $this->assertSame(0, Invoice::count());
+    }
+
+    #[Test]
+    public function demo_password_comes_from_config_and_is_empty_in_tests(): void
+    {
+        $this->assertTrue(config()->has('aspec.demo_password'));
+        $this->assertEmpty(config('aspec.demo_password'));
+    }
+
+    #[Test]
+    public function refuses_to_run_outside_local_and_testing_without_a_demo_password(): void
+    {
+        $this->runDemoSeederInStaging(null);
+
+        $this->assertNoDemoDataWasCreated();
+    }
+
+    #[Test]
+    public function refuses_to_run_outside_local_and_testing_with_the_public_demo_password(): void
+    {
+        $this->runDemoSeederInStaging(DemoSeeder::PASSWORD);
+
+        $this->assertNoDemoDataWasCreated();
+    }
+
+    #[Test]
+    public function outside_local_and_testing_demo_accounts_use_the_configured_password(): void
+    {
+        $password = 'Outra#Demo-2026x';
+        config(['aspec.demo_password' => $password]);
+        $this->app->detectEnvironment(fn () => 'staging');
+
+        try {
+            $this->artisan('db:seed', ['--class' => DemoSeeder::class, '--force' => true])
+                ->doesntExpectOutputToContain($password)
+                ->doesntExpectOutputToContain(DemoSeeder::PASSWORD)
+                ->assertSuccessful();
+        } finally {
+            $this->app->detectEnvironment(fn () => 'testing');
+        }
+
+        $this->assertTrue(User::where('email', 'demo.membro@aspec.test')->exists());
+
+        $this->postJson('/api/auth/token', ['email' => 'demo.membro@aspec.test', 'password' => $password])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $this->postJson('/api/auth/token', ['email' => 'demo.membro@aspec.test', 'password' => DemoSeeder::PASSWORD])
+            ->assertUnauthorized();
+    }
+
+    /**
      * O mapa da página do evento usa só o place_id; a API nunca grava place_id e coordenadas juntos.
      */
     #[Test]
