@@ -160,14 +160,17 @@ class AppServiceProvider extends ServiceProvider
         ];
 
         foreach ($authActions as $action) {
-            RateLimiter::for(
-                $action,
-                fn (Request $request) => Limit::perMinute(5)
-                    ->by(
-                        strtolower(trim((string) $request->input('email')))
-                        .'|'.$request->ip()
-                    )
-            );
+            RateLimiter::for($action, function (Request $request) {
+                $email = strtolower(trim((string) $request->input('email')));
+                $limits = [Limit::perMinute(5)->by($email.'|'.$request->ip())];
+
+                // Atrás do proxy o IP pode ser forjado (X-Forwarded-For), por isso cada conta tem também um limite que não depende do IP.
+                if ($email !== '') {
+                    $limits[] = Limit::perMinutes(15, 20)->by('email:'.$email);
+                }
+
+                return $limits;
+            });
         }
 
         // Limite por IP para pedidos de "forgot password".
