@@ -14,7 +14,9 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^3.0",
         "league/flysystem-aws-s3-v3": "^3.0",
-        "propaganistas/laravel-phone": "^6.1"
+        "propaganistas/laravel-phone": "^6.1",
+        "symfony/brevo-mailer": "^8.1",
+        "symfony/http-client": "^8.1"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

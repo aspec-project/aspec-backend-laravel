@@ -65,6 +65,11 @@ return [
             'transport' => 'resend',
         ],
 
+        // API HTTP do Brevo (porta 443), registado no AppServiceProvider; chave em services.brevo.key.
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
