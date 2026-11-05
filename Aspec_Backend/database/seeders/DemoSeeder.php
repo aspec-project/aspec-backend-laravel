@@ -71,6 +71,25 @@ class DemoSeeder extends Seeder
     /** Ids dos lookups já procurados, por modelo e nome. */
     private array $lookupIds = [];
 
+    /** Password usada nesta execução (ver demoPassword()). */
+    private string $password = self::PASSWORD;
+
+    /**
+     * Password das contas de demonstração: a de DEMO_PASSWORD ou, em local/testing, a pública
+     * Demo#2026 se não houver nenhuma. Fora de local/testing devolve null (recusa) se estiver vazia
+     * ou for a pública, porque o repositório é público e qualquer pessoa a conhece.
+     */
+    private function demoPassword(): ?string
+    {
+        $password = (string) config('aspec.demo_password');
+
+        if (app()->environment('local', 'testing')) {
+            return $password !== '' ? $password : self::PASSWORD;
+        }
+
+        return $password !== '' && $password !== self::PASSWORD ? $password : null;
+    }
+
     /**
      * Cria ou repõe os dados de demonstração. Recusa correr em produção e, se os lookups
      * ainda não existirem, corre primeiro o DatabaseSeeder.
@@ -82,6 +101,16 @@ class DemoSeeder extends Seeder
 
             return;
         }
+
+        $password = $this->demoPassword();
+
+        if ($password === null) {
+            $this->command?->error('Defina DEMO_PASSWORD (diferente de '.self::PASSWORD.') para criar as contas de demonstração fora de local/testing.');
+
+            return;
+        }
+
+        $this->password = $password;
 
         if ($this->lookupsMissing()) {
             $this->call(DatabaseSeeder::class);
@@ -156,7 +185,7 @@ class DemoSeeder extends Seeder
         // Papel, estado e motivo não são fillable (só o admin e os pagamentos os mudam), daí o forceFill.
         $user->forceFill([
             ...($this->hasRealRunningSubscription($user) ? [] : $paymentState),
-            'password' => self::PASSWORD,
+            'password' => $this->password,
             'phone' => $data['phone'],
             'role_id' => $this->lookupId(Role::class, $data['role'] ?? 'Member'),
             'email_verified_at' => $user->email_verified_at ?? now(),
@@ -873,7 +902,9 @@ class DemoSeeder extends Seeder
         $rows = array_map(fn (array $row) => [...$row, $states[$row[0]] ?? ''], $this->accountRows);
 
         $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa', 'Subscrição'], $rows);
-        $this->command?->info('Password de todas as contas: '.self::PASSWORD);
+        $this->command?->info(app()->environment('local', 'testing')
+            ? 'Password de todas as contas: '.$this->password
+            : 'Password de todas as contas: a definida em DEMO_PASSWORD');
 
         if (config('filesystems.media_disk') === 'public') {
             $this->command?->warn('Para as imagens abrirem no frontend, corra uma vez: php artisan storage:link');

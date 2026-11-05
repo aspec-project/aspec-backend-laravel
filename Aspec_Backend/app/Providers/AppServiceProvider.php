@@ -9,11 +9,14 @@ use App\Services\Geocoding\GeocoderFactory;
 use App\Services\Invoicing\InvoiceServiceFactory;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use InvalidArgumentException;
 use Laravel\Cashier\Cashier;
+use Symfony\Component\Mailer\Bridge\Brevo\Transport\BrevoTransportFactory;
+use Symfony\Component\Mailer\Transport\Dsn;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -99,6 +102,21 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureRateLimiting();
         $this->configurePasswordRules();
+        $this->registerBrevoMailer();
+    }
+
+    /**
+     * Transporte "brevo" (API HTTP do Brevo, porta 443) para o mailer `mail.mailers.brevo`.
+     *
+     * Usado no deploy (MAIL_MAILER=brevo), onde o Render Free bloqueia o SMTP de saída. O transporte só é
+     * criado quando o mailer brevo é usado: sem `services.brevo.key` só falha nessa altura, por isso o
+     * desenvolvimento local (log/smtp) e os testes (array) não precisam da chave.
+     */
+    private function registerBrevoMailer(): void
+    {
+        Mail::extend('brevo', fn () => (new BrevoTransportFactory)->create(
+            new Dsn('brevo+api', 'default', config('services.brevo.key'))
+        ));
     }
 
     /**
@@ -160,14 +178,17 @@ class AppServiceProvider extends ServiceProvider
         ];
 
         foreach ($authActions as $action) {
-            RateLimiter::for(
-                $action,
-                fn (Request $request) => Limit::perMinute(5)
-                    ->by(
-                        strtolower(trim((string) $request->input('email')))
-                        .'|'.$request->ip()
-                    )
-            );
+            RateLimiter::for($action, function (Request $request) {
+                $email = strtolower(trim((string) $request->input('email')));
+                $limits = [Limit::perMinute(5)->by($email.'|'.$request->ip())];
+
+                // Atrás do proxy o IP pode ser forjado (X-Forwarded-For), por isso cada conta tem também um limite que não depende do IP.
+                if ($email !== '') {
+                    $limits[] = Limit::perMinutes(15, 20)->by('email:'.$email);
+                }
+
+                return $limits;
+            });
         }
 
         // Limite por IP para pedidos de "forgot password".

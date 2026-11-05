@@ -1,0 +1,27 @@
+# Nunca entram na imagem: segredos, dependências instaladas no PC, ficheiros locais (PDFs das faturas
+# com NIF e morada, uploads), caches e testes. As pastas de storage/ são criadas no Dockerfile.
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+.env
+.env.*
+vendor/
+node_modules/
+storage/app/**
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing
+storage/pail
+bootstrap/cache/*.php
+public/storage
+public/hot
+public/build
+database/*.sqlite
+tests/
+phpunit*.xml
+.phpunit.result.cache
+.phpunit.cache
