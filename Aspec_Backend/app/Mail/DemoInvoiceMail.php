@@ -33,11 +33,11 @@ class DemoInvoiceMail extends Mailable
     }
 
     /**
-     * Corpo curto, com o aviso de que é um documento de demonstração.
+     * Corpo curto em Markdown (com o tema dos emails), com o aviso de que é um documento de demonstração.
      */
     public function content(): Content
     {
-        return new Content(view: 'mail.demo-invoice');
+        return new Content(markdown: 'mail.demo-invoice');
     }
 
     /**

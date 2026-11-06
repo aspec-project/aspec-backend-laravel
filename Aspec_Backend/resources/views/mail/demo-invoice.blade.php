@@ -1,7 +1,10 @@
-<p>Olá!</p>
+<x-mail::message>
+# Olá!
 
-<p>Segue em anexo a fatura da sua quota da ASPEC. Documento de demonstração, sem validade fiscal.</p>
+Segue em anexo a fatura da sua quota da ASPEC. Documento de demonstração, sem validade fiscal.
 
-<p>Fatura n.º {{ $number }}</p>
+Fatura n.º {{ $number }}
 
-<p>Cumprimentos,<br>ASPEC</p>
+Cumprimentos,<br>
+ASPEC
+</x-mail::message>

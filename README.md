@@ -248,6 +248,18 @@ Erros comuns: `535 Username and Password not accepted` → palavra-passe de apli
 
 **Brevo (deploy):** no Render o SMTP de saída está bloqueado, por isso o deploy envia pela API HTTP do Brevo: `MAIL_MAILER=brevo` e `BREVO_API_KEY` (chave *Restricted*, só *Transactional email*, sem bloqueio por IP). O remetente continua a ser o Gmail do projeto, verificado no Brevo; como o domínio `gmail.com` não é nosso, os emails não levam DKIM/DMARC do remetente e o primeiro pode cair no spam. Plano grátis: 300 emails por dia.
 
+### Tema e logótipo
+
+Todos os emails (notificações e email da fatura demo) usam o tema Markdown `aspec` com as cores do frontend: `Aspec_Backend/resources/views/vendor/mail/html/themes/aspec.css`. Só estão publicados os ficheiros que mudam (`html/header.blade.php`, `html/message.blade.php` e o tema); o resto vem do Laravel. O link do cabeçalho vai para o frontend (`FRONTEND_URL`).
+
+O logótipo do cabeçalho é um PNG 600×200 com o fundo navy embutido, em `Aspec_Backend/resources/images/aspec-logo-email.png` (mostrado a 240×80). Os clientes de email só carregam imagens com URL público e absoluto, por isso o ficheiro é carregado **uma vez, à mão**, no painel da Cloudflare para o bucket público `aspec-media`, em `branding/logo-email.png`, e o URL completo vai para `MAIL_LOGO_URL` (ex. `<R2_MEDIA_URL>/branding/logo-email.png`). Com `MAIL_LOGO_URL` vazio (local, testes) o cabeçalho mostra o nome da app em texto.
+
+Pré-visualizar o tema sem enviar (abre `storage/app/preview-email.html` no browser):
+
+```
+php artisan tinker --execute="file_put_contents(storage_path('app/preview-email.html'), (new Illuminate\Notifications\Messages\MailMessage)->greeting('Olá!')->line('Teste do tema ASPEC.')->action('Botão', config('app.frontend_url'))->render());"
+```
+
 ### Emails de eventos
 
 Vão para as contas **Active com perfil de membro** (membros e admins com perfil) que não desligaram a preferência na página da conta (`GET|PUT /api/account/notification-preferences`; ligadas por omissão).
