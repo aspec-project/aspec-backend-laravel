@@ -294,6 +294,65 @@ class MemberLogoTest extends TestCase
         $this->assertSame([$oldPath], Storage::disk('public')->allFiles($this->logoDir($user)));
     }
 
+    /**
+     * Ficheiros que não são imagens mas têm nome de imagem (ex.: um script PHP chamado logo.jpg).
+     */
+    public static function renamedNonImages(): array
+    {
+        return [
+            'script PHP com nome .jpg' => ['logo.jpg', 'image/jpeg', '<?php echo 1;'],
+            'texto simples com nome .png' => ['logo.png', 'image/png', "Isto nao e uma imagem.\nApenas texto.\n"],
+            'HTML com SVG embutido com nome .webp' => ['logo.webp', 'image/webp', '<!DOCTYPE html><html><body><svg onload="alert(1)"><script>alert(1)</script></svg></body></html>'],
+        ];
+    }
+
+    /**
+     * Ficheiro real (não o fake do Laravel, que deduz o tipo pela extensão), para que o tipo
+     * seja detetado pelo conteúdo no servidor, como acontece num pedido verdadeiro.
+     */
+    private function renamedUpload(string $name, string $clientMime, string $content): UploadedFile
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'aspec-upload-');
+        file_put_contents($tmp, $content);
+
+        $file = new UploadedFile($tmp, $name, $clientMime, null, true);
+        $this->assertNotContains($file->getMimeType(), ['image/jpeg', 'image/png', 'image/webp']);
+
+        return $file;
+    }
+
+    #[Test]
+    #[DataProvider('renamedNonImages')]
+    public function renamed_non_image_is_rejected_by_content_and_keeps_current_logo(string $name, string $clientMime, string $content): void
+    {
+        $user = $this->memberWithProfile();
+        $oldPath = $this->giveStoredLogo($user);
+        Sanctum::actingAs($user);
+
+        $this->postJson(self::URL, ['logo' => $this->renamedUpload($name, $clientMime, $content)])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['logo'], 'errors');
+
+        $this->assertSame($oldPath, $this->logoPathOf($user));
+        $this->assertSame([$oldPath], Storage::disk('public')->allFiles('logos'));
+    }
+
+    #[Test]
+    #[DataProvider('renamedNonImages')]
+    public function renamed_non_image_is_rejected_when_member_has_no_logo(string $name, string $clientMime, string $content): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->postJson(self::URL, ['logo' => $this->renamedUpload($name, $clientMime, $content)])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['logo'], 'errors');
+
+        $this->assertNull($this->logoPathOf($user));
+        $this->assertNothingStored($user);
+    }
+
     // ---- Throttle: 120 pedidos/min e 2000/hora (logo-upload), como no portfólio ----
 
     #[Test]
