@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
+use App\Http\Controllers\Api\Events\EventCalendarController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
 use App\Http\Controllers\Api\Events\EventRegistrationController;
 use App\Http\Controllers\Api\Events\PrayerCardController;
@@ -57,6 +58,12 @@ Route::middleware('throttle:public-events')->group(function () {
     Route::get('/events', [EventInstanceController::class, 'index']);
     Route::get('/events/{eventInstance}', [EventInstanceController::class, 'show'])
         ->whereUuid('eventInstance');
+
+    // Sem sessão: o ficheiro nunca precisa de utilizador e um clique vindo do frontend criaria uma sessão por download.
+    Route::get('/events/{eventInstance}/calendar.ics', [EventCalendarController::class, 'show'])
+        ->whereUuid('eventInstance')
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('events.calendar');
 });
 
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.

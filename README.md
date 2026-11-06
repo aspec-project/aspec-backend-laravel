@@ -267,6 +267,15 @@ Vão para as contas **Active com perfil de membro** (membros e admins com perfil
 - **Anúncio de novo evento:** sai quando um admin cria um evento **pontual** (as sessões de séries nunca são anunciadas). Um evento só é anunciado uma vez (`event_instances.announced_at`). Nunca inclui o link de um evento online.
 - **Agenda semanal:** comando `events:send-weekly-agenda`, agendado ao **sábado às 10:00 (hora de Lisboa)**. Cada membro recebe os eventos em que está inscrito com início até ao sábado seguinte às 23:59 e até 10 eventos pontuais com inscrições abertas. Quem não tem nada para mostrar não recebe email. No máximo uma agenda por semana a cada conta (`users.weekly_agenda_sent_at`).
 
+Nos dois, o local do evento aparece como o nome do espaço (ou "Ver no mapa") com link para o Google Maps, seguido do distrito; a morada não aparece em texto (está no mapa, na página do evento e no ficheiro do calendário). Os eventos online aparecem como "Online", sem mapa.
+
+- **Anúncio:** botão "Ver o evento" (página do evento no frontend) e botão "Adicionar ao calendário".
+- **Agenda semanal:** cada evento tem o título e, na linha seguinte, a data, a hora e o local, acabando num ícone pequeno de calendário (link para o ficheiro .ics). "A sua semana" acaba com o botão "Ver as minhas inscrições" (`/perfil/inscricoes`); "Inscrições abertas" acaba com o botão "Ver a agenda" (`/eventos`).
+
+**Ícone de calendário:** o PNG `Aspec_Backend/resources/images/calendar-icon.png` (48×48, mostrado a 24×24) é carregado uma vez à mão no bucket público do R2 em `branding/calendar-icon.png`, com o URL completo em `MAIL_CALENDAR_ICON_URL`. Vazio (local, testes): aparece um link de texto "Calendário" no mesmo sítio.
+
+O link "Adicionar ao calendário" descarrega o evento em ficheiro iCalendar: `GET /api/events/{id}/calendar.ics` (público, mesmas regras do detalhe do evento, limite `public-events`, sem sessão; horas em UTC; nunca leva o link da reunião online). O link usa o **`APP_URL`** (a API), não o `FRONTEND_URL`: confirmar que o `APP_URL` do servidor está certo, senão os links dos emails saem errados. No telemóvel, Outlook e Apple abrem o ficheiro diretamente; o Google Calendar na web obriga a descarregar e importar.
+
 Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local, o agendamento só corre com `php artisan schedule:work` (em produção, um cron com `php artisan schedule:run` a cada minuto).
 
 **Demo:** correr à mão `php artisan events:send-weekly-agenda` (com o `queue:work` a correr). Fora do sábado, a agenda vai de agora até ao sábado seguinte às 23:59. Para a enviar outra vez na mesma semana às contas demo, voltar a correr `php artisan db:seed --class=DemoSeeder` (limpa a marca da agenda dessas contas).

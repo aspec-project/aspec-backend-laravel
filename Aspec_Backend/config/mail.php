@@ -149,5 +149,15 @@ return [
     */
 
     'logo_url' => env('MAIL_LOGO_URL'),
+    | Ícone de calendário dos emails
+    |--------------------------------------------------------------------------
+    |
+    | URL público e absoluto do PNG do ícone "Adicionar ao calendário" da agenda
+    | semanal (resources/images/calendar-icon.png, carregado no R2). Vazio: o
+    | email mostra um link de texto "Calendário".
+    |
+    */
+
+    'calendar_icon_url' => env('MAIL_CALENDAR_ICON_URL'),
 
 ];
