@@ -120,4 +120,34 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Tema dos emails (Markdown)
+    |--------------------------------------------------------------------------
+    |
+    | Tema "aspec" em resources/views/vendor/mail/html/themes/aspec.css. O
+    | "paths" tem de estar aqui: esta chave substitui a do framework inteira.
+    |
+    */
+
+    'markdown' => [
+        'theme' => env('MAIL_MARKDOWN_THEME', 'aspec'),
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logótipo dos emails
+    |--------------------------------------------------------------------------
+    |
+    | URL público e absoluto do PNG (os clientes de email não carregam caminhos
+    | relativos, localhost nem data:). Vazio: o cabeçalho mostra o nome da app.
+    |
+    */
+
+    'logo_url' => env('MAIL_LOGO_URL'),
+
 ];
