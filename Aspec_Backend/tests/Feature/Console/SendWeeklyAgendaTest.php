@@ -6,6 +6,7 @@ use App\Enums\InactiveReason;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\EventSeries;
+use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\WeeklyAgendaNotification;
@@ -14,10 +15,12 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsEventEmailLinks;
 use Tests\TestCase;
 
 /**
@@ -31,13 +34,15 @@ use Tests\TestCase;
  */
 class SendWeeklyAgendaTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssertsEventEmailLinks, RefreshDatabase;
 
     private const COMMAND = 'events:send-weekly-agenda';
 
     private const FRONTEND = 'https://app.aspec.test';
 
     private const TZ = 'Europe/Lisbon';
+
+    private const CALENDAR_ICON = 'https://media.aspec.test/branding/calendar-icon.png';
 
     private const LINK_PENDING_TEXT = 'O link será disponibilizado na página do evento após o fecho das inscrições.';
 
@@ -46,7 +51,7 @@ class SendWeeklyAgendaTest extends TestCase
         parent::setUp();
 
         Notification::fake();
-        config(['app.frontend_url' => self::FRONTEND]);
+        config(['app.frontend_url' => self::FRONTEND, 'mail.calendar_icon_url' => self::CALENDAR_ICON]);
         $this->travelToLisbon('2027-06-05 10:00');
     }
 
@@ -499,8 +504,8 @@ class SendWeeklyAgendaTest extends TestCase
 
         $mail = $this->mailFor($member);
         $this->assertStringContainsString('Rui Carvalho', $mail);
-        $this->assertStringContainsString(self::FRONTEND.'/eventos/'.$registered->id, $mail);
-        $this->assertStringContainsString(self::FRONTEND.'/eventos/'.$open->id, $mail);
+        $this->assertCalendarIconLink($this->sectionA($mail), $registered->id, self::CALENDAR_ICON);
+        $this->assertCalendarIconLink($this->sectionB($mail), $open->id, self::CALENDAR_ICON);
         $this->assertStringContainsString(self::FRONTEND.'/perfil/conta', $mail);
     }
 
@@ -534,5 +539,254 @@ class SendWeeklyAgendaTest extends TestCase
         $this->assertFalse($notification->shouldSend($blocked->fresh(), 'mail'));
         $this->assertFalse($notification->shouldSend($optedOut->fresh(), 'mail'));
         $this->assertTrue($notification->shouldSend($stillActive->fresh(), 'mail'));
+    }
+
+    #[Test]
+    public function each_event_in_both_sections_has_one_calendar_link(): void
+    {
+        $member = $this->member();
+        $registered = $this->event('Jantar Inscrito', '2027-06-09 20:00');
+        $this->register($member, $registered);
+        $open = $this->event('Aberto Valido', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertSame(1, substr_count($mail, 'href="'.e($this->calendarIcsUrl($registered->id)).'"'));
+        $this->assertSame(1, substr_count($mail, 'href="'.e($this->calendarIcsUrl($open->id)).'"'));
+        $this->assertStringContainsString(e($this->calendarIcsUrl($registered->id)), $this->sectionA($mail));
+        $this->assertStringContainsString(e($this->calendarIcsUrl($open->id)), $this->sectionB($mail));
+    }
+
+    #[Test]
+    public function calendar_icon_link_sits_at_the_end_of_the_event_details_line_below_the_title(): void
+    {
+        $member = $this->member();
+        $event = $this->event('Jantar Inscrito', '2027-06-09 20:00', [
+            'location_id' => Location::query()->where('name', 'Porto')->firstOrFail()->id,
+        ]);
+        $this->register($member, $event);
+
+        $this->runAgenda();
+
+        $html = $this->sectionA($this->mailFor($member));
+        $anchor = $this->calendarAnchor($html, $event->id);
+        $this->assertNotNull($anchor);
+
+        $paragraphStart = strrpos(substr($html, 0, $anchor['offset']), '<p');
+        $paragraph = substr($html, $paragraphStart, $anchor['offset'] - $paragraphStart);
+        $lastLine = preg_split('/<br\s*\/?>/i', $paragraph);
+        $detailsLine = end($lastLine);
+        $this->assertStringContainsString('09/06/2027', $detailsLine);
+        $this->assertStringContainsString('20:00', $detailsLine);
+        $this->assertStringContainsString('Porto', $detailsLine);
+        $this->assertStringNotContainsString('Jantar Inscrito', $detailsLine);
+
+        $titlePosition = strpos($html, '>Jantar Inscrito</strong>');
+        $this->assertNotFalse($titlePosition);
+        $this->assertLessThan($anchor['offset'], $titlePosition);
+        $betweenTitleAndDate = substr($html, $titlePosition, strpos($html, '09/06/2027', $titlePosition) - $titlePosition);
+        $this->assertMatchesRegularExpression('/<br\s*\/?>|<\/p>/i', $betweenTitleAndDate);
+    }
+
+    #[Test]
+    public function agenda_has_no_large_per_event_calendar_button(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Jantar Inscrito', '2027-06-09 20:00'));
+        $this->event('Aberto Valido', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertSame(2, preg_match_all('/<a\s[^>]*class="[^"]*button[^"]*"/i', $mail));
+        $this->assertNotNull($this->anchorTagFor($mail, self::FRONTEND.'/perfil/inscricoes'));
+        $this->assertNotNull($this->anchorTagFor($mail, self::FRONTEND.'/eventos'));
+        $this->assertStringNotContainsString('>Adicionar ao calendário<', $mail);
+    }
+
+    #[Test]
+    public function without_calendar_icon_url_the_agenda_uses_a_small_calendario_text_link(): void
+    {
+        config(['mail.calendar_icon_url' => null]);
+        $member = $this->member();
+        $event = $this->event('Jantar Inscrito', '2027-06-09 20:00');
+        $this->register($member, $event);
+
+        $this->runAgenda();
+
+        $anchor = $this->calendarAnchor($this->mailFor($member), $event->id);
+        $this->assertNotNull($anchor);
+        $this->assertSame('Calendário', trim(strip_tags($anchor['inner'])));
+        $this->assertStringNotContainsString('<img', $anchor['inner']);
+        $this->assertDoesNotMatchRegularExpression('/class="[^"]*button/i', $anchor['tag']);
+    }
+
+    #[Test]
+    public function text_version_of_the_agenda_keeps_the_calendar_url_in_full(): void
+    {
+        $member = $this->member();
+        $event = $this->event('Jantar Inscrito', '2027-06-09 20:00');
+        $this->register($member, $event);
+
+        $this->runAgenda();
+
+        $message = Notification::sent($member, WeeklyAgendaNotification::class)->last()->toMail($member);
+        $text = (string) app(Markdown::class)->renderText($message->markdown, $message->data());
+
+        $this->assertStringContainsString('Adicionar ao calendário: '.$this->calendarIcsUrl($event->id), $text);
+    }
+
+    #[Test]
+    public function calendar_icon_file_is_a_48_by_48_png(): void
+    {
+        $path = resource_path('images/calendar-icon.png');
+
+        $this->assertFileExists($path);
+        [$width, $height, $type] = getimagesize($path);
+        $this->assertSame([48, 48, IMAGETYPE_PNG], [$width, $height, $type]);
+    }
+
+    #[Test]
+    public function agenda_lines_have_no_per_event_page_link_but_keep_the_agenda_button(): void
+    {
+        $member = $this->member();
+        $registered = $this->event('Jantar Inscrito', '2027-06-09 20:00');
+        $this->register($member, $registered);
+        $open = $this->event('Aberto Valido', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertStringNotContainsString('Ver o evento', $mail);
+        $this->assertStringNotContainsString(self::FRONTEND.'/eventos/'.$registered->id, $mail);
+        $this->assertStringNotContainsString(self::FRONTEND.'/eventos/'.$open->id, $mail);
+        $this->assertStringContainsString('Ver a agenda', $mail);
+        $this->assertNotNull($this->anchorTagFor($mail, self::FRONTEND.'/eventos'));
+    }
+
+    #[Test]
+    public function agenda_links_the_venue_to_google_maps_with_the_district_and_hides_the_address(): void
+    {
+        $member = $this->member();
+        $porto = Location::query()->where('name', 'Porto')->firstOrFail()->id;
+        $this->register($member, $this->event('Jantar no Salao', '2027-06-09 20:00', [
+            'location_id' => $porto,
+            'venue_name' => 'Salão de eventos',
+            'address' => 'Rua de Santa Catarina 100',
+            'place_id' => 'ChIJ_abc-123',
+            'latitude' => null,
+            'longitude' => null,
+        ]));
+        $this->event('Aberto sem Espaco', '2027-07-01 18:00', [
+            'location_id' => $porto,
+            'venue_name' => null,
+            'address' => 'Avenida dos Aliados 1',
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+        $maps = 'https://www.google.com/maps/search/?api=1&query=';
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertNotNull($this->anchorTagFor(
+            $this->sectionA($mail),
+            $maps.rawurlencode('Rua de Santa Catarina 100').'&query_place_id=ChIJ_abc-123'
+        ));
+        $this->assertStringContainsString('Salão de eventos</a>, Porto', $this->sectionA($mail));
+        $this->assertNotNull($this->anchorTagFor($this->sectionB($mail), $maps.rawurlencode('Avenida dos Aliados 1')));
+        $this->assertStringContainsString('Ver no mapa</a>, Porto', $this->sectionB($mail));
+        $this->assertStringNotContainsString('Rua de Santa Catarina 100', $mail);
+        $this->assertStringNotContainsString('Avenida dos Aliados 1', $mail);
+    }
+
+    #[Test]
+    public function online_events_in_the_agenda_have_no_map_link(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Webinar Inscrito', '2027-06-09 20:00', $this->onlineAttributes('https://meet.example.com/a-1')));
+        $this->event('Webinar Aberto', '2027-07-01 20:00', $this->onlineAttributes('https://meet.example.com/b-2'));
+
+        $this->runAgenda();
+
+        $this->assertStringNotContainsString('google.com/maps', $this->mailFor($member));
+    }
+
+    #[Test]
+    public function agenda_with_week_events_ends_that_section_with_my_registrations_button(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Jantar Inscrito', '2027-06-09 20:00'));
+        $this->event('Aberto Valido', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $sectionA = $this->sectionA($this->mailFor($member));
+        $tag = $this->anchorTagFor($sectionA, self::FRONTEND.'/perfil/inscricoes');
+        $this->assertNotNull($tag);
+        $start = strpos($sectionA, $tag);
+        $this->assertStringContainsString(
+            'Ver as minhas inscrições',
+            substr($sectionA, $start, strpos($sectionA, '</a>', $start) - $start)
+        );
+        $this->assertGreaterThan(strrpos($sectionA, 'Jantar Inscrito'), $start);
+    }
+
+    #[Test]
+    public function agenda_with_only_open_events_has_no_my_registrations_button(): void
+    {
+        $member = $this->member();
+        $this->event('Aberto Valido', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertStringNotContainsString('Ver as minhas inscrições', $mail);
+        $this->assertStringNotContainsString(self::FRONTEND.'/perfil/inscricoes', $mail);
+        $this->assertStringContainsString('Ver a agenda', $mail);
+    }
+
+    #[Test]
+    public function agenda_with_only_week_events_has_no_agenda_button(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Jantar Inscrito', '2027-06-09 20:00'));
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertStringNotContainsString('Inscrições abertas', $mail);
+        $this->assertStringNotContainsString('Ver a agenda', $mail);
+        $this->assertNull($this->anchorTagFor($mail, self::FRONTEND.'/eventos'));
+    }
+
+    #[Test]
+    public function markdown_in_the_event_name_does_not_create_a_link_in_the_agenda(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Jantar [Confirme aqui](https://phish.pt)', '2027-06-09 20:00'));
+        $this->event('Aberto [Clique](https://phish.pt)', '2027-07-01 18:00');
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertStringNotContainsString('href="https://phish.pt', $mail);
+        $this->assertStringContainsString('>Jantar [Confirme aqui](https://phish.pt)</strong>', $this->sectionA($mail));
+        $this->assertStringContainsString('>Aberto [Clique](https://phish.pt)</strong>', $this->sectionB($mail));
+    }
+
+    #[Test]
+    public function angle_brackets_in_the_event_name_are_shown_as_text_in_the_agenda(): void
+    {
+        $member = $this->member();
+        $this->register($member, $this->event('Jantar <b>VIP</b>', '2027-06-09 20:00'));
+
+        $this->runAgenda();
+
+        $mail = $this->mailFor($member);
+        $this->assertStringNotContainsString('<b>', $mail);
+        $this->assertStringContainsString('Jantar &lt;b&gt;VIP&lt;/b&gt;', $mail);
+        $this->assertStringNotContainsString('\&lt;', $mail);
     }
 }
