@@ -1,5 +1,8 @@
 @props(['url'])
-{{-- bgcolor e width/height como atributos porque o Outlook ignora estes valores quando vêm só em CSS; o alt branco aparece sobre o navy quando as imagens estão bloqueadas. --}}
+{{-- bgcolor e width/height como atributos porque o Outlook ignora estes valores quando vêm só em CSS; o alt branco aparece sobre o navy quando as imagens estão bloqueadas. A barra tem a largura do corpo (inner-body: 570 px, 100 % no telemóvel). --}}
+<tr>
+<td>
+<table class="inner-body header-body" align="center" width="570" cellpadding="0" cellspacing="0" role="presentation" bgcolor="#0D1F35">
 <tr>
 <td class="header" bgcolor="#0D1F35">
 <a href="{{ $url }}" style="display: inline-block;">
@@ -9,5 +12,8 @@
 {!! $slot !!}
 @endif
 </a>
+</td>
+</tr>
+</table>
 </td>
 </tr>

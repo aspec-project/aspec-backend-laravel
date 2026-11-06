@@ -153,7 +153,15 @@ img {
 }
 
 .inner-body a {
-    word-break: break-all;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+.header-body {
+    background-color: #0D1F35;
+    border-color: #0D1F35;
+    border-radius: 4px 4px 0 0;
+    box-shadow: none;
 }
 
 /* Subcopy */
