@@ -120,4 +120,17 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Ícone de calendário dos emails
+    |--------------------------------------------------------------------------
+    |
+    | URL público e absoluto do PNG do ícone "Adicionar ao calendário" da agenda
+    | semanal (resources/images/calendar-icon.png, carregado no R2). Vazio: o
+    | email mostra um link de texto "Calendário".
+    |
+    */
+
+    'calendar_icon_url' => env('MAIL_CALENDAR_ICON_URL'),
+
 ];
