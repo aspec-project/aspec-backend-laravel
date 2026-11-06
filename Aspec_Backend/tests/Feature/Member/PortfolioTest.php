@@ -221,6 +221,49 @@ class PortfolioTest extends TestCase
         $this->assertNothingStored($user);
     }
 
+    /**
+     * Ficheiros que não são imagens mas têm nome de imagem (ex.: um script PHP chamado foto.jpg).
+     */
+    public static function renamedNonImages(): array
+    {
+        return [
+            'script PHP com nome .jpg' => ['foto.jpg', 'image/jpeg', '<?php echo 1;'],
+            'texto simples com nome .png' => ['foto.png', 'image/png', "Isto nao e uma imagem.\nApenas texto.\n"],
+            'HTML com SVG embutido com nome .webp' => ['foto.webp', 'image/webp', '<!DOCTYPE html><html><body><svg onload="alert(1)"><script>alert(1)</script></svg></body></html>'],
+        ];
+    }
+
+    /**
+     * Ficheiro real (não o fake do Laravel, que deduz o tipo pela extensão), para que o tipo
+     * seja detetado pelo conteúdo no servidor, como acontece num pedido verdadeiro.
+     */
+    private function renamedUpload(string $name, string $clientMime, string $content): UploadedFile
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'aspec-upload-');
+        file_put_contents($tmp, $content);
+
+        $file = new UploadedFile($tmp, $name, $clientMime, null, true);
+        $this->assertNotContains($file->getMimeType(), ['image/jpeg', 'image/png', 'image/webp']);
+
+        return $file;
+    }
+
+    #[Test]
+    #[DataProvider('renamedNonImages')]
+    public function renamed_non_image_is_rejected_by_content_and_stores_nothing(string $name, string $clientMime, string $content): void
+    {
+        $user = $this->memberWithProfile();
+        Sanctum::actingAs($user);
+
+        $this->postJson(self::URL, ['image' => $this->renamedUpload($name, $clientMime, $content)])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors(['image'], 'errors');
+
+        $this->assertDatabaseCount('portfolios', 0);
+        $this->assertSame([], Storage::disk('public')->allFiles('portfolios'));
+    }
+
     #[Test]
     public function tenth_image_is_accepted(): void
     {
