@@ -5773,6 +5773,113 @@
           ]
         },
         {
+          "name": "Evento no calendário (.ics)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/events/{{event_id}}/calendar.ics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "{{event_id}}",
+                "calendar.ics"
+              ]
+            },
+            "description": "Descarrega o evento em ficheiro iCalendar (RFC 5545) para o adicionar ao calendário (Google, Outlook, Apple). É o link \"Adicionar ao calendário\" dos emails de eventos (anúncio e agenda semanal), que usa o `APP_URL` da API.\n\nPúblico, com as mesmas regras de \"Ver evento\": qualquer evento existente, incluindo passados e sessões de séries; inexistente, apagado ou id que não seja UUID → 404 em JSON. Partilha o limite `public-events` (120/min por utilizador ou IP) com a agenda e o detalhe. Não usa sessão nem cookies.\n\nA resposta não é JSON: corpo `text/calendar; charset=utf-8`, `Content-Disposition: attachment` com o nome do evento em slug (`evento.ics` se ficar vazio) e `Cache-Control: max-age=300, private`. Horas em UTC (sufixo `Z`), convertidas da hora de Lisboa. Descrição cortada a 500 caracteres + link da página do evento. O `online_url` nunca entra no ficheiro (eventos online levam só o aviso de que o link está na página do evento). `{{event_id}}` é preenchido pelo pedido \"Agenda de eventos\".",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "response": [
+            {
+              "name": "200 Ficheiro iCalendar",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Ficheiro iCalendar"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/e5a6b7c8-5555-4c55-8555-555555555555/calendar.ics",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555",
+                    "calendar.ics"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "text",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "text/calendar; charset=utf-8"
+                },
+                {
+                  "key": "Content-Disposition",
+                  "value": "attachment; filename=jantar-lisboa.ics"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "max-age=300, private"
+                },
+                {
+                  "key": "X-Content-Type-Options",
+                  "value": "nosniff"
+                }
+              ],
+              "cookie": [],
+              "body": "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ASPEC//Plataforma ASPEC//PT\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\nBEGIN:VEVENT\r\nUID:e5a6b7c8-5555-4c55-8555-555555555555@localhost\r\nDTSTAMP:20301101T100000Z\r\nDTSTART:20301115T193000Z\r\nDTEND:20301115T223000Z\r\nLAST-MODIFIED:20301020T091200Z\r\nSUMMARY:Jantar — Lisboa\r\nDESCRIPTION:Encontro mensal para partilha de experiências e criação de p\r\n arcerias entre membros.\\n\\nMais informações: http://localhost:5173/event\r\n os/e5a6b7c8-5555-4c55-8555-555555555555\r\nLOCATION:Centro de Congressos de Lisboa\\, Rua Castilho 39\\, 1250-068 Lisboa\r\n \\, Lisboa\r\nURL:http://localhost:5173/eventos/e5a6b7c8-5555-4c55-8555-555555555555\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+            },
+            {
+              "name": "404 Evento não encontrado",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "404 Evento não encontrado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/events/00000000-0000-4000-8000-000000000000/calendar.ics",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "events",
+                    "00000000-0000-4000-8000-000000000000",
+                    "calendar.ics"
+                  ]
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Recurso não encontrado.\"\n}"
+            }
+          ]
+        },
+        {
           "name": "Inscritos de um evento (nomes das empresas)",
           "request": {
             "method": "GET",
