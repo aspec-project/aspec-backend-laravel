@@ -52,7 +52,7 @@ class EventCategoriesTableTest extends TestCase
         DB::table('event_categories')->insert([
             'id' => (string) Str::uuid(),
             'name' => 'Workshops',
-            'color' => '#1565C0',
+            'color' => '#1E449A',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

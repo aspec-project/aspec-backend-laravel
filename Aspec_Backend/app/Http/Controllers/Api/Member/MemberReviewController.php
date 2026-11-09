@@ -186,6 +186,7 @@ class MemberReviewController extends Controller
                 'status',
                 'reviewerProfile' => fn ($query) => $query->withTrashed(),
                 'reviewedProfile' => fn ($query) => $query->withTrashed(),
+                'reports' => fn ($query) => $query->whereNull('resolved_at')->select(['id', 'review_id', 'reason']),
             ])
             ->where(function (Builder $query) use ($direction, $profileId): void {
                 if ($direction === 'received') {
@@ -241,6 +242,10 @@ class MemberReviewController extends Controller
                 'per_page' => $reviews->perPage(),
                 'total' => $reviews->total(),
                 'last_page' => $reviews->lastPage(),
+            ],
+            'counts' => [
+                'received' => Review::query()->where('reviewed_profile_id', $profileId)->count(),
+                'written' => Review::query()->where('reviewer_profile_id', $profileId)->count(),
             ],
         ], 'As suas avaliações foram obtidas com sucesso.')
             ->header('Cache-Control', 'private, no-store')

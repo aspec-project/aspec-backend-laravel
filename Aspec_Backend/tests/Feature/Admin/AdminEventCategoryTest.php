@@ -17,6 +17,12 @@ class AdminEventCategoryTest extends TestCase
 
     private const URL = '/api/admin/event-categories';
 
+    private const PALETTE_URL = self::URL.'/palette';
+
+    private const OUTSIDE_PALETTE_MESSAGE = 'A cor escolhida não faz parte da paleta de cores disponíveis.';
+
+    private const PALETTE_EXHAUSTED_MESSAGE = 'Todas as cores disponíveis já estão em uso. Apague um tipo de evento sem eventos para libertar uma cor.';
+
     private const SEEDED_NAMES = [
         'Almoço',
         'Formação',
@@ -97,7 +103,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
-            'color' => '#00796B',
+            'color' => '#2A6E9E',
         ]);
 
         $response
@@ -105,14 +111,14 @@ class AdminEventCategoryTest extends TestCase
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria criada com sucesso.')
             ->assertJsonPath('data.name', 'Workshops')
-            ->assertJsonPath('data.color', '#00796B');
+            ->assertJsonPath('data.color', '#2A6E9E');
 
         $this->assertTrue(Str::isUuid($response->json('data.id')));
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $response->json('data.id'),
             'name' => 'Workshops',
-            'color' => '#00796B',
+            'color' => '#2A6E9E',
         ]);
     }
 
@@ -121,13 +127,13 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => '  Workshops  ', 'color' => '#00796B'])
+        $this->postJson(self::URL, ['name' => '  Workshops  ', 'color' => '#2A6E9E'])
             ->assertStatus(201)
             ->assertJsonPath('data.name', 'Workshops');
 
         $this->assertDatabaseHas('event_categories', ['name' => 'Workshops']);
 
-        $this->postJson(self::URL, ['name' => '   ', 'color' => '#00796B'])
+        $this->postJson(self::URL, ['name' => '   ', 'color' => '#2A6E9E'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome é obrigatório.');
     }
@@ -151,14 +157,14 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 31), 'color' => '#00796B'])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 31), 'color' => '#2A6E9E'])
             ->assertStatus(422)
             ->assertJsonPath('errors.name.0', 'O campo nome não pode ter mais de 30 caracteres.');
 
-        $this->postJson(self::URL, ['name' => str_repeat('a', 30), 'color' => '#00796B'])
+        $this->postJson(self::URL, ['name' => str_repeat('a', 30), 'color' => '#2A6E9E'])
             ->assertStatus(201);
 
-        $this->postJson(self::URL, ['name' => str_repeat('ç', 30), 'color' => '#5D4037'])
+        $this->postJson(self::URL, ['name' => str_repeat('ç', 30), 'color' => '#5A3A14'])
             ->assertStatus(201);
     }
 
@@ -237,7 +243,7 @@ class AdminEventCategoryTest extends TestCase
 
         $response = $this->postJson(self::URL, [
             'name' => 'Workshops',
-            'color' => '#00796B',
+            'color' => '#2A6E9E',
             'id' => $forgedId,
             'created_at' => '2000-01-01',
         ]);
@@ -257,7 +263,7 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $workshop = $this->category('Workshop');
 
-        $this->putJson(self::URL."/{$workshop->id}", ['name' => 'Workshop Prático', 'color' => '#C62828'])
+        $this->putJson(self::URL."/{$workshop->id}", ['name' => 'Workshop Prático', 'color' => '#1C747E'])
             ->assertOk()
             ->assertJsonPath('success', true)
             ->assertJsonPath('message', 'Categoria atualizada com sucesso.')
@@ -277,11 +283,11 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565C0'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1E449A'])
             ->assertOk()
             ->assertJsonPath('data.name', 'Formação');
 
-        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'FORMAÇÃO', 'color' => '#1565C0'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'FORMAÇÃO', 'color' => '#1E449A'])
             ->assertOk()
             ->assertJsonPath('data.name', 'FORMAÇÃO');
 
@@ -316,7 +322,7 @@ class AdminEventCategoryTest extends TestCase
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $formacao->id,
-            'color' => '#1565C0',
+            'color' => '#1E449A',
         ]);
     }
 
@@ -336,7 +342,7 @@ class AdminEventCategoryTest extends TestCase
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $formacao->id,
-            'color' => '#1565C0',
+            'color' => '#1E449A',
         ]);
     }
 
@@ -462,7 +468,7 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        foreach (['#1565c0', '#1565C0'] as $color) {
+        foreach (['#1e449a', '#1E449A'] as $color) {
             $this->postJson(self::URL, ['name' => 'Workshops', 'color' => $color])
                 ->assertStatus(422)
                 ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
@@ -477,13 +483,13 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#00796b'])
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2a6e9e'])
             ->assertStatus(201)
-            ->assertJsonPath('data.color', '#00796B');
+            ->assertJsonPath('data.color', '#2A6E9E');
 
         $this->assertDatabaseHas('event_categories', [
             'name' => 'Workshops',
-            'color' => '#00796B',
+            'color' => '#2A6E9E',
         ]);
     }
 
@@ -493,9 +499,9 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565c0'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1e449a'])
             ->assertOk()
-            ->assertJsonPath('data.color', '#1565C0');
+            ->assertJsonPath('data.color', '#1E449A');
     }
 
     #[Test]
@@ -504,13 +510,13 @@ class AdminEventCategoryTest extends TestCase
         $this->actingAsAdmin();
         $formacao = $this->category('Formação');
 
-        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#2e7d32'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#0e784f'])
             ->assertStatus(422)
             ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
 
         $this->assertDatabaseHas('event_categories', [
             'id' => $formacao->id,
-            'color' => '#1565C0',
+            'color' => '#1E449A',
         ]);
     }
 
@@ -553,15 +559,130 @@ class AdminEventCategoryTest extends TestCase
     {
         $this->actingAsAdmin();
 
-        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#00796B'])
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#2A6E9E'])
             ->assertStatus(201)
             ->assertJsonPath('data.events_count', 0);
 
         $formacao = $this->category('Formação');
         EventInstance::factory()->create(['category_id' => $formacao->id]);
 
-        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1565C0'])
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#1E449A'])
             ->assertOk()
             ->assertJsonPath('data.events_count', 1);
+    }
+
+    /**
+     * Substitui as categorias por uma por cada cor da paleta, deixando-a esgotada.
+     */
+    private function useAllPaletteColors(): void
+    {
+        EventCategory::query()->delete();
+
+        foreach (array_keys(config('event_categories.palette', [])) as $index => $color) {
+            EventCategory::create(['name' => "Tipo {$index}", 'color' => $color]);
+        }
+    }
+
+    #[Test]
+    public function color_with_a_valid_format_outside_the_palette_is_rejected_on_create(): void
+    {
+        $this->actingAsAdmin();
+
+        foreach (['#FF0000', '#8A7043'] as $color) {
+            $this->postJson(self::URL, ['name' => 'Workshops', 'color' => $color])
+                ->assertStatus(422)
+                ->assertJsonPath('errors.color.0', self::OUTSIDE_PALETTE_MESSAGE);
+        }
+
+        $this->assertDatabaseMissing('event_categories', ['name' => 'Workshops']);
+    }
+
+    #[Test]
+    public function color_outside_the_palette_is_rejected_on_update(): void
+    {
+        $this->actingAsAdmin();
+        $formacao = $this->category('Formação');
+
+        $this->putJson(self::URL."/{$formacao->id}", ['name' => 'Formação', 'color' => '#FF0000'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', self::OUTSIDE_PALETTE_MESSAGE);
+
+        $this->assertDatabaseHas('event_categories', ['id' => $formacao->id, 'color' => '#1E449A']);
+    }
+
+    #[Test]
+    public function creating_with_every_palette_color_in_use_returns_the_exhausted_message(): void
+    {
+        $this->actingAsAdmin();
+        $this->useAllPaletteColors();
+
+        $this->postJson(self::URL, ['name' => 'Workshops', 'color' => '#0D1F35'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', self::PALETTE_EXHAUSTED_MESSAGE);
+
+        $this->assertSame(20, EventCategory::count());
+    }
+
+    #[Test]
+    public function editing_with_every_palette_color_in_use_keeps_the_usual_rules(): void
+    {
+        $this->actingAsAdmin();
+        $this->useAllPaletteColors();
+        $category = EventCategory::where('color', '#1E449A')->firstOrFail();
+
+        $this->putJson(self::URL."/{$category->id}", ['name' => $category->name, 'color' => '#0D1F35'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.color.0', 'Já existe uma categoria com esta cor.');
+
+        $this->putJson(self::URL."/{$category->id}", ['name' => 'Novo nome', 'color' => '#1E449A'])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Novo nome');
+    }
+
+    #[Test]
+    public function admin_gets_the_palette_in_configuration_order(): void
+    {
+        $this->actingAsAdmin();
+
+        $expected = collect(config('event_categories.palette', []))
+            ->map(fn (string $name, string $color): array => ['color' => $color, 'name' => $name])
+            ->values()
+            ->all();
+
+        $this->getJson(self::PALETTE_URL)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Paleta de cores obtida com sucesso.')
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('data.0', ['color' => '#0D1F35', 'name' => 'Azul-marinho'])
+            ->assertJsonPath('data', $expected);
+    }
+
+    #[Test]
+    public function guest_cannot_get_the_palette(): void
+    {
+        $this->getJson(self::PALETTE_URL)
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Não autenticado.');
+    }
+
+    #[Test]
+    public function member_cannot_get_the_palette(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->getJson(self::PALETTE_URL)
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Não tem permissão para realizar esta ação.');
+    }
+
+    #[Test]
+    public function inactive_admin_cannot_get_the_palette(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->inactive()->create());
+
+        $this->getJson(self::PALETTE_URL)
+            ->assertForbidden()
+            ->assertJsonPath('message', 'A conta não está ativa e não pode editar dados.');
     }
 }

@@ -21,6 +21,8 @@ class AdminReviewController extends Controller
         'hidden' => 'Hidden',
     ];
 
+    private const REPORTS_RELATION = 'reports:id,review_id,source,reason,comment,resolved_at,created_at';
+
     /**
      * Lista as avaliações de acordo com os filtros fornecidos.
      */
@@ -59,7 +61,7 @@ class AdminReviewController extends Controller
                 'status',
                 'reviewerProfile' => fn ($profile) => $profile->withTrashed(),
                 'reviewedProfile' => fn ($profile) => $profile->withTrashed(),
-                'reports:id,review_id,source',
+                self::REPORTS_RELATION,
             ])
             ->when(
                 $statusName !== null,
@@ -200,7 +202,7 @@ class AdminReviewController extends Controller
                 'status',
                 'reviewerProfile' => fn ($profile) => $profile->withTrashed(),
                 'reviewedProfile' => fn ($profile) => $profile->withTrashed(),
-                'reports:id,review_id,source',
+                self::REPORTS_RELATION,
             ]);
 
             return $this->successResponse(

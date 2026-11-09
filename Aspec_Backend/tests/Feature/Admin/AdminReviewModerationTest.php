@@ -251,4 +251,19 @@ class AdminReviewModerationTest extends TestCase
                 ->assertForbidden();
         }
     }
+
+    /**
+     * Moderar resolve os reports em aberto, por isso a resposta já não os pode listar.
+     */
+    #[Test]
+    public function moderation_response_lists_no_reports_because_they_were_resolved(): void
+    {
+        $this->actingAsAdmin();
+        $review = $this->createReview('Flagged');
+        $this->createReport($review);
+
+        $this->patchJson($this->actionUrl($review, 'hide'))
+            ->assertOk()
+            ->assertJsonPath('data.reports', []);
+    }
 }

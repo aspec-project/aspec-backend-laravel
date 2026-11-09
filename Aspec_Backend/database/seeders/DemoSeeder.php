@@ -1667,7 +1667,7 @@ class DemoSeeder extends Seeder
      * Avaliações de demonstração [autor, avaliado, estrelas, estado, comentário], sem autoavaliações nem pares repetidos.
      * Os autores são sempre membros (role Member), como exige o POST de avaliações.
      * Médias visíveis: Contas Certas 4,8 e Ferreira 4,7 (aparecem em "4,5+"), Sabores do Algarve 4,3 (só "4+"),
-     * Carvalho 3,5 e Clínica Bem Cuidar 3,3 (só "3+"). A Hidden e a Flagged não contam para a média.
+     * Carvalho 3,5 e Clínica Bem Cuidar 3,3 (só "3+"). A Hidden e a Flagged (ambas em demo.membro, para mostrar a justificação) não contam para a média.
      *
      * @return list<array{string, string, int, string, string}>
      */
@@ -1680,6 +1680,8 @@ class DemoSeeder extends Seeder
             [$member(2), $demoMember, 5, 'Visible', 'Projeto de remodelação do nosso escritório impecável, cumpriram prazos e orçamento.'],
             [$member(5), $demoMember, 5, 'Visible', 'Muito profissionais, ouviram as nossas ideias e melhoraram-nas.'],
             [$member(7), $demoMember, 4, 'Visible', 'Bom trabalho de interiores; a obra atrasou uma semana, mas avisaram com tempo.'],
+            [$member(11), $demoMember, 1, 'Flagged', 'Nunca mais! Bando de aldrabões, fujam desta empresa!'],
+            [$member(8), $demoMember, 1, 'Hidden', 'Péssimos, só querem dinheiro. Não percam tempo com esta gente.'],
 
             [$demoMember, $member(2), 5, 'Visible', 'Contabilidade sempre em dia e respostas rápidas às dúvidas.'],
             [$member(3), $member(2), 5, 'Visible', 'Ajudaram-nos a organizar as contas do restaurante desde o primeiro mês.'],
@@ -1692,12 +1694,10 @@ class DemoSeeder extends Seeder
 
             [$member(6), $member(1), 4, 'Visible', 'Obra bem executada e equipa organizada.'],
             [$member(10), $member(1), 3, 'Visible', 'Trabalho correto, mas a comunicação durante a obra podia ser melhor.'],
-            [$member(11), $member(1), 1, 'Flagged', 'Nunca mais! Bando de aldrabões, fujam desta empresa!'],
 
             [$member(1), $member(6), 3, 'Visible', 'Atendimento simpático, mas esperei bastante para a consulta.'],
             [$member(4), $member(6), 4, 'Visible', 'Clínica limpa e profissionais atenciosos.'],
             [$member(9), $member(6), 3, 'Visible', 'Razoável; a marcação por telefone é difícil.'],
-            [$member(11), $member(6), 1, 'Hidden', 'Péssimos, só querem dinheiro. Não percam tempo com esta gente.'],
         ];
     }
 

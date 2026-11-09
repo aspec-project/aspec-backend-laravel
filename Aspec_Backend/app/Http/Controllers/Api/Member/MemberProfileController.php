@@ -14,12 +14,12 @@ use Symfony\Component\HttpFoundation\Response;
 class MemberProfileController extends Controller
 {
     /**
-     * Devolve o perfil do membro autenticado, com horário, redes sociais e portfólio.
+     * Devolve o perfil do membro autenticado, com horário, redes sociais, portfólio e média das avaliações Visible.
      * Atua sempre sobre o próprio utilizador (sem id na rota); 404 se o user não tiver perfil (ex. admin).
      */
     public function show(Request $request): JsonResponse
     {
-        $profile = $request->user()->memberProfile;
+        $profile = $request->user()->memberProfile()->withRatingSummary()->first();
 
         if (! $profile) {
             return $this->errorResponse('Perfil de membro não encontrado.', Response::HTTP_NOT_FOUND);

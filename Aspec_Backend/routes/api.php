@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\Account\NotificationPreferenceController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
+use App\Http\Controllers\Api\Admin\AdminEventCategoryPaletteController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
 use App\Http\Controllers\Api\Admin\AdminPrayerCardController;
@@ -117,6 +118,7 @@ Route::prefix('admin')
             ->whereUuid('review');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
+        Route::get('/event-categories/palette', [AdminEventCategoryPaletteController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
         Route::put('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'update'])
             ->whereUuid('eventCategory');

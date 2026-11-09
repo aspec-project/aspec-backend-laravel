@@ -8,6 +8,7 @@ use App\Models\ReviewReport;
 use App\Models\ReviewStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -175,5 +176,127 @@ class AdminReviewIndexTest extends TestCase
 
         $this->getJson(self::URL)
             ->assertForbidden();
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    private function reportWith(Review $review, array $attributes, string $createdAt = '2026-11-01 10:00:00'): ReviewReport
+    {
+        $report = ReviewReport::query()->create([
+            'review_id' => $review->id,
+            'reporter_profile_id' => null,
+            'reason' => ReviewReport::REASON_OTHER,
+            'comment' => null,
+            'source' => ReviewReport::SOURCE_MEMBER,
+            ...$attributes,
+        ]);
+
+        $report->forceFill(['created_at' => $createdAt])->save();
+
+        return $report;
+    }
+
+    private function countQueriesOfTheList(): int
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        $this->getJson(self::URL.'?status=all&per_page=50')->assertOk();
+
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        return $count;
+    }
+
+    #[Test]
+    public function list_includes_only_unresolved_reports_in_creation_order_with_the_full_comment(): void
+    {
+        $this->actingAsAdmin();
+        $review = $this->createReview('Flagged');
+        $longComment = str_repeat('Comentário detalhado do report. ', 40);
+
+        $newer = $this->reportWith($review, [
+            'reason' => 'language_filter',
+            'source' => ReviewReport::SOURCE_AUTOMATIC,
+        ], '2026-11-02 10:00:00');
+        $older = $this->reportWith($review, [
+            'reason' => ReviewReport::REASON_SPAM_OR_ADVERTISING,
+            'comment' => $longComment,
+            'reporter_profile_id' => $this->profile()->id,
+        ], '2026-11-01 10:00:00');
+        $this->reportWith($review, [
+            'comment' => 'Report já resolvido.',
+            'resolved_at' => now(),
+        ]);
+
+        $response = $this->getJson(self::URL)->assertOk();
+        $reports = $response->json('data.items.0.reports');
+
+        $this->assertSame([$older->id, $newer->id], array_column($reports, 'id'));
+        $this->assertEqualsCanonicalizing(['id', 'source', 'reason', 'comment', 'created_at'], array_keys($reports[0]));
+        $this->assertSame(ReviewReport::SOURCE_MEMBER, $reports[0]['source']);
+        $this->assertSame(ReviewReport::REASON_SPAM_OR_ADVERTISING, $reports[0]['reason']);
+        $this->assertSame($longComment, $reports[0]['comment']);
+        $this->assertSame('language_filter', $reports[1]['reason']);
+        $this->assertNull($reports[1]['comment']);
+        $response->assertDontSee('Report já resolvido.');
+    }
+
+    #[Test]
+    public function reports_never_identify_who_reported(): void
+    {
+        $this->actingAsAdmin();
+        $review = $this->createReview('Flagged');
+        $reporter = MemberProfile::factory()->create([
+            'user_id' => User::factory()->create()->id,
+            'business_name' => 'Empresa Denunciante Lda',
+        ]);
+        $this->reportWith($review, ['reporter_profile_id' => $reporter->id, 'comment' => 'Detalhe.']);
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonCount(1, 'data.items.0.reports')
+            ->assertJsonMissingPath('data.items.0.reports.0.reporter_profile_id')
+            ->assertJsonMissingPath('data.items.0.reports.0.reporter')
+            ->assertDontSee('Empresa Denunciante Lda')
+            ->assertDontSee($reporter->id);
+    }
+
+    /**
+     * A origem continua a contar reports resolvidos (contrato já existente), ao contrário de reports.
+     */
+    #[Test]
+    public function flagging_sources_still_counts_resolved_reports_while_reports_does_not(): void
+    {
+        $this->actingAsAdmin();
+        $review = $this->createReview('Visible');
+        $this->createReport($review, ReviewReport::SOURCE_MEMBER, now()->toDateTimeString());
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.items.0.flagging_sources', ['member'])
+            ->assertJsonPath('data.items.0.reports', []);
+    }
+
+    /**
+     * O primeiro pedido carrega o papel e o estado do admin autenticado e o resultado fica em memória;
+     * esse pedido inicial fica de fora para as duas contagens serem comparáveis.
+     */
+    #[Test]
+    public function number_of_queries_does_not_grow_with_the_number_of_reviews(): void
+    {
+        $this->actingAsAdmin();
+        $this->createReport($this->createReview('Flagged'), ReviewReport::SOURCE_MEMBER);
+
+        $this->countQueriesOfTheList();
+        $withOneReview = $this->countQueriesOfTheList();
+
+        for ($index = 0; $index < 4; $index++) {
+            $this->createReport($this->createReview('Flagged'), ReviewReport::SOURCE_MEMBER);
+        }
+
+        $this->assertSame($withOneReview, $this->countQueriesOfTheList());
     }
 }
