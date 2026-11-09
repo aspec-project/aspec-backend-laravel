@@ -5,6 +5,7 @@ namespace Tests\Feature\Member;
 use App\Models\AccountStatus;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
+use App\Models\Review;
 use App\Models\Role;
 use App\Models\SocialPlatform;
 use App\Models\User;
@@ -283,5 +284,58 @@ class MemberProfileShowTest extends TestCase
         $this->getJson(self::URL)
             ->assertNotFound()
             ->assertExactJson(['success' => false, 'message' => 'Perfil de membro não encontrado.']);
+    }
+
+    #[Test]
+    public function own_profile_average_counts_only_visible_reviews(): void
+    {
+        $user = $this->memberWithProfile();
+        $reviewedProfileId = $user->memberProfile->id;
+        Review::factory()->create(['reviewed_profile_id' => $reviewedProfileId, 'rating' => 4]);
+        Review::factory()->create(['reviewed_profile_id' => $reviewedProfileId, 'rating' => 2]);
+        Review::factory()->hidden()->create(['reviewed_profile_id' => $reviewedProfileId, 'rating' => 5]);
+        Review::factory()->flagged()->create(['reviewed_profile_id' => $reviewedProfileId, 'rating' => 5]);
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.reviews_count', 2);
+
+        $this->assertEquals(3, $response->json('data.average_rating'));
+    }
+
+    #[Test]
+    public function own_profile_without_reviews_has_null_average_and_zero_count(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        $this->getJson(self::URL)
+            ->assertOk()
+            ->assertJsonPath('data.average_rating', null)
+            ->assertJsonPath('data.reviews_count', 0);
+    }
+
+    /**
+     * O mesmo resource serve outros pedidos que não calculam a média: sem a chave, o frontend
+     * não confunde "não calculado" com "sem avaliações".
+     */
+    #[Test]
+    public function rating_keys_are_absent_outside_the_own_profile_endpoint(): void
+    {
+        $user = $this->memberWithProfile();
+        Review::factory()->create(['reviewed_profile_id' => $user->memberProfile->id, 'rating' => 5]);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['business_name' => 'Nova Lda'])
+            ->assertOk()
+            ->assertJsonPath('data.business_name', 'Nova Lda')
+            ->assertJsonMissingPath('data.average_rating')
+            ->assertJsonMissingPath('data.reviews_count');
+
+        $this->getJson('/api/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.member_profile.id', $user->memberProfile->id)
+            ->assertJsonMissingPath('data.member_profile.average_rating')
+            ->assertJsonMissingPath('data.member_profile.reviews_count');
     }
 }

@@ -12,6 +12,7 @@ class MemberProfileResource extends JsonResource
      * Perfil do próprio membro, com contactos, horário, redes sociais e portfólio.
      * Não expõe ids internos (user_id, role_id, account_status_id) nem paths de ficheiros.
      * Espera as relações user, sector, location, weekDays, socialPlatforms e portfolios carregadas.
+     * A média e a contagem só saem quando o pedido as calculou: nos outros, a chave ausente evita um falso "sem avaliações".
      *
      * @return array<string, mixed>
      */
@@ -44,6 +45,8 @@ class MemberProfileResource extends JsonResource
             'business_hours' => BusinessHourResource::collection($this->weekDays),
             'social_links' => SocialLinkResource::collection($this->socialPlatforms),
             'portfolio' => PortfolioResource::collection($this->portfolios),
+            'average_rating' => $this->whenHas('average_rating', fn ($value) => $value === null ? null : round((float) $value, 1)),
+            'reviews_count' => $this->whenHas('reviews_count', fn ($value) => (int) $value),
         ];
     }
 }

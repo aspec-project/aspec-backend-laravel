@@ -855,7 +855,7 @@ class DemoSeederTest extends TestCase
 
         $this->assertSame($demoCount + 1, Review::count());
         $this->assertModelExists($other);
-        $this->assertSame(4, Review::where('reviewed_profile_id', $demoMemberProfileId)->count());
+        $this->assertSame(6, Review::where('reviewed_profile_id', $demoMemberProfileId)->count());
     }
 
     /**

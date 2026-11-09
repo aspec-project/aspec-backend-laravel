@@ -8,6 +8,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class MyReviewResource extends JsonResource
 {
     /**
+     * Avaliação vista pelo autor ou pelo avaliado. Espera os reports por resolver carregados só com o motivo:
+     * os códigos explicam a sinalização sem revelar o comentário do report nem quem o fez.
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -27,6 +30,9 @@ class MyReviewResource extends JsonResource
             'hidden_reason' => $this->status?->name === 'Hidden'
                 ? $this->hidden_reason
                 : null,
+            'flagging_reasons' => $this->status?->name === 'Flagged'
+                ? $this->reports->pluck('reason')->unique()->sort()->values()->all()
+                : [],
             'reviewer' => [
                 'id' => $reviewerIsAnonymized ? null : $reviewer?->id,
                 'business_name' => $reviewerIsAnonymized
