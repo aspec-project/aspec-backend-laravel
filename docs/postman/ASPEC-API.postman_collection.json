@@ -2164,6 +2164,48 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"commercial_email\": [\n      \"O campo email comercial é obrigatório.\"\n    ],\n    \"commercial_phone\": [\n      \"O campo telefone comercial é obrigatório.\"\n    ]\n  }\n}"
             },
             {
+              "name": "422 Email inválido",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Email inválido"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"joão@novodominio.pt\",\n  \"current_password\": \"password123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"email\": [\n      \"O campo email tem de ser um endereço de email válido.\"\n    ]\n  }\n}"
+            },
+            {
               "name": "422 Email comercial inválido",
               "originalRequest": {
                 "method": "PUT",
