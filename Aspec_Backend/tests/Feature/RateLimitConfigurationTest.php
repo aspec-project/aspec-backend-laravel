@@ -248,14 +248,59 @@ class RateLimitConfigurationTest extends TestCase
     // C4 — limites que não mudam
 
     #[Test]
-    public function login_limit_is_unchanged(): void
+    public function login_limit_per_email_and_ip_is_unchanged(): void
     {
         $limits = $this->limitsFor('auth-login', $this->requestFrom(null, ['email' => ' Membro@Exemplo.pt ']));
 
-        $this->assertCount(1, $limits);
-        $this->assertSame(5, $limits[0]->maxAttempts);
-        $this->assertSame(60, $limits[0]->decaySeconds);
-        $this->assertSame('membro@exemplo.pt|'.self::IP, $limits[0]->key);
+        $perMinute = $this->limitWithDecay($limits, 60);
+        $this->assertNotNull($perMinute);
+        $this->assertSame(5, $perMinute->maxAttempts);
+        $this->assertSame('membro@exemplo.pt|'.self::IP, $perMinute->key);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function credentialLimiters(): array
+    {
+        return [
+            'auth-login' => ['auth-login'],
+            'auth-token' => ['auth-token'],
+            'auth-forgot-password' => ['auth-forgot-password'],
+        ];
+    }
+
+    /**
+     * Atrás de um proxy de confiança o IP pode ser forjado num pedido direto à API, por isso cada
+     * conta tem também um limite que não depende do IP (limite por conta + limite por IP).
+     */
+    #[Test]
+    #[DataProvider('credentialLimiters')]
+    public function credential_limiters_also_limit_each_email_to_twenty_per_fifteen_minutes(string $name): void
+    {
+        $limits = $this->limitsFor($name, $this->requestFrom(null, ['email' => 'membro@exemplo.pt']));
+
+        $this->assertCount(2, $limits);
+        $this->assertNotNull($this->limitWithDecay($limits, 60));
+
+        $perEmail = $this->limitWithDecay($limits, 900);
+        $this->assertNotNull($perEmail, "O limitador '{$name}' não tem limite de 15 minutos.");
+        $this->assertSame(20, $perEmail->maxAttempts);
+        $this->assertStringContainsString('membro@exemplo.pt', $perEmail->key);
+        $this->assertStringNotContainsString(self::IP, $perEmail->key);
+    }
+
+    /**
+     * Sem email todos os pedidos partilhariam a mesma chave por conta e bloqueavam-se uns aos outros.
+     */
+    #[Test]
+    #[DataProvider('credentialLimiters')]
+    public function credential_limiters_without_email_have_no_per_email_limit(string $name): void
+    {
+        $limits = $this->limitsFor($name, $this->requestFrom(null, ['email' => '']));
+
+        $this->assertNull($this->limitWithDecay($limits, 900));
+        $this->assertNotNull($this->limitWithDecay($limits, 60));
     }
 
     #[Test]

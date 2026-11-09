@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api\Member;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexMemberReviewsRequest;
+use App\Http\Requests\IndexMyReviewsRequest;
 use App\Http\Requests\StoreMemberReviewRequest;
+use App\Http\Resources\MyReviewResource;
 use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
 use App\Models\Review;
+use App\Models\ReviewReport;
 use App\Models\ReviewStatus;
 use App\Services\Reviews\ReviewContentModerator;
 use Illuminate\Database\Eloquent\Builder;
@@ -154,6 +157,101 @@ class MemberReviewController extends Controller
             ->header('Vary', 'Cookie, Authorization');
     }
 
+    public function mine(IndexMyReviewsRequest $request): JsonResponse
+    {
+        $profile = $request->user()->memberProfile;
+
+        if ($profile === null) {
+            return $this->errorResponse(
+                'Perfil de membro não encontrado.',
+                Response::HTTP_FORBIDDEN
+            );
+        }
+
+        $validated = $request->validated();
+        $direction = $validated['direction'] ?? 'all';
+        $status = $validated['status'] ?? 'all';
+
+        $statusNames = [
+            'visible' => 'Visible',
+            'hidden' => 'Hidden',
+            'flagged' => 'Flagged',
+        ];
+
+        $statusName = $statusNames[$status] ?? null;
+        $profileId = $profile->getKey();
+
+        $reviews = Review::query()
+            ->with([
+                'status',
+                'reviewerProfile' => fn ($query) => $query->withTrashed(),
+                'reviewedProfile' => fn ($query) => $query->withTrashed(),
+                'reports' => fn ($query) => $query->whereNull('resolved_at')->select(['id', 'review_id', 'reason']),
+            ])
+            ->where(function (Builder $query) use ($direction, $profileId): void {
+                if ($direction === 'received') {
+                    $query->where('reviewed_profile_id', $profileId);
+
+                    return;
+                }
+
+                if ($direction === 'written') {
+                    $query->where('reviewer_profile_id', $profileId);
+
+                    return;
+                }
+
+                $query
+                    ->where('reviewer_profile_id', $profileId)
+                    ->orWhere('reviewed_profile_id', $profileId);
+            })
+            ->when(
+                $statusName !== null,
+                fn (Builder $query) => $query->whereHas(
+                    'status',
+                    fn (Builder $statusQuery) => $statusQuery
+                        ->where('name', $statusName)
+                )
+            )
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(
+                (int) ($validated['per_page'] ?? 10),
+                ['*'],
+                'page',
+                (int) ($validated['page'] ?? 1)
+            );
+
+        $reviews->getCollection()->each(
+            function (Review $review) use ($profileId): void {
+                $review->setAttribute(
+                    'direction',
+                    (string) $review->reviewer_profile_id === (string) $profileId
+                        ? 'written'
+                        : 'received'
+                );
+            }
+        );
+
+        return $this->successResponse([
+            'items' => MyReviewResource::collection(
+                $reviews->getCollection()
+            )->resolve($request),
+            'pagination' => [
+                'current_page' => $reviews->currentPage(),
+                'per_page' => $reviews->perPage(),
+                'total' => $reviews->total(),
+                'last_page' => $reviews->lastPage(),
+            ],
+            'counts' => [
+                'received' => Review::query()->where('reviewed_profile_id', $profileId)->count(),
+                'written' => Review::query()->where('reviewer_profile_id', $profileId)->count(),
+            ],
+        ], 'As suas avaliações foram obtidas com sucesso.')
+            ->header('Cache-Control', 'private, no-store')
+            ->header('Vary', 'Cookie, Authorization');
+    }
+
     public function store(
         StoreMemberReviewRequest $request,
         string $member
@@ -197,11 +295,19 @@ class MemberReviewController extends Controller
         $shouldFlag = $this->reviewContentModerator
             ->containsFlaggedLanguage($validated['comment']);
 
+        $automaticReportAttributes = [
+            'reporter_profile_id' => null,
+            'reason' => 'language_filter',
+            'comment' => null,
+            'source' => ReviewReport::SOURCE_AUTOMATIC,
+        ];
+
         [$review, $created] = DB::transaction(function () use (
             $reviewerProfile,
             $reviewedProfile,
             $validated,
             $shouldFlag,
+            $automaticReportAttributes,
         ): array {
             // Serializa as submissões para este perfil; a unique key da BD continua
             // a ser a proteção final contra avaliações duplicadas.
@@ -225,17 +331,20 @@ class MemberReviewController extends Controller
                 ->firstOrFail();
 
             if ($review !== null) {
-                $statusId = $review->status_id;
-
-                if ($shouldFlag && $review->status_id === $visibleStatus->id) {
-                    $statusId = $flaggedStatus->id;
-                }
+                $wasVisible = $review->status_id === $visibleStatus->id;
+                $shouldCreateAutomaticReport = $shouldFlag && $wasVisible;
 
                 $review->update([
                     'rating' => $validated['rating'],
                     'comment' => $validated['comment'],
-                    'status_id' => $statusId,
+                    'status_id' => $shouldCreateAutomaticReport
+                        ? $flaggedStatus->id
+                        : $review->status_id,
                 ]);
+
+                if ($shouldCreateAutomaticReport) {
+                    $review->reports()->create($automaticReportAttributes);
+                }
 
                 return [$review, false];
             }
@@ -249,6 +358,10 @@ class MemberReviewController extends Controller
                     ? $flaggedStatus->id
                     : $visibleStatus->id,
             ]);
+
+            if ($shouldFlag) {
+                $review->reports()->create($automaticReportAttributes);
+            }
 
             return [$review, true];
         });

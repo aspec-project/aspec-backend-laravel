@@ -283,6 +283,22 @@ class MemberReviewStoreTest extends TestCase
                 ->where('name', 'Flagged')
                 ->value('id'),
         ]);
+
+        $review = Review::query()
+            ->where('reviewer_profile_id', $reviewerProfile->id)
+            ->where('reviewed_profile_id', $reviewedProfile->id)
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('review_reports', [
+            'review_id' => $review->id,
+            'reporter_profile_id' => null,
+            'reason' => 'language_filter',
+            'comment' => null,
+            'source' => 'automatic',
+            'resolved_at' => null,
+        ]);
+
+        $this->assertDatabaseCount('review_reports', 1);
     }
 
     #[Test]
@@ -345,6 +361,22 @@ class MemberReviewStoreTest extends TestCase
         ]);
 
         $this->assertDatabaseCount('reviews', 1);
+
+        $review = Review::query()
+            ->where('reviewer_profile_id', $reviewerProfile->id)
+            ->where('reviewed_profile_id', $reviewedProfile->id)
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('review_reports', [
+            'review_id' => $review->id,
+            'reporter_profile_id' => null,
+            'reason' => 'language_filter',
+            'comment' => null,
+            'source' => 'automatic',
+            'resolved_at' => null,
+        ]);
+
+        $this->assertDatabaseCount('review_reports', 1);
     }
 
     #[Test]

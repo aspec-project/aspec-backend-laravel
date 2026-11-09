@@ -31,6 +31,7 @@ class ReviewTablesTest extends TestCase
             'rating',
             'comment',
             'status_id',
+            'hidden_reason',
             'created_at',
             'updated_at',
         ]));
@@ -70,6 +71,32 @@ class ReviewTablesTest extends TestCase
         $this->assertNull(
             $indexes->get('reviews_reviewed_profile_id_status_id_index'),
             'O índice antigo não deve existir depois da migração.'
+        );
+
+        $this->assertTrue(Schema::hasTable('review_reports'));
+        $this->assertTrue(Schema::hasColumns('review_reports', [
+            'id',
+            'review_id',
+            'reporter_profile_id',
+            'reason',
+            'comment',
+            'source',
+            'resolved_at',
+            'created_at',
+            'updated_at',
+        ]));
+
+        $reportIndexes = collect(Schema::getIndexes('review_reports'))->keyBy('name');
+
+        $reviewSourceResolvedIndex = $reportIndexes->get(
+            'review_reports_review_source_resolved_index'
+        );
+
+        $this->assertNotNull($reviewSourceResolvedIndex);
+        $this->assertFalse($reviewSourceResolvedIndex['unique']);
+        $this->assertSame(
+            ['review_id', 'source', 'resolved_at'],
+            $reviewSourceResolvedIndex['columns']
         );
     }
 }

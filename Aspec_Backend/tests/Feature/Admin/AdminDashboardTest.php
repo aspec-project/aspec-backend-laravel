@@ -28,6 +28,10 @@ class AdminDashboardTest extends TestCase
 
     private const URL = '/api/admin/dashboard';
 
+    private const APPLICATIONS_URL = '/api/admin/dashboard/pending-applications';
+
+    private const APPLICATIONS_MESSAGE = 'Candidaturas pendentes obtidas com sucesso.';
+
     private const SUCCESS_MESSAGE = 'Dados do painel obtidos com sucesso.';
 
     private const FORBIDDEN_MESSAGE = 'Não tem permissão para realizar esta ação.';
@@ -147,6 +151,13 @@ class AdminDashboardTest extends TestCase
         return $this->getJson(self::URL)->assertOk();
     }
 
+    private function applications(?int $page = null): TestResponse
+    {
+        $url = $page === null ? self::APPLICATIONS_URL : self::APPLICATIONS_URL.'?page='.$page;
+
+        return $this->getJson($url)->assertOk();
+    }
+
     private function assertJsonError(TestResponse $response, int $status, string $message): void
     {
         $response->assertStatus($status)
@@ -190,7 +201,7 @@ class AdminDashboardTest extends TestCase
         $this->assertSame(['this_month', 'this_week'], $this->sortedKeys($data['stats']['events']));
         $this->assertSame(['flagged', 'new_this_week'], $this->sortedKeys($data['stats']['reviews']));
         $this->assertSame(['grace', 'total', 'unpaid'], $this->sortedKeys($data['stats']['overdue_payments']));
-        $this->assertSame(['this_week'], $this->sortedKeys($data['stats']['event_registrations']));
+        $this->assertSame(['events_with_registrations', 'this_week'], $this->sortedKeys($data['stats']['event_registrations']));
 
         $this->assertSame(0, $data['stats']['active_members']['total']);
         $this->assertSame(0, $data['stats']['active_members']['new_this_month']);
@@ -203,6 +214,7 @@ class AdminDashboardTest extends TestCase
         $this->assertSame(0, $data['stats']['overdue_payments']['grace']);
         $this->assertSame(0, $data['stats']['overdue_payments']['unpaid']);
         $this->assertSame(0, $data['stats']['event_registrations']['this_week']);
+        $this->assertSame(0, $data['stats']['event_registrations']['events_with_registrations']);
         $this->assertSame([], $data['pending_applications']);
         $this->assertSame([], $data['recent_reviews']);
 
@@ -212,7 +224,7 @@ class AdminDashboardTest extends TestCase
     }
 
     #[Test]
-    public function active_members_are_users_in_trial_active_or_grace_including_promoted_admins(): void
+    public function active_members_are_users_in_trial_or_active_including_promoted_admins(): void
     {
         $this->actingAsTechnicalAdmin();
 
@@ -230,12 +242,13 @@ class AdminDashboardTest extends TestCase
         User::factory()->inactive(InactiveReason::Cancelled)->create();
         $this->withProfile(User::factory()->create())->anonymizeAndDelete();
 
-        $this->dashboard()->assertJsonPath('data.stats.active_members.total', 5);
+        $this->assertSame(4, $this->dashboard()->json('data.stats.active_members.total'));
 
         $counts = $this->getJson('/api/admin/users?include_admins=1')
             ->assertOk()
             ->json('data.subscription_state_counts');
-        $this->assertSame(5, $counts['trial'] + $counts['active'] + $counts['grace']);
+        $this->assertSame(4, $counts['trial'] + $counts['active']);
+        $this->assertSame(1, $counts['grace']);
     }
 
     #[Test]
@@ -647,6 +660,7 @@ class AdminDashboardTest extends TestCase
         $response = $this->dashboard();
 
         $this->assertSame(5, $response->json('data.stats.event_registrations.this_week'));
+        $this->assertSame(4, $response->json('data.stats.event_registrations.events_with_registrations'));
         $this->assertSame(5, $response->json('data.stats.events.this_week'));
     }
 
@@ -661,7 +675,10 @@ class AdminDashboardTest extends TestCase
             $this->register($member, $this->event($date));
         }
 
-        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+
+        $this->assertSame(2, $registrations['this_week']);
+        $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
     }
 
     #[Test]
@@ -674,10 +691,14 @@ class AdminDashboardTest extends TestCase
 
         $this->nowInLisbon('2026-10-25 23:30:00');
         $this->actingAsTechnicalAdmin();
-        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+        $this->assertSame(2, $registrations['this_week']);
+        $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
 
         $this->nowInLisbon('2026-03-30 00:15:00');
-        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+        $this->assertSame(2, $registrations['this_week']);
+        $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
     }
 
     #[Test]
@@ -699,7 +720,10 @@ class AdminDashboardTest extends TestCase
         }
         $this->register($b, $sessions['2026-10-26']);
 
-        $this->assertSame(2, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+
+        $this->assertSame(2, $registrations['this_week']);
+        $this->assertSame(1, $registrations['events_with_registrations'] ?? null);
     }
 
     #[Test]
@@ -722,7 +746,9 @@ class AdminDashboardTest extends TestCase
         $this->register(User::factory()->admin()->create(), $friday);
 
         $this->assertDatabaseCount('event_registrations', 3);
-        $this->assertSame(3, $this->dashboard()->json('data.stats.event_registrations.this_week'));
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+        $this->assertSame(3, $registrations['this_week']);
+        $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
     }
 
     #[Test]
@@ -752,6 +778,273 @@ class AdminDashboardTest extends TestCase
         foreach (['inscrito.semana@example.pt', '+351910000777', 'carencia@example.pt', '"user_id"', '"grace_ends_at"', '"stripe'] as $forbidden) {
             $this->assertStringNotContainsString($forbidden, $content);
         }
+    }
+
+    #[Test]
+    public function new_members_this_month_and_total_leave_out_accounts_in_grace(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        $this->subscription(User::factory()->create(), '2026-10-10 10:00:00');
+        $this->subscription(User::factory()->create(['trial_ends_at' => now()->addDays(20)]), '2026-10-20 10:00:00');
+        $this->subscription($this->inGrace(User::factory()->create()), '2026-10-05 10:00:00');
+        $this->subscription($this->inGrace(User::factory()->admin()->create()), '2026-10-06 10:00:00');
+
+        $activeMembers = $this->dashboard()->json('data.stats.active_members');
+
+        $this->assertSame(2, $activeMembers['new_this_month']);
+        $this->assertSame(2, $activeMembers['total']);
+    }
+
+    #[Test]
+    public function an_account_in_grace_is_counted_only_in_overdue_payments_not_in_active_members(): void
+    {
+        $this->actingAsTechnicalAdmin();
+
+        User::factory()->create(['trial_ends_at' => now()->addDays(10)]);
+        User::factory()->create();
+        $this->inGrace(User::factory()->create());
+        $this->inGrace(User::factory()->admin()->create());
+        $this->inGrace(User::factory()->technicalAdmin()->create());
+
+        $stats = $this->dashboard()->json('data.stats');
+
+        $this->assertSame(2, $stats['active_members']['total']);
+        $this->assertSame(2, $stats['overdue_payments']['grace']);
+
+        $activeNotExempt = User::query()
+            ->where('subscription_exempt', false)
+            ->whereHas('accountStatus', fn ($status) => $status->where('name', 'Active'))
+            ->count();
+        $this->assertSame(4, $activeNotExempt);
+        $this->assertSame($activeNotExempt, $stats['active_members']['total'] + $stats['overdue_payments']['grace']);
+    }
+
+    #[Test]
+    public function guests_members_and_inactive_admins_cannot_see_the_pending_applications_page(): void
+    {
+        $this->assertJsonError($this->getJson(self::APPLICATIONS_URL), 401, 'Não autenticado.');
+
+        Sanctum::actingAs(User::factory()->create());
+        $this->assertJsonError($this->getJson(self::APPLICATIONS_URL), 403, self::FORBIDDEN_MESSAGE);
+
+        Sanctum::actingAs(User::factory()->admin()->inactive(InactiveReason::Blocked)->create());
+        $this->getJson(self::APPLICATIONS_URL)->assertForbidden();
+    }
+
+    #[Test]
+    public function pending_applications_page_one_has_the_three_most_recent_by_default(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $pending = $this->fivePendingApplications();
+
+        $response = $this->getJson(self::APPLICATIONS_URL)
+            ->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', self::APPLICATIONS_MESSAGE);
+
+        $data = $response->json('data');
+        $this->assertSame(['items', 'pagination'], $this->sortedKeys($data));
+        $this->assertSame(
+            [$pending['2026-10-29']->id, $pending['2026-10-28']->id, $pending['2026-10-27']->id],
+            array_column($data['items'], 'id')
+        );
+        $this->assertSame(['current_page' => 1, 'per_page' => 3, 'total' => 5, 'last_page' => 2], $data['pagination']);
+        foreach ($data['items'] as $item) {
+            $this->assertSame(
+                ['account_status', 'created_at', 'email', 'id', 'inactive_reason', 'member_profile', 'role', 'subscription_state'],
+                $this->sortedKeys($item)
+            );
+            $this->assertSame(['business_name', 'location', 'name', 'sector'], $this->sortedKeys($item['member_profile']));
+            $this->assertSame('pending', $item['subscription_state']['value']);
+        }
+
+        $cacheControl = (string) $response->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $cacheControl);
+        $this->assertStringContainsString('private', $cacheControl);
+    }
+
+    #[Test]
+    public function pending_applications_page_two_continues_and_page_one_matches_the_dashboard_list(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $pending = $this->fivePendingApplications();
+
+        $second = $this->applications(2)->json('data');
+        $this->assertSame([$pending['2026-10-26']->id, $pending['2026-10-25']->id], array_column($second['items'], 'id'));
+        $this->assertSame(2, $second['pagination']['current_page']);
+
+        $this->assertSame(
+            array_column($this->applications(1)->json('data.items'), 'id'),
+            array_column($this->dashboard()->json('data.pending_applications'), 'id')
+        );
+    }
+
+    #[Test]
+    public function pending_applications_beyond_the_last_page_or_without_applications_return_an_empty_list(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $pending = $this->fivePendingApplications();
+
+        $beyond = $this->applications(3)->json('data');
+        $this->assertSame([], $beyond['items']);
+        $this->assertSame(['current_page' => 3, 'per_page' => 3, 'total' => 5, 'last_page' => 2], $beyond['pagination']);
+
+        foreach ($pending as $user) {
+            $user->delete();
+        }
+
+        $empty = $this->applications(1)->json('data');
+        $this->assertSame([], $empty['items']);
+        $this->assertSame(['current_page' => 1, 'per_page' => 3, 'total' => 0, 'last_page' => 1], $empty['pagination']);
+
+        $this->getJson(self::APPLICATIONS_URL.'?page=')
+            ->assertOk()
+            ->assertJsonPath('data.pagination.current_page', 1);
+    }
+
+    #[Test]
+    public function pending_applications_page_must_be_an_integer_from_one_to_ten_thousand(): void
+    {
+        $this->actingAsTechnicalAdmin();
+        $between = 'O campo página tem de estar entre 1 e 10000.';
+        $integer = 'O campo página tem de ser um número inteiro.';
+
+        foreach (['0' => $between, '10001' => $between, '-1' => $between, 'abc' => $integer] as $page => $message) {
+            $this->getJson(self::APPLICATIONS_URL.'?page='.$page)
+                ->assertUnprocessable()
+                ->assertJsonPath('success', false)
+                ->assertJsonPath('message', 'Os dados enviados são inválidos.')
+                ->assertJsonPath('errors.page', [$message]);
+        }
+
+        foreach (['page=1.5', 'page[]=1'] as $query) {
+            $this->getJson(self::APPLICATIONS_URL.'?'.$query)
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['page']);
+        }
+    }
+
+    #[Test]
+    public function pending_applications_page_size_is_always_three(): void
+    {
+        $this->actingAsTechnicalAdmin();
+        for ($i = 0; $i < 5; $i++) {
+            $this->withProfile(User::factory()->pending()->create());
+        }
+
+        $data = $this->getJson(self::APPLICATIONS_URL.'?per_page=50')->assertOk()->json('data');
+
+        $this->assertCount(3, $data['items']);
+        $this->assertSame(3, $data['pagination']['per_page']);
+    }
+
+    #[Test]
+    public function pending_applications_with_the_same_date_are_paged_by_id_without_repeats(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        $ids = [];
+        for ($i = 0; $i < 3; $i++) {
+            $ids[] = $this->withProfile(User::factory()->pending()->create(['created_at' => '2026-10-28 09:00:00']))->id;
+        }
+        $withoutProfile = User::factory()->pending()->create(['created_at' => '2026-10-28 09:00:00']);
+        $ids[] = $withoutProfile->id;
+        usort($ids, fn (string $a, string $b) => strcmp($b, $a));
+
+        $first = $this->applications(1)->json('data.items');
+        $second = $this->applications(2)->json('data.items');
+
+        $this->assertCount(3, $first);
+        $this->assertCount(1, $second);
+        $this->assertSame($ids, array_merge(array_column($first, 'id'), array_column($second, 'id')));
+
+        $item = collect(array_merge($first, $second))->firstWhere('id', $withoutProfile->id);
+        $this->assertNull($item['member_profile']);
+    }
+
+    #[Test]
+    public function pending_applications_page_does_not_expose_contacts_billing_or_dashboard_data(): void
+    {
+        $this->actingAsTechnicalAdmin();
+        $this->withProfile(
+            User::factory()->pending()->create([
+                'phone' => '+351910000888',
+                'nif' => '123456780',
+                'billing_address' => 'Rua Fictícia 1',
+            ]),
+            ['commercial_email' => 'comercial.candidato@example.pt']
+        );
+
+        $content = $this->applications(1)->getContent();
+
+        $forbidden = ['+351910000888', '123456780', 'Rua Fictícia 1', 'comercial.candidato@example.pt', '"phone"', '"nif"', '"stripe', '"counts"', '"subscription_state_counts"', '"stats"'];
+        foreach ($forbidden as $text) {
+            $this->assertStringNotContainsString($text, $content);
+        }
+    }
+
+    #[Test]
+    public function pending_applications_page_runs_the_same_number_of_queries_with_one_or_many_applications(): void
+    {
+        $this->actingAsTechnicalAdmin();
+        $this->withProfile(User::factory()->pending()->create());
+
+        $this->applications();
+        $small = $this->countQueries(self::APPLICATIONS_URL);
+
+        for ($i = 0; $i < 7; $i++) {
+            $this->withProfile(User::factory()->pending()->create());
+        }
+
+        $large = $this->countQueries(self::APPLICATIONS_URL);
+        $this->assertSame($small, $large);
+        $this->assertLessThanOrEqual(10, $large);
+    }
+
+    #[Test]
+    public function dashboard_and_pending_applications_share_the_60_requests_per_minute_limit(): void
+    {
+        $this->freezeTime();
+        $this->actingAsTechnicalAdmin();
+
+        for ($i = 1; $i <= 30; $i++) {
+            $this->getJson(self::URL)->assertOk();
+            $this->getJson(self::APPLICATIONS_URL)->assertOk();
+        }
+
+        $this->assertJsonError($this->getJson(self::APPLICATIONS_URL), 429, 'Demasiados pedidos. Tente novamente mais tarde.');
+        $this->assertJsonError($this->getJson(self::URL), 429, 'Demasiados pedidos. Tente novamente mais tarde.');
+
+        $this->actingAsTechnicalAdmin();
+        $this->getJson(self::APPLICATIONS_URL)->assertOk();
+    }
+
+    #[Test]
+    public function pending_applications_page_reflects_an_approval_immediately(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+        $newest = null;
+        foreach (['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28'] as $date) {
+            $newest = $this->withProfile(User::factory()->pending()->create(['created_at' => "{$date} 09:00:00"]));
+        }
+
+        $before = $this->applications(2)->json('data');
+        $this->assertCount(1, $before['items']);
+        $this->assertSame(4, $before['pagination']['total']);
+
+        $this->patchJson("/api/admin/users/{$newest->id}/approve")->assertOk();
+
+        $after = $this->applications(2)->json('data');
+        $this->assertSame([], $after['items']);
+        $this->assertSame(3, $after['pagination']['total']);
+        $this->assertSame(1, $after['pagination']['last_page']);
     }
 
     /**
@@ -791,11 +1084,28 @@ class AdminDashboardTest extends TestCase
         return 1;
     }
 
-    private function countQueries(): int
+    /**
+     * Cria 5 candidaturas com perfil (25/10 a 29/10 às 09:00), uma conta ativa e uma candidatura apagada; devolve as 5 por data.
+     *
+     * @return array<string, User>
+     */
+    private function fivePendingApplications(): array
+    {
+        $pending = [];
+        foreach (['2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29'] as $date) {
+            $pending[$date] = $this->withProfile(User::factory()->pending()->create(['created_at' => "{$date} 09:00:00"]));
+        }
+        $this->withProfile(User::factory()->create(['created_at' => '2026-10-29 11:00:00']));
+        User::factory()->pending()->create(['created_at' => '2026-10-29 11:30:00'])->delete();
+
+        return $pending;
+    }
+
+    private function countQueries(string $url = self::URL): int
     {
         DB::flushQueryLog();
         DB::enableQueryLog();
-        $this->dashboard();
+        $this->getJson($url)->assertOk();
         $count = count(DB::getQueryLog());
         DB::disableQueryLog();
 

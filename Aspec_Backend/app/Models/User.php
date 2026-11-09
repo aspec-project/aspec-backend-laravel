@@ -6,6 +6,7 @@ use App\Enums\ActivationType;
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
 use App\Jobs\CancelStripeSubscriptionJob;
+use App\Jobs\DeleteMediaJob;
 use App\Jobs\DeleteStripeCustomerJob;
 use App\Notifications\ResetPasswordNotification;
 use App\Services\Payments\StripeCustomerService;
@@ -21,7 +22,6 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Cashier\Billable;
 use Laravel\Cashier\Subscription;
@@ -347,7 +347,9 @@ class User extends Authenticatable
     /**
      * Anonimiza e apaga (soft delete) o utilizador e, se existir, o perfil de membro.
      * Horários, redes sociais e portfólio são apagados definitivamente, tal como as
-     * pastas de logótipo e portfólio no disco público. Revoga tokens e sessões (SPA) e a conta fica Inactive.
+     * pastas de logótipo e portfólio no disco de media: as do perfil (logos/{profile_id}) e as antigas
+     * por id do utilizador (logos/{user_id}), de ficheiros gravados antes das pastas por perfil.
+     * Revoga tokens e sessões (SPA) e a conta fica Inactive.
      * Apaga os tokens de reposição de password do email original (dado pessoal).
      * Limpa os dados de faturação e o estado da subscrição; o motivo passa a Deleted (substitui
      * qualquer outro, mesmo Blocked, porque a conta deixa de existir).
@@ -378,8 +380,9 @@ class User extends Authenticatable
         $handledStripeId = $this->stripe_id;
         $stripeCustomerDeleted = $this->deleteStripeCustomer();
         $checkoutSessionId = null;
+        $profileId = null;
 
-        $anonymized = DB::transaction(function () use ($handledStripeId, $stripeCustomerDeleted, $anonymizedBy, &$checkoutSessionId) {
+        $anonymized = DB::transaction(function () use ($handledStripeId, $stripeCustomerDeleted, $anonymizedBy, &$checkoutSessionId, &$profileId) {
             $current = static::withTrashed()->whereKey($this->id)->lockForUpdate()->first();
 
             if ($current === null || $current->trashed()) {
@@ -396,6 +399,7 @@ class User extends Authenticatable
                 ->first();
 
             if ($profile) {
+                $profileId = $profile->id;
                 $profile->reviewsReceived()->delete();
 
                 $profile->update([
@@ -505,10 +509,13 @@ class User extends Authenticatable
             return false;
         }
 
-        DB::afterCommit(function () {
-            Storage::disk('public')->deleteDirectory("logos/{$this->id}");
-            Storage::disk('public')->deleteDirectory("portfolios/{$this->id}");
-        });
+        $folders = $profileId === null ? [] : ["logos/{$profileId}", "portfolios/{$profileId}"];
+        $folders = [...$folders, "logos/{$this->id}", "portfolios/{$this->id}"];
+
+        // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.
+        foreach ($folders as $folder) {
+            rescue(fn () => DeleteMediaJob::dispatch($folder, directory: true)->afterCommit(), report: true);
+        }
 
         if ($checkoutSessionId !== null) {
             // Com a fila sync, um job falhado lança: a anonimização já está gravada e não pode falhar por isso.

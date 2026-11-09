@@ -52,6 +52,13 @@
         <!-- Os testes nunca usam a chave real do Google, mesmo que o .env local a tenha. -->
         <env name="GEOCODING_DRIVER" value="nominatim" force="true"/>
         <env name="GOOGLE_MAPS_GEOCODING_KEY" value="" force="true"/>
+        <!-- Discos locais nos testes, mesmo com MEDIA_DISK=r2 e chaves reais no .env: nenhum teste grava no R2. -->
+        <!-- O endpoint numa porta local fechada é a rede de segurança para um disco r2 usado sem Storage::fake. -->
+        <env name="MEDIA_DISK" value="public" force="true"/>
+        <env name="INVOICES_DISK" value="local" force="true"/>
+        <env name="R2_ENDPOINT" value="http://127.0.0.1:9" force="true"/>
+        <env name="R2_ACCESS_KEY_ID" value="test" force="true"/>
+        <env name="R2_SECRET_ACCESS_KEY" value="test" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

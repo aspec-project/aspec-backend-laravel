@@ -6,11 +6,14 @@ use App\Enums\InactiveReason;
 use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\Portfolio;
+use App\Models\Review;
 use App\Models\Sector;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -25,7 +28,12 @@ class AdminUserShowTest extends TestCase
 
     private const NOT_FOUND_BODY = ['success' => false, 'message' => 'Recurso não encontrado.'];
 
-    private const ACCOUNT_KEYS = ['id', 'email', 'phone', 'created_at', 'role', 'account_status', 'inactive_reason', 'subscription_state', 'member_profile'];
+    private const ACCOUNT_KEYS = ['id', 'email', 'phone', 'created_at', 'role', 'account_status', 'inactive_reason', 'subscription_state', 'review_counts', 'member_profile'];
+
+    private const ZERO_REVIEW_COUNTS = [
+        'received' => ['total' => 0, 'hidden' => 0, 'flagged' => 0],
+        'given' => ['total' => 0, 'hidden' => 0, 'flagged' => 0],
+    ];
 
     private const PROFILE_KEYS = [
         'id', 'name', 'business_name', 'congregation', 'role_in_congregation', 'description', 'website_url',
@@ -367,6 +375,215 @@ class AdminUserShowTest extends TestCase
                 ->assertJsonCount(2, 'data.member_profile.social_links')
                 ->assertJsonCount(4, 'data.member_profile.portfolio')),
         );
+    }
+
+    #[Test]
+    public function review_counts_split_received_and_given_reviews_by_status(): void
+    {
+        $ana = $this->profile();
+        $bruno = $this->profile();
+        $carla = $this->profile();
+        $duarte = $this->profile();
+        $eva = $this->profile();
+
+        $this->review($bruno, $ana);
+        $this->review($carla, $ana);
+        $this->review($duarte, $ana, 'hidden');
+        $this->review($eva, $ana, 'flagged');
+        $this->review($ana, $bruno);
+        $this->review($ana, $carla, 'flagged');
+        $this->review($ana, $duarte, 'flagged');
+        $this->review($bruno, $carla, 'hidden');
+        $this->review($carla, $duarte, 'flagged');
+
+        $this->assertSame(
+            [
+                'received' => ['total' => 4, 'hidden' => 1, 'flagged' => 1],
+                'given' => ['total' => 3, 'hidden' => 0, 'flagged' => 2],
+            ],
+            $this->show($ana->user_id)->assertOk()->json('data.review_counts'),
+        );
+    }
+
+    #[Test]
+    public function member_without_reviews_has_zero_review_counts(): void
+    {
+        $member = $this->profile();
+        $this->review($this->profile(), $this->profile(), 'flagged');
+
+        $counts = $this->show($member->user_id)->assertOk()->json('data.review_counts');
+
+        foreach (['received', 'given'] as $side) {
+            foreach (['total', 'hidden', 'flagged'] as $key) {
+                $this->assertSame(0, data_get($counts, "{$side}.{$key}"), "{$side}.{$key}");
+            }
+        }
+    }
+
+    #[Test]
+    public function user_without_loaded_profile_has_zero_review_counts(): void
+    {
+        $otherAdmin = User::factory()->admin()->create();
+
+        $data = $this->show($otherAdmin->id)->assertOk()->json('data');
+
+        $this->assertArrayHasKey('review_counts', $data);
+        $this->assertSame(self::ZERO_REVIEW_COUNTS, $data['review_counts']);
+
+        $deleted = $this->profile();
+        $other = $this->profile();
+        $this->review($other, $deleted, 'hidden');
+        $this->review($deleted, $other, 'flagged');
+        $deleted->delete();
+
+        $data = $this->show($deleted->user_id)->assertOk()->json('data');
+
+        $this->assertNull($data['member_profile']);
+        $this->assertArrayHasKey('review_counts', $data);
+        $this->assertSame(self::ZERO_REVIEW_COUNTS, $data['review_counts']);
+    }
+
+    #[Test]
+    public function review_counts_include_anonymized_and_soft_deleted_counterparts(): void
+    {
+        Notification::fake();
+        Queue::fake();
+
+        $ana = $this->profile();
+        $bruno = $this->profile();
+        $carla = $this->profile();
+        $duarte = $this->profile();
+
+        $this->review($bruno, $ana, 'hidden');
+        $this->review($ana, $duarte);
+        $this->review($ana, $carla, 'flagged');
+
+        $bruno->user->anonymizeAndDelete();
+        $duarte->delete();
+        $carla->user->anonymizeAndDelete();
+
+        $this->assertSame(
+            [
+                'received' => ['total' => 1, 'hidden' => 1, 'flagged' => 0],
+                'given' => ['total' => 1, 'hidden' => 0, 'flagged' => 0],
+            ],
+            $this->show($ana->user_id)->assertOk()->json('data.review_counts'),
+        );
+    }
+
+    #[Test]
+    public function review_counts_have_a_fixed_shape(): void
+    {
+        $member = $this->profile();
+        $this->review($this->profile(), $member, 'hidden');
+
+        $data = $this->show($member->user_id)->assertOk()->json('data');
+
+        $this->assertIsArray($data['review_counts'] ?? null);
+        $this->assertSame(['received', 'given'], array_keys($data['review_counts']));
+        foreach (['received', 'given'] as $side) {
+            $this->assertSame(['total', 'hidden', 'flagged'], array_keys($data['review_counts'][$side]));
+        }
+        $this->assertEqualsCanonicalizing(self::PROFILE_KEYS, array_keys($data['member_profile']));
+    }
+
+    #[Test]
+    public function review_counts_use_a_single_aggregate_query(): void
+    {
+        $empty = $this->profile();
+        $member = $this->profile();
+        $others = [$this->profile(), $this->profile(), $this->profile()];
+        foreach (['visible', 'hidden', 'flagged'] as $index => $state) {
+            $this->review($others[$index], $member, $state);
+            $this->review($member, $others[$index], $state);
+        }
+        $otherAdmin = User::factory()->admin()->create();
+        $this->admin->load(['role', 'accountStatus']);
+
+        $this->assertSame(
+            $this->countQueries(fn () => $this->show($empty->user_id)->assertOk()),
+            $this->countQueries(fn () => $this->show($member->user_id)->assertOk()),
+        );
+
+        $reviewQueries = $this->reviewQueries(fn () => $this->show($member->user_id)->assertOk());
+        $this->assertCount(1, $reviewQueries);
+        $this->assertStringContainsStringIgnoringCase('count(', $reviewQueries[0]);
+
+        $this->assertSame([], $this->reviewQueries(fn () => $this->show($otherAdmin->id)->assertOk()));
+    }
+
+    #[Test]
+    public function review_counts_are_not_exposed_to_members_nor_in_admin_actions(): void
+    {
+        Notification::fake();
+
+        $ana = $this->profile();
+        $this->review($this->profile(), $ana, 'hidden');
+        $this->review($this->profile(), $ana, 'flagged');
+
+        Sanctum::actingAs($ana->user);
+        $response = $this->getJson('/api/member-profile')
+            ->assertOk()
+            ->assertJsonMissingPath('data.review_counts');
+        $this->assertSame([], $this->forbiddenKeys($response->json(), ['review_counts', 'hidden', 'flagged']));
+
+        Sanctum::actingAs($this->admin);
+        $response = $this->patchJson("/api/admin/users/{$ana->user_id}/block")
+            ->assertOk()
+            ->assertJsonMissingPath('data.review_counts');
+        $this->assertSame([], $this->forbiddenKeys($response->json(), ['review_counts']));
+    }
+
+    private function profile(): MemberProfile
+    {
+        return MemberProfile::factory()->for(User::factory()->create())->create();
+    }
+
+    private function review(MemberProfile $reviewer, MemberProfile $reviewed, string $state = 'visible'): Review
+    {
+        return Review::factory()->{$state}()->create([
+            'reviewer_profile_id' => $reviewer->id,
+            'reviewed_profile_id' => $reviewed->id,
+        ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reviewQueries(callable $request): array
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $request();
+        $queries = collect(DB::getQueryLog())
+            ->pluck('query')
+            ->filter(fn (string $sql) => preg_match('/\breviews\b/i', $sql) === 1)
+            ->values()
+            ->all();
+        DB::disableQueryLog();
+
+        return $queries;
+    }
+
+    /**
+     * @param  array<string>  $keys
+     * @return list<string>
+     */
+    private function forbiddenKeys(mixed $data, array $keys): array
+    {
+        if (! is_array($data)) {
+            return [];
+        }
+
+        $found = [];
+        foreach ($data as $key => $value) {
+            if (in_array($key, $keys, true)) {
+                $found[] = (string) $key;
+            }
+            array_push($found, ...$this->forbiddenKeys($value, $keys));
+        }
+
+        return $found;
     }
 
     private function show(string $id): TestResponse

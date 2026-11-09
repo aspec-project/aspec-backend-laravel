@@ -5,6 +5,7 @@ namespace Tests\Feature\Events;
 use App\Models\EventInstance;
 use App\Models\EventRegistration;
 use App\Models\EventSeries;
+use App\Models\MemberProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -18,6 +19,17 @@ class EventRegistrationStoreTest extends TestCase
     private function url(EventInstance $event): string
     {
         return "/api/events/{$event->id}/registrations";
+    }
+
+    private function activeMemberWithProfile(): User
+    {
+        $user = User::factory()->create();
+
+        MemberProfile::factory()->create([
+            'user_id' => $user->id,
+        ]);
+
+        return $user;
     }
 
     /**
@@ -57,7 +69,7 @@ class EventRegistrationStoreTest extends TestCase
     #[Test]
     public function active_member_can_register_for_an_event(): void
     {
-        $user = User::factory()->create(); // A factory cria uma conta Active.
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $event = EventInstance::factory()->create([
@@ -76,9 +88,14 @@ class EventRegistrationStoreTest extends TestCase
     }
 
     #[Test]
-    public function active_admin_can_register_for_an_event(): void
+    public function active_admin_with_member_profile_can_register_for_an_event(): void
     {
         $admin = User::factory()->admin()->create();
+
+        MemberProfile::factory()->create([
+            'user_id' => $admin->id,
+        ]);
+
         Sanctum::actingAs($admin);
 
         $event = EventInstance::factory()->create();
@@ -90,6 +107,20 @@ class EventRegistrationStoreTest extends TestCase
             'event_instance_id' => $event->id,
             'user_id' => $admin->id,
         ]);
+    }
+
+    #[Test]
+    public function active_admin_without_member_profile_cannot_register_for_an_event(): void
+    {
+        $admin = User::factory()->admin()->create();
+        Sanctum::actingAs($admin);
+
+        $event = EventInstance::factory()->create();
+
+        $this->postJson($this->url($event))
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('event_registrations', 0);
     }
 
     #[Test]
@@ -126,7 +157,7 @@ class EventRegistrationStoreTest extends TestCase
     #[Test]
     public function user_cannot_register_for_the_same_event_twice(): void
     {
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $event = EventInstance::factory()->create();
@@ -153,7 +184,7 @@ class EventRegistrationStoreTest extends TestCase
             'user_id' => $existingUser->id,
         ]);
 
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $this->postJson($this->url($event))
@@ -173,12 +204,48 @@ class EventRegistrationStoreTest extends TestCase
                 ->format('Y-m-d H:i:s'),
         ]);
 
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->activeMemberWithProfile());
 
         $this->postJson($this->url($event))
             ->assertConflict();
 
         $this->assertDatabaseCount('event_registrations', 0);
+    }
+
+    #[Test]
+    public function user_cannot_register_for_a_past_session_in_a_series(): void
+    {
+        $timezone = config('app.event_timezone', 'Europe/Lisbon');
+        $now = now($timezone)->setTime(12, 0, 0);
+        $this->travelTo($now);
+
+        $sessionDate = $now->copy()->subDay()->toDateString();
+        $registrationDeadline = $now->copy()
+            ->subDays(2)
+            ->setTime(23, 59, 0);
+
+        $series = EventSeries::query()->create([
+            'frequency' => 'weekly',
+            'ends_on' => $sessionDate,
+            'registration_deadline_days_before' => 1,
+        ]);
+
+        $pastSession = EventInstance::factory()->create([
+            'series_id' => $series->id,
+            'event_date' => $sessionDate,
+            'event_start_time' => '10:00',
+            'event_end_time' => '11:00',
+            'registration_deadline' => $registrationDeadline->format('Y-m-d H:i:s'),
+        ]);
+
+        Sanctum::actingAs($this->activeMemberWithProfile());
+
+        $this->postJson($this->url($pastSession))
+            ->assertConflict();
+
+        $this->assertDatabaseMissing('event_registrations', [
+            'event_instance_id' => $pastSession->id,
+        ]);
     }
 
     #[Test]
@@ -192,7 +259,7 @@ class EventRegistrationStoreTest extends TestCase
         ]);
 
         $this->travelTo($deadline);
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs($this->activeMemberWithProfile());
 
         $this->postJson($this->url($event))
             ->assertCreated();
@@ -203,7 +270,7 @@ class EventRegistrationStoreTest extends TestCase
     #[Test]
     public function member_can_register_for_this_and_following_sessions_in_a_series(): void
     {
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         [$previousSession, $selectedSession, $followingSession] =
@@ -254,14 +321,14 @@ class EventRegistrationStoreTest extends TestCase
         [$selectedSession, $followingSession, $fullSession] =
             $this->createSeriesSessions([2, 2, 1]);
 
-        $existingUser = User::factory()->create();
+        $existingUser = $this->activeMemberWithProfile();
 
         EventRegistration::query()->create([
             'event_instance_id' => $fullSession->id,
             'user_id' => $existingUser->id,
         ]);
 
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $this->postJson($this->url($selectedSession), [
@@ -291,7 +358,7 @@ class EventRegistrationStoreTest extends TestCase
     {
         [, $selectedSession, $followingSession] = $this->createSeriesSessions();
 
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
 
         EventRegistration::query()->create([
             'event_instance_id' => $followingSession->id,
@@ -330,7 +397,7 @@ class EventRegistrationStoreTest extends TestCase
                 ->format('Y-m-d H:i:s'),
         ]);
 
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $this->postJson($this->url($selectedSession), [
@@ -353,7 +420,7 @@ class EventRegistrationStoreTest extends TestCase
     #[Test]
     public function this_and_following_scope_is_rejected_for_a_standalone_event(): void
     {
-        $user = User::factory()->create();
+        $user = $this->activeMemberWithProfile();
         Sanctum::actingAs($user);
 
         $event = EventInstance::factory()->create();

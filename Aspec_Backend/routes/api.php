@@ -5,14 +5,17 @@ use App\Http\Controllers\Api\Account\NotificationPreferenceController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\AdminEventAttendeeController;
 use App\Http\Controllers\Api\Admin\AdminEventCategoryController;
+use App\Http\Controllers\Api\Admin\AdminEventCategoryPaletteController;
 use App\Http\Controllers\Api\Admin\AdminEventInstanceController;
 use App\Http\Controllers\Api\Admin\AdminGeocodeController;
 use App\Http\Controllers\Api\Admin\AdminPrayerCardController;
+use App\Http\Controllers\Api\Admin\AdminReviewController;
 use App\Http\Controllers\Api\Admin\AdminUserAnonymizationController;
 use App\Http\Controllers\Api\Admin\AdminUserController;
 use App\Http\Controllers\Api\Admin\AdminUserPaymentLinkController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Directory\MemberController;
+use App\Http\Controllers\Api\Events\EventCalendarController;
 use App\Http\Controllers\Api\Events\EventInstanceController;
 use App\Http\Controllers\Api\Events\EventRegistrationController;
 use App\Http\Controllers\Api\Events\PrayerCardController;
@@ -25,6 +28,7 @@ use App\Http\Controllers\Api\Lists\WeekDayController;
 use App\Http\Controllers\Api\Member\MemberLogoController;
 use App\Http\Controllers\Api\Member\MemberProfileController;
 use App\Http\Controllers\Api\Member\MemberReviewController;
+use App\Http\Controllers\Api\Member\MemberReviewReportController;
 use App\Http\Controllers\Api\Member\PortfolioController;
 use App\Http\Controllers\Api\Payments\AccountActivationController;
 use App\Http\Controllers\Api\Payments\BillingPortalSessionController;
@@ -55,6 +59,12 @@ Route::middleware('throttle:public-events')->group(function () {
     Route::get('/events', [EventInstanceController::class, 'index']);
     Route::get('/events/{eventInstance}', [EventInstanceController::class, 'show'])
         ->whereUuid('eventInstance');
+
+    // Sem sessão: o ficheiro nunca precisa de utilizador e um clique vindo do frontend criaria uma sessão por download.
+    Route::get('/events/{eventInstance}/calendar.ics', [EventCalendarController::class, 'show'])
+        ->whereUuid('eventInstance')
+        ->withoutMiddleware(EnsureFrontendRequestsAreStateful::class)
+        ->name('events.calendar');
 });
 
 // Públicas com utilizador opcional: o controller lê a sessão ou o Bearer para decidir se mostra os contactos.
@@ -99,8 +109,16 @@ Route::prefix('admin')
         Route::post('/users/{user}/payment-link', [AdminUserPaymentLinkController::class, 'store'])
             ->whereUuid('user')
             ->middleware('throttle:admin-payment-link');
+        Route::get('/reviews', [AdminReviewController::class, 'index']);
+        Route::patch('/reviews/{review}/hide', [AdminReviewController::class, 'hide'])
+            ->whereUuid('review');
+        Route::patch('/reviews/{review}/show', [AdminReviewController::class, 'show'])
+            ->whereUuid('review');
+        Route::patch('/reviews/{review}/unflag', [AdminReviewController::class, 'unflag'])
+            ->whereUuid('review');
         // rotas administrativas
         Route::get('/event-categories', [AdminEventCategoryController::class, 'index']);
+        Route::get('/event-categories/palette', [AdminEventCategoryPaletteController::class, 'index']);
         Route::post('/event-categories', [AdminEventCategoryController::class, 'store']);
         Route::put('/event-categories/{eventCategory}', [AdminEventCategoryController::class, 'update'])
             ->whereUuid('eventCategory');
@@ -127,7 +145,8 @@ Route::prefix('admin')
             ->whereUuid('eventInstance')
             ->middleware('throttle:admin-prayer-distribute');
         Route::get('/geocode', AdminGeocodeController::class)->middleware('throttle:geocode');
-        Route::get('/dashboard', AdminDashboardController::class)->middleware('throttle:admin-dashboard');
+        Route::get('/dashboard', [AdminDashboardController::class, 'index'])->middleware('throttle:admin-dashboard');
+        Route::get('/dashboard/pending-applications', [AdminDashboardController::class, 'pendingApplications'])->middleware('throttle:admin-dashboard');
     });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -145,6 +164,8 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
         ->whereUuid('member')->middleware('throttle:review-submit');
     Route::delete('/members/{member}/reviews', [MemberReviewController::class, 'destroy'])
         ->whereUuid('member')->middleware('throttle:review-delete');
+    Route::post('/reviews/{review}/reports', [MemberReviewReportController::class, 'store'])
+        ->whereUuid('review');
     Route::put('/account/password', [AccountPasswordController::class, 'update'])->middleware('throttle:password-update');
     Route::get('/account/notification-preferences', [NotificationPreferenceController::class, 'show']);
     Route::put('/account/notification-preferences', [NotificationPreferenceController::class, 'update'])
@@ -163,6 +184,7 @@ Route::middleware(['auth:sanctum', 'account.active'])->group(function () {
     Route::get('/events/{eventInstance}/registrants', [EventRegistrationController::class, 'registrants'])
         ->whereUuid('eventInstance');
     Route::get('/me/registrations', [EventRegistrationController::class, 'mine']);
+    Route::get('/me/reviews', [MemberReviewController::class, 'mine']);
     Route::middleware('throttle:prayer-cards')->group(function () {
         Route::get('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'show'])->whereUuid('eventInstance');
         Route::put('/events/{eventInstance}/prayer-card', [PrayerCardController::class, 'update'])->whereUuid('eventInstance');

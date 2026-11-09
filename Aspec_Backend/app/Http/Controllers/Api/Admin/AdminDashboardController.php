@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Enums\InactiveReason;
 use App\Enums\SubscriptionState;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\IndexDashboardPendingApplicationsRequest;
 use App\Http\Resources\AdminDashboardReviewResource;
 use App\Http\Resources\AdminUserSummaryResource;
 use App\Models\EventInstance;
@@ -20,23 +21,23 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Totais e listas do painel do backoffice, num só pedido e sem cache.
+ * Painel do backoffice: totais e listas num só pedido e a lista paginada das candidaturas pendentes, sem cache.
  * O mês e a semana (segunda a domingo) são calculados na hora de Lisboa.
  */
 class AdminDashboardController extends Controller
 {
     /**
-     * Número de linhas de cada lista do painel.
+     * Número de linhas de cada lista do painel e de cada página das candidaturas pendentes.
      */
     private const LIST_LIMIT = 3;
 
     /**
-     * Estados de subscrição que contam como membro ativo (os mesmos dos chips da lista de utilizadores).
+     * Estados de subscrição que contam como membro ativo (os mesmos dos chips "Em trial" e "Ativos" da lista de utilizadores).
+     * As contas em carência contam só nas quotas em atraso.
      */
     private const ACTIVE_MEMBER_STATES = [
         SubscriptionState::Trial,
         SubscriptionState::Active,
-        SubscriptionState::Grace,
     ];
 
     /**
@@ -50,13 +51,37 @@ class AdminDashboardController extends Controller
      * @param  Request  $request  Pedido atual (sem parâmetros).
      * @return JsonResponse 200 com stats, pending_applications e recent_reviews, com Cache-Control private, no-store.
      */
-    public function __invoke(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse
     {
+        $pendingApplications = $this->pendingApplicationsQuery()->limit(self::LIST_LIMIT)->get();
+
         return $this->successResponse([
             'stats' => $this->stats($this->periods()),
-            'pending_applications' => AdminUserSummaryResource::collection($this->pendingApplications())->resolve($request),
+            'pending_applications' => AdminUserSummaryResource::collection($pendingApplications)->resolve($request),
             'recent_reviews' => AdminDashboardReviewResource::collection($this->recentReviews())->resolve($request),
         ], 'Dados do painel obtidos com sucesso.')->header('Cache-Control', 'private, no-store');
+    }
+
+    /**
+     * Devolve uma página das candidaturas pendentes, das mais recentes para as mais antigas, 3 por página.
+     * A página 1 é sempre igual à lista pending_applications do painel.
+     *
+     * @param  IndexDashboardPendingApplicationsRequest  $request  Pedido com a página validada.
+     * @return JsonResponse 200 com items e pagination, com Cache-Control private, no-store.
+     */
+    public function pendingApplications(IndexDashboardPendingApplicationsRequest $request): JsonResponse
+    {
+        $applications = $this->pendingApplicationsQuery()->paginate(self::LIST_LIMIT);
+
+        return $this->successResponse([
+            'items' => AdminUserSummaryResource::collection($applications->getCollection())->resolve($request),
+            'pagination' => [
+                'current_page' => $applications->currentPage(),
+                'per_page' => $applications->perPage(),
+                'total' => $applications->total(),
+                'last_page' => $applications->lastPage(),
+            ],
+        ], 'Candidaturas pendentes obtidas com sucesso.')->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -117,9 +142,7 @@ class AdminDashboardController extends Controller
                 'new_this_week' => (int) $newReviewsThisWeek,
             ],
             'overdue_payments' => $this->overduePayments(),
-            'event_registrations' => [
-                'this_week' => $this->registrationsThisWeek($periods),
-            ],
+            'event_registrations' => $this->registrationsThisWeek($periods),
         ];
     }
 
@@ -155,22 +178,31 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * Inscrições em eventos com data na semana corrente (segunda a domingo, em Lisboa).
+     * Inscrições em eventos com data na semana corrente (segunda a domingo, em Lisboa) e
+     * quantos eventos distintos as recebem, numa só consulta.
      * Cada linha conta: sessões de séries, eventos online e inscrições de contas já apagadas.
      *
      * @param  array{week_start: CarbonImmutable, week_end: CarbonImmutable}  $periods  Limites da semana em Lisboa.
+     * @return array{this_week: int, events_with_registrations: int}
      */
-    private function registrationsThisWeek(array $periods): int
+    private function registrationsThisWeek(array $periods): array
     {
-        return EventRegistration::query()
+        $counts = EventRegistration::query()
             ->whereHas('eventInstance', fn (Builder $event) => $event
                 ->whereDate('event_date', '>=', $periods['week_start']->toDateString())
                 ->whereDate('event_date', '<=', $periods['week_end']->toDateString()))
-            ->count();
+            ->toBase()
+            ->selectRaw('COUNT(*) as registrations, COUNT(DISTINCT event_instance_id) as events')
+            ->first();
+
+        return [
+            'this_week' => (int) $counts->registrations,
+            'events_with_registrations' => (int) $counts->events,
+        ];
     }
 
     /**
-     * Utilizadores em trial, ativos ou em carência, pelo scope dos estados de subscrição.
+     * Utilizadores em trial ou ativos, pelo scope dos estados de subscrição.
      *
      * @return Builder<User>
      */
@@ -184,19 +216,18 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * As candidaturas pendentes mais recentes, com as relações que o AdminUserSummaryResource usa.
+     * Consulta-base das candidaturas pendentes, das mais recentes para as mais antigas (desempate pelo id),
+     * com as relações que o AdminUserSummaryResource usa. Partilhada pelo painel e pela lista paginada.
      *
-     * @return Collection<int, User>
+     * @return Builder<User>
      */
-    private function pendingApplications(): Collection
+    private function pendingApplicationsQuery(): Builder
     {
         return User::query()
             ->whereHas('accountStatus', fn (Builder $status) => $status->where('name', 'Pending'))
             ->with(['role', 'accountStatus', 'memberProfile.sector', 'memberProfile.location'])
             ->orderByDesc('created_at')
-            ->orderByDesc('id')
-            ->limit(self::LIST_LIMIT)
-            ->get();
+            ->orderByDesc('id');
     }
 
     /**

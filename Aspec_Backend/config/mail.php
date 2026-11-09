@@ -65,6 +65,11 @@ return [
             'transport' => 'resend',
         ],
 
+        // API HTTP do Brevo (porta 443), registado no AppServiceProvider; chave em services.brevo.key.
+        'brevo' => [
+            'transport' => 'brevo',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
@@ -114,5 +119,48 @@ return [
         'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tema dos emails (Markdown)
+    |--------------------------------------------------------------------------
+    |
+    | Tema "aspec" em resources/views/vendor/mail/html/themes/aspec.css. O
+    | "paths" tem de estar aqui: esta chave substitui a do framework inteira.
+    |
+    */
+
+    'markdown' => [
+        'theme' => env('MAIL_MARKDOWN_THEME', 'aspec'),
+
+        'paths' => [
+            resource_path('views/vendor/mail'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Logótipo dos emails
+    |--------------------------------------------------------------------------
+    |
+    | URL público e absoluto do PNG (os clientes de email não carregam caminhos
+    | relativos, localhost nem data:). Vazio: o cabeçalho mostra o nome da app.
+    |
+    */
+
+    'logo_url' => env('MAIL_LOGO_URL'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Ícone de calendário dos emails
+    |--------------------------------------------------------------------------
+    |
+    | URL público e absoluto do PNG do ícone "Adicionar ao calendário" da agenda
+    | semanal (resources/images/calendar-icon.png, carregado no R2). Vazio: o
+    | email mostra um link de texto "Calendário".
+    |
+    */
+
+    'calendar_icon_url' => env('MAIL_CALENDAR_ICON_URL'),
 
 ];

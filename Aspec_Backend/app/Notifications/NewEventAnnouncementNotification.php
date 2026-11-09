@@ -51,17 +51,24 @@ class NewEventAnnouncementNotification extends Notification implements ShouldQue
     }
 
     /**
-     * Nome, data, horas, local e prazo de inscrição, com botão para a página do evento.
-     * Nunca inclui o link da reunião online: só os inscritos o recebem, depois do fecho das inscrições.
+     * Nome, data, horas, local (com link para o mapa) e prazo de inscrição, com os botões para a página
+     * do evento e para o adicionar ao calendário, lado a lado. Nunca inclui o link da reunião online: só os
+     * inscritos o recebem, depois do fecho das inscrições.
      */
     public function toMail(object $notifiable): MailMessage
     {
-        return $this->eventMail($notifiable)
-            ->subject("Novo evento ASPEC: {$this->event->name}")
-            ->line("A ASPEC tem um novo evento: **{$this->event->name}**.")
-            ->line($this->eventSummary($this->event))
-            ->line("Inscrições abertas até {$this->registrationDeadlineDate($this->event)}.")
-            ->action('Ver o evento', $this->eventUrl($this->event))
-            ->line($this->preferencesFooter());
+        $mail = $this->eventMail($notifiable)->subject("Novo evento ASPEC: {$this->event->name}");
+
+        return $this->withBlocks($mail, [
+            'A ASPEC tem um novo evento:',
+            "**{$this->markdownText($this->event->name)}**",
+            $this->eventSummary($this->event),
+            "Inscrições abertas até {$this->registrationDeadlineDate($this->event)}.",
+            $this->buttonRow(
+                $this->button('Ver o evento', $this->eventUrl($this->event)),
+                $this->calendarButton($this->event),
+            ),
+            $this->preferencesFooter(),
+        ]);
     }
 }

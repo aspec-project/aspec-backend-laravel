@@ -56,11 +56,11 @@ class EventCategorySeederTest extends TestCase
     {
         $this->assertEqualsCanonicalizing(
             [
-                'Pequeno-almoço' => '#B84A00',
-                'Almoço' => '#2E7D32',
-                'Jantar' => '#6A1B9A',
-                'Workshop' => '#C62828',
-                'Formação' => '#1565C0',
+                'Pequeno-almoço' => '#94591A',
+                'Almoço' => '#0E784F',
+                'Jantar' => '#763B82',
+                'Workshop' => '#1C747E',
+                'Formação' => '#1E449A',
             ],
             EventCategory::pluck('color', 'name')->all()
         );
@@ -85,17 +85,17 @@ class EventCategorySeederTest extends TestCase
     public function seeder_skips_a_category_whose_color_is_already_used_and_warns(): void
     {
         EventCategory::where('name', 'Almoço')->delete();
-        EventCategory::create(['name' => 'Brunch', 'color' => '#2E7D32']);
+        EventCategory::create(['name' => 'Brunch', 'color' => '#0E784F']);
 
         $this->artisan('db:seed', ['--class' => EventCategorySeeder::class])
-            ->expectsOutputToContain('A categoria "Almoço" não foi criada: a cor #2E7D32 já é usada por outra categoria.')
+            ->expectsOutputToContain('A categoria "Almoço" não foi criada: a cor #0E784F já é usada por outra categoria.')
             ->assertSuccessful();
 
         $this->assertEqualsCanonicalizing(
             ['Pequeno-almoço', 'Jantar', 'Workshop', 'Formação', 'Brunch'],
             EventCategory::pluck('name')->all()
         );
-        $this->assertSame('#2E7D32', EventCategory::where('name', 'Brunch')->firstOrFail()->color);
+        $this->assertSame('#0E784F', EventCategory::where('name', 'Brunch')->firstOrFail()->color);
     }
 
     #[Test]
@@ -109,6 +109,6 @@ class EventCategorySeederTest extends TestCase
 
         $this->assertSame(5, EventCategory::count());
         $this->assertFalse(EventCategory::where('name', 'Jantar')->exists());
-        $this->assertSame('#6A1B9A', EventCategory::where('name', 'Jantares')->firstOrFail()->color);
+        $this->assertSame('#763B82', EventCategory::where('name', 'Jantares')->firstOrFail()->color);
     }
 }

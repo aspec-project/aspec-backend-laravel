@@ -53,57 +53,74 @@ class WeeklyAgendaNotification extends Notification implements ShouldQueue
     }
 
     /**
-     * Secção "A sua semana" e depois "Inscrições abertas" (cada uma só se tiver eventos), botão
-     * para a agenda e rodapé das preferências. O link da reunião online só aparece na primeira
-     * secção, com a regra da página do evento: o membro continua inscrito e o prazo já passou.
+     * Secção "A sua semana" (cada evento com o título, os detalhes e um ícone pequeno para o
+     * calendário; no fim, o botão para as inscrições do membro) e depois "Inscrições abertas" (os
+     * eventos no mesmo formato e, no fim, o botão para a agenda); cada secção só aparece se tiver eventos. O link da reunião
+     * online só aparece na primeira secção, com a regra da página do evento: o membro continua
+     * inscrito e o prazo já passou.
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = $this->eventMail($notifiable)
-            ->subject('Agenda semanal de eventos ASPEC')
-            ->line('Estes são os eventos da ASPEC para os próximos dias.');
+        $blocks = ['Estes são os eventos da ASPEC para os próximos dias.'];
 
         if ($this->weekEvents->isNotEmpty()) {
-            $mail->line('**A sua semana**');
+            $blocks[] = '**A sua semana**';
 
             foreach ($this->weekEvents as $event) {
-                $this->addEvent($mail, $event);
-                $this->addOnlineLink($mail, $event, $notifiable);
+                $blocks[] = $this->eventBlock($event);
+                $blocks = [...$blocks, ...$this->onlineLinkLines($event, $notifiable)];
             }
+
+            $blocks[] = $this->button('Ver as minhas inscrições', $this->frontendUrl('/perfil/inscricoes'));
         }
 
         if ($this->openEvents->isNotEmpty()) {
-            $mail->line('**Inscrições abertas**');
+            $blocks[] = '**Inscrições abertas**';
 
             foreach ($this->openEvents as $event) {
-                $this->addEvent($mail, $event);
+                $blocks[] = $this->eventBlock($event);
             }
 
-            $mail->action('Ver a agenda', $this->frontendUrl('/eventos'));
+            $blocks[] = $this->button('Ver a agenda', $this->frontendUrl('/eventos'));
         }
 
-        return $mail->line($this->preferencesFooter());
+        $blocks[] = $this->preferencesFooter();
+
+        $mail = $this->eventMail($notifiable)->subject('Agenda semanal de eventos ASPEC');
+
+        return $this->withBlocks($mail, $blocks);
     }
 
-    private function addEvent(MailMessage $mail, EventInstance $event): void
+    /**
+     * @return array{type: string, title: string, details: string, calendar_url: string}
+     */
+    private function eventBlock(EventInstance $event): array
     {
-        $mail->line("**{$event->name}**: {$this->eventSummary($event)}. [Ver o evento]({$this->eventUrl($event)})");
+        return [
+            'type' => 'event',
+            'title' => $this->markdownText($event->name),
+            'details' => $this->eventSummary($event).'.',
+            'calendar_url' => $this->calendarUrl($event),
+        ];
     }
 
-    private function addOnlineLink(MailMessage $mail, EventInstance $event, object $notifiable): void
+    /**
+     * @return array<int, string>
+     */
+    private function onlineLinkLines(EventInstance $event, object $notifiable): array
     {
         if (! $event->is_online) {
-            return;
+            return [];
         }
 
         if (! $event->registrationDeadlinePassed()) {
-            $mail->line(self::LINK_PENDING_TEXT);
-
-            return;
+            return [self::LINK_PENDING_TEXT];
         }
 
         if ($event->registrations()->where('user_id', $notifiable->id)->exists()) {
-            $mail->line("Link da reunião: {$event->online_url}");
+            return ["Link da reunião: {$event->online_url}"];
         }
+
+        return [];
     }
 }

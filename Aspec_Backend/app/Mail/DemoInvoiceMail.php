@@ -17,7 +17,7 @@ class DemoInvoiceMail extends Mailable
 {
     /**
      * @param  string  $number  Número da fatura (DEMO-AAAA-XXXXXXXX).
-     * @param  string  $path  Caminho do PDF no disco local.
+     * @param  string  $path  Caminho do PDF no disco privado das faturas (INVOICES_DISK).
      */
     public function __construct(
         public string $number,
@@ -33,22 +33,22 @@ class DemoInvoiceMail extends Mailable
     }
 
     /**
-     * Corpo curto, com o aviso de que é um documento de demonstração.
+     * Corpo curto em Markdown (com o tema dos emails), com o aviso de que é um documento de demonstração.
      */
     public function content(): Content
     {
-        return new Content(view: 'mail.demo-invoice');
+        return new Content(markdown: 'mail.demo-invoice');
     }
 
     /**
-     * O PDF da fatura, lido do disco privado, como único anexo.
+     * O PDF da fatura, lido do disco privado das faturas, como único anexo.
      *
      * @return array<int, Attachment>
      */
     public function attachments(): array
     {
         return [
-            Attachment::fromStorageDisk('local', $this->path)
+            Attachment::fromStorageDisk(config('filesystems.invoices_disk'), $this->path)
                 ->as("fatura-{$this->number}.pdf")
                 ->withMime('application/pdf'),
         ];

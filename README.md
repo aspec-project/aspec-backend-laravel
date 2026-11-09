@@ -7,7 +7,7 @@ Na pasta `Aspec_Backend/`:
 1. Copiar `.env.example` para `.env`. O `APP_URL` já vem como `http://localhost:8000`, o endereço do `php artisan serve` e o que o frontend usa por omissão (`VITE_API_URL`). Se a API correr noutro endereço (ex. domínio do Laragon), mudar o `APP_URL` e o `VITE_API_URL` do frontend para o mesmo valor. Os URLs das imagens (logótipos e portfólio) são gerados a partir do `APP_URL`, com a porta incluída; se estiver errado, as imagens não abrem no frontend.
 2. `php artisan key:generate`
 3. `php artisan migrate:fresh --seed` — cria as tabelas e os dados de referência (roles, estados de conta, setores, distritos, dias da semana, redes sociais). **Apaga todos os dados da base de dados local.**
-4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{user_id}`, `portfolios/{user_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**.
+4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{profile_id}`, `portfolios/{profile_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**. Só é preciso com as imagens guardadas na máquina (`MEDIA_DISK=public`, o valor por omissão); com o Cloudflare R2 não se usa (ver "Armazenamento de ficheiros").
 5. `php artisan serve` — a API fica em `http://localhost:8000/api`.
 
 No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão de browser.
@@ -69,6 +69,62 @@ Não há apagamento de conta pelo próprio membro: o membro pede à ASPEC por em
 - Não usa os limites do reenvio público (`/api/account-activations/resend`), que um atacante consegue esgotar: tem limites próprios, 30 por hora por administrador e 3 por hora por membro.
 - Cada envio fica no log (`user_id`, `admin_id`, `type`; sem o email).
 
+## Pôr a demo a funcionar do zero
+
+Guia para ter a plataforma completa (API + frontend) com os dados de demonstração num computador novo, sem contas do Stripe nem da Google. Os detalhes de cada passo estão nas secções seguintes.
+
+**Requisitos:** Git, PHP **8.4.1 ou mais recente** com as extensões `intl`, `gd`, `pdo_sqlite` (ou `pdo_mysql`), `fileinfo` e `mbstring`; Composer; Node.js com npm. Por omissão usa SQLite e não precisa de servidor de base de dados; para MySQL (ex.: Laragon), preencher `DB_CONNECTION=mysql` e os `DB_*` no `.env`.
+
+**1. Backend** (pasta `Aspec_Backend/`):
+
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+# só com SQLite: criar o ficheiro vazio da base de dados
+touch database/database.sqlite
+php artisan migrate:fresh --seed
+php artisan db:seed --class=DemoSeeder
+php artisan storage:link
+php artisan serve --host=localhost
+```
+
+- O `.env.example` já traz o que a demo precisa: `APP_URL=http://localhost:8000`, sessões na base de dados para o login do frontend (`SESSION_DRIVER`, `SESSION_DOMAIN`, `SANCTUM_STATEFUL_DOMAINS`), emails para o log (`MAIL_MAILER=log`, ficam em `storage/logs/laravel.log`) e geocodificação pelo OpenStreetMap.
+- `--host=localhost` evita um atraso de cerca de 0,2 s por pedido no Windows (o browser tenta primeiro o endereço IPv6 de `localhost`).
+- Opcional, noutro terminal: `php artisan queue:work`, para os emails e as tarefas em fila (anúncio de eventos, envio de faturas) correrem enquanto se usa a demo.
+
+**2. Frontend** (repositório `aspec-frontend-react`, pasta `Aspec_Frontend/`):
+
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
+
+- `VITE_API_URL=http://localhost:8000` já vem no `.env.example`. Sem `VITE_GOOGLE_MAPS_EMBED_KEY` a página do evento não mostra o mapa; o resto funciona (a chave de teste pede-se ao Mário em privado).
+- Abrir **`http://localhost:5173`**, nunca `127.0.0.1` nem outra porta: o login usa um cookie de sessão que só vale para `localhost:5173`.
+
+**3. Entrar:** todas as contas têm a password `Demo#2026` (tabela em "Dados de demonstração").
+
+| Para mostrar | Conta |
+|---|---|
+| Área pública, agenda e diretório limitado | sem login |
+| Área de membro: montra, portefólio, inscrições, série, cartões de oração, subscrição e faturas | `demo.membro@aspec.test` |
+| Backoffice: painel, aprovar candidaturas, utilizadores, eventos e cartões de oração | `demo.admin@aspec.test` |
+| Conta em carência (aviso de pagamento) | `demo.membro07@aspec.test` |
+
+**Antes de cada apresentação**, correr outra vez `php artisan db:seed --class=DemoSeeder`: as datas dos eventos, dos trials e da carência são relativas ao dia em que o seeder corre.
+
+**Sem contas externas** funciona tudo menos: ativar ou reativar uma conta e o portal de faturação (precisam das chaves de teste do Stripe, ver "Pagamentos"), o mapa (chave da Google) e o envio real de emails (ver "Email").
+
+| Problema | Causa provável |
+|---|---|
+| Imagens partidas no frontend | Falta `php artisan storage:link`, ou o `APP_URL` não é `http://localhost:8000` (depois de mudar: `php artisan config:clear`). Com `MEDIA_DISK=r2`: falta o `R2_MEDIA_URL`, o bucket `aspec-media` não tem o acesso público ligado, ou as imagens ainda estão só na máquina (voltar a correr o `DemoSeeder`) |
+| Login falha com 419 ou "Session store not set" | Frontend aberto noutro endereço que não `http://localhost:5173`, ou `SANCTUM_STATEFUL_DOMAINS` sem `localhost:5173` |
+| Erro 500 "no such table" | Falta `php artisan migrate:fresh --seed` |
+| Pedidos lentos (~2 s) | `php artisan serve` sem `--host=localhost` |
+| O seeder recusa correr | `APP_ENV=production` no `.env` (a demo nunca corre em produção) |
+
 ## Dados de demonstração
 
 **Só para desenvolvimento e demonstração.** O `DemoSeeder` recusa correr em produção e não entra no `migrate --seed`.
@@ -79,34 +135,99 @@ Na pasta `Aspec_Backend/`:
 2. `php artisan db:seed --class=DemoSeeder`
 3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
 
-Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 16 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
+Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 22 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
 
 - 11 presenciais futuros (um deles hoje), alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
+- 1 **série semanal** "Ciclo de Formação: Liderar Pequenas Equipas" em Leiria: 6 sessões a partir de depois de amanhã, cada uma com inscrição própria e prazo na véspera às 23:59 (como o backoffice cria uma série);
 - 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
 - 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
 
-Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, num online e nos 2 passados.
+Os eventos presenciais só têm o `place_id` da Google (sem coordenadas), como os que o backoffice grava.
+
+Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, nas sessões 2 a 6 da série (o que "nesta e nas seguintes" dá a partir da sessão 2; a sessão 1 fica livre para mostrar a inscrição ao vivo), num online e nos 2 passados. Na série, `demo.membro01` e `demo.membro04` estão em todas as sessões, `demo.membro09` só na 3.ª e `demo.membro10` nas duas primeiras. A série não tem cartões de oração nem é anunciada por email (o anúncio só sai para eventos únicos criados no backoffice).
+
+Avaliações: 17 entre perfis de demonstração, quase todas visíveis (para a média e o filtro por estrelas). A página de moderação começa com dois exemplos, que não contam para a média: uma avaliação **sinalizada**, com a sinalização automática do filtro de linguagem e a da empresa avaliada (motivo e comentário), e uma **oculta**, com a justificação do admin e a sinalização automática já resolvida.
 
 Cartões de oração em dois eventos:
 
 - a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
 - o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos (as datas avançam) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. As imagens são geradas com a extensão GD do PHP; sem ela, os perfis ficam sem imagens. Não chama o Stripe nem o InvoiceExpress: as contas Active não têm subscrição.
+ Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. Os logótipos são gerados com a extensão GD do PHP (sem ela, os perfis ficam sem logótipo). O portefólio usa 17 fotografias reais do Pexels guardadas em `database/seeders/demo/portfolio/` (origem e licença em `THIRD_PARTY_NOTICES.md`); ao correr outra vez, as imagens de demonstração antigas do portefólio são substituídas e as que o membro enviou ficam.
 
-Password de todas as contas: `Demo#2026`
+Password de todas as contas: `Demo#2026` (em local; noutros ambientes, a definida em `DEMO_PASSWORD`, ver [Deploy](#deploy-render--vercel--tidb))
 
 O seeder não cria o administrador técnico: para mostrar o estado "Isento" no backoffice, correr também `php artisan aspec:create-admin`.
 
-| Email | Papel | Estado |
-|---|---|---|
-| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento, aparece "Ativo") |
-| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) |
-| `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active |
-| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) |
-| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) |
-| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) |
-| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) |
+| Email | Papel | Estado | Subscrição |
+|---|---|---|---|
+| `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento) | Ativo |
+| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) | Ativo |
+| `demo.membro07@aspec.test` | Member | Active | Em carência |
+| restantes `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active | Em trial |
+| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) | Pendente |
+| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) | Por ativar |
+| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) | Subscrição caída |
+| `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) | Bloqueado |
+
+### Subscrições e faturas de demonstração
+
+O seeder cria subscrições e faturas **sem chamar o Stripe nem o InvoiceExpress**: os ids são falsos e têm `_demo_` (`sub_demo_…`, `si_demo_…`, `in_demo_…_1`), as contas demo não têm cliente Stripe (`users.stripe_id` vazio) e as datas são relativas ao momento em que corre, com o trial, a carência e a periodicidade da configuração (`SUBSCRIPTION_*`). As contas que já ativaram têm dados de faturação (empresa, morada do perfil e um NIF de demonstração válido). Os NIFs são fictícios mas têm dígito de controlo válido, por isso podem coincidir com empresas reais: não usar as contas demo para testar o driver `invoiceexpress` (usar contas criadas à mão).
+
+| Conta | Estado da subscrição | Situação | Faturas |
+|---|---|---|---|
+| `demo.membro` | Ativo | período atual começou há 5 dias; já pagou dois períodos | 2 |
+| `demo.admin` | Ativo | período atual começou há 20 dias (paga como os outros admins) | 1 |
+| `demo.membro07` | Em carência | renovação falhada há 2 dias; a carência (`SUBSCRIPTION_GRACE_DAYS`, 7 por omissão) termina daqui a 5 dias | 1 |
+| `demo.membro02` | Em trial | cancelamento agendado para o fim do trial (daqui a 10 dias) | 0 |
+| outros 9 `demo.membroNN` | Em trial | o trial termina entre 7 e 28 dias depois | 0 |
+| `demo.inativo.pagamento` | Subscrição caída | o trial terminou há 17 dias e a cobrança falhou | 0 |
+| `demo.bloqueado` | Bloqueado | bloqueado ainda em trial | 0 |
+| `demo.aprovado`, `demo.pendenteNN` | Por ativar / Pendente | sem subscrição nem faturação | — |
+
+As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `invoices/{user_id}/` no disco das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket privado `aspec-invoices` no R2), com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 2 quotas em atraso (1 em carência, 1 por pagar).
+
+Cada execução apaga e cria de novo as subscrições, as faturas e os PDFs com `_demo_` das contas demo; nunca toca noutras linhas nem noutras contas. Se uma conta demo tiver uma subscrição **real** em curso (ex.: o `demo.inativo.pagamento` reativado pelo Checkout num ensaio), fica sem dados de demonstração e o seeder avisa: cancelar essa subscrição no dashboard de teste do Stripe e voltar a correr o seeder.
+
+O que funciona com as subscrições de demonstração (o Stripe não as conhece):
+
+| Ação | Resultado |
+|---|---|
+| Ver a subscrição e as faturas, descarregar o PDF | funciona (só base de dados e disco privado) |
+| Portal de faturação | 404 "Não existe subscrição." (a conta não tem cliente Stripe) |
+| Cancelar / retomar a subscrição (membro) | 502 "Não foi possível contactar o serviço de pagamentos. Tente novamente."; nada é gravado nem enviado |
+| Admin bloqueia | funciona; o pedido de cancelamento ao Stripe falha sem erro (com chaves de teste a subscrição fica cancelada; sem chaves fica um aviso no log) |
+| Admin desbloqueia → link de reativação → Checkout | funciona com as chaves de teste (cria um cliente Stripe real) |
+| Admin "Enviar link de pagamento" e anonimizar | funcionam sem Stripe; as faturas de uma conta anonimizada ficam, e a execução seguinte cria a conta de novo |
+| `stripe listen` / webhooks | o Stripe nunca envia eventos de ids `_demo_`; os dados demo não mudam |
+
+Para mostrar o portal, cancelar e retomar, usar uma conta ativada pelo Checkout (guião "Ativação da conta (demo ponta a ponta)").
+
+**Voltar a correr o seeder antes de cada demonstração:** não há webhooks para as subscrições demo, por isso as datas não avançam sozinhas. Com o `schedule:work` ligado vários dias, o `subscriptions:end-grace` passa o `demo.membro07` a inativo quando a carência acaba, e os trials terminam sem cobrança.
+
+## Armazenamento de ficheiros (local ou Cloudflare R2)
+
+Os logótipos e o portefólio vão para o disco de media (`MEDIA_DISK`) e os PDFs das faturas demo para o disco das faturas (`INVOICES_DISK`). O código nunca escolhe o disco: mudar de sítio é só o `.env`.
+
+- **Por omissão nada muda:** `MEDIA_DISK=public` (imagens em `storage/app/public`, servidas por `public/storage`, precisa de `php artisan storage:link`) e `INVOICES_DISK=local` (`storage/app/private`, nunca servido).
+- **Cloudflare R2** (compatível com S3; 10 GB grátis, sem custo de saída), dois buckets:
+  - `aspec-media`: imagens, com leitura pública pelo subdomínio `r2.dev` (`R2_MEDIA_URL`), sem listagem do bucket. As imagens já são públicas no diretório; cada upload tem um nome novo, por isso têm cache de 1 ano.
+  - `aspec-invoices`: PDFs das faturas, **privado** e sem URL. O download continua só por `GET /api/invoices/{id}/pdf`, com o dono verificado.
+- **Passar uma máquina para o R2:**
+  1. Pedir ao Mário, em privado, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT` e `R2_MEDIA_URL` (nunca no `.env.example`, no git nem em mensagens públicas).
+  2. No `.env`: `MEDIA_DISK=r2`, `INVOICES_DISK=r2-invoices` e as quatro variáveis acima.
+  3. `php artisan config:clear`
+  4. `php artisan db:seed --class=DemoSeeder` (recria logótipos, portefólio e PDFs demo no R2; o que foi enviado à mão em local fica partido).
+  5. O `storage:link` deixa de ser preciso.
+- **Nunca `INVOICES_DISK=public`** (nem `r2`, nem o mesmo disco das imagens): os PDFs têm NIF e morada. O driver `demo` recusa emitir e servir faturas nesse caso e deixa um erro crítico no log.
+- **Pastas por perfil:** os ficheiros ficam em `logos/{profile_id}/` e `portfolios/{profile_id}/`. O id do perfil já é público (`/api/members/{id}`); o id do utilizador (usado em links assinados e rotas de admin) nunca aparece nos URLs das imagens.
+- **Depois do `git pull` que trouxe as pastas por perfil** (uma vez por máquina, com o `MEDIA_DISK` que a máquina usa):
+  1. `php artisan media:move-to-profile-folders --dry-run` (mostra o que vai mudar, sem mexer em nada);
+  2. `php artisan media:move-to-profile-folders` (move os ficheiros das pastas antigas `logos/{user_id}`/`portfolios/{user_id}` e atualiza `logo_path`/`image_path`);
+  3. correr outra vez: deve dizer `Movidos: 0`.
+  - Por ficheiro, o comando move primeiro e só depois atualiza a linha; se parar a meio, voltar a correr retoma (um ficheiro já movido só atualiza a linha). Um ficheiro que não existe em nenhuma das pastas fica com um aviso "Em falta" e a linha não muda; o comando termina com sucesso na mesma. Termina com erro só se o disco recusar mover um ficheiro (ex.: falha de rede do R2): basta voltar a correr.
+  - Quem só usa os dados demo pode, em vez disso, voltar a correr o `DemoSeeder` (também limpa as imagens demo das pastas antigas).
+- **Testes:** usam sempre os discos locais (o `phpunit.xml` força `MEDIA_DISK=public`, `INVOICES_DISK=local` e chaves R2 falsas com um endpoint numa porta local fechada), mesmo com o R2 no `.env`. Nenhum teste grava nos buckets.
 
 ## Email
 
@@ -125,12 +246,35 @@ Erros comuns: `535 Username and Password not accepted` → palavra-passe de apli
 
 **Limite:** o Gmail aceita cerca de 500 destinatários por dia. Chega para desenvolvimento e para a demonstração; em produção (anúncios de eventos e agenda semanal para todos os membros) é preciso um serviço de envio (ex. Brevo, Mailgun, Amazon SES). Só muda o bloco `MAIL_*` do `.env`.
 
+**Brevo (deploy):** no Render o SMTP de saída está bloqueado, por isso o deploy envia pela API HTTP do Brevo: `MAIL_MAILER=brevo` e `BREVO_API_KEY` (chave *Restricted*, só *Transactional email*, sem bloqueio por IP). O remetente continua a ser o Gmail do projeto, verificado no Brevo; como o domínio `gmail.com` não é nosso, os emails não levam DKIM/DMARC do remetente e o primeiro pode cair no spam. Plano grátis: 300 emails por dia.
+
+### Tema e logótipo
+
+Todos os emails (notificações e email da fatura demo) usam o tema Markdown `aspec` com as cores do frontend: `Aspec_Backend/resources/views/vendor/mail/html/themes/aspec.css`. Só estão publicados os ficheiros que mudam (`html/header.blade.php`, `html/message.blade.php` e o tema); o resto vem do Laravel. O link do cabeçalho vai para o frontend (`FRONTEND_URL`).
+
+O logótipo do cabeçalho é um PNG 600×200 com o fundo navy embutido, em `Aspec_Backend/resources/images/aspec-logo-email.png` (mostrado a 240×80). Os clientes de email só carregam imagens com URL público e absoluto, por isso o ficheiro é carregado **uma vez, à mão**, no painel da Cloudflare para o bucket público `aspec-media`, em `branding/logo-email.png`, e o URL completo vai para `MAIL_LOGO_URL` (ex. `<R2_MEDIA_URL>/branding/logo-email.png`). Com `MAIL_LOGO_URL` vazio (local, testes) o cabeçalho mostra o nome da app em texto.
+
+Pré-visualizar o tema sem enviar (abre `storage/app/preview-email.html` no browser):
+
+```
+php artisan tinker --execute="file_put_contents(storage_path('app/preview-email.html'), (new Illuminate\Notifications\Messages\MailMessage)->greeting('Olá!')->line('Teste do tema ASPEC.')->action('Botão', config('app.frontend_url'))->render());"
+```
+
 ### Emails de eventos
 
 Vão para as contas **Active com perfil de membro** (membros e admins com perfil) que não desligaram a preferência na página da conta (`GET|PUT /api/account/notification-preferences`; ligadas por omissão).
 
 - **Anúncio de novo evento:** sai quando um admin cria um evento **pontual** (as sessões de séries nunca são anunciadas). Um evento só é anunciado uma vez (`event_instances.announced_at`). Nunca inclui o link de um evento online.
 - **Agenda semanal:** comando `events:send-weekly-agenda`, agendado ao **sábado às 10:00 (hora de Lisboa)**. Cada membro recebe os eventos em que está inscrito com início até ao sábado seguinte às 23:59 e até 10 eventos pontuais com inscrições abertas. Quem não tem nada para mostrar não recebe email. No máximo uma agenda por semana a cada conta (`users.weekly_agenda_sent_at`).
+
+Nos dois, o local do evento aparece como o nome do espaço (ou "Ver no mapa") com link para o Google Maps, seguido do distrito; a morada não aparece em texto (está no mapa, na página do evento e no ficheiro do calendário). Os eventos online aparecem como "Online", sem mapa.
+
+- **Anúncio:** botão "Ver o evento" (página do evento no frontend) e botão "Adicionar ao calendário".
+- **Agenda semanal:** cada evento tem o título e, na linha seguinte, a data, a hora e o local, acabando num ícone pequeno de calendário (link para o ficheiro .ics). "A sua semana" acaba com o botão "Ver as minhas inscrições" (`/perfil/inscricoes`); "Inscrições abertas" acaba com o botão "Ver a agenda" (`/eventos`).
+
+**Ícone de calendário:** o PNG `Aspec_Backend/resources/images/calendar-icon.png` (48×48, mostrado a 24×24) é carregado uma vez à mão no bucket público do R2 em `branding/calendar-icon.png`, com o URL completo em `MAIL_CALENDAR_ICON_URL`. Vazio (local, testes): aparece um link de texto "Calendário" no mesmo sítio.
+
+O link "Adicionar ao calendário" descarrega o evento em ficheiro iCalendar: `GET /api/events/{id}/calendar.ics` (público, mesmas regras do detalhe do evento, limite `public-events`, sem sessão; horas em UTC; nunca leva o link da reunião online). O link usa o **`APP_URL`** (a API), não o `FRONTEND_URL`: confirmar que o `APP_URL` do servidor está certo, senão os links dos emails saem errados. No telemóvel, Outlook e Apple abrem o ficheiro diretamente; o Google Calendar na web obriga a descarregar e importar.
 
 Os dois passam pela fila, por isso é preciso `php artisan queue:work`. Em local, o agendamento só corre com `php artisan schedule:work` (em produção, um cron com `php artisan schedule:run` a cada minuto).
 
@@ -251,12 +395,12 @@ Calculado a partir das colunas da conta, sem coluna própria: `$user->subscripti
 
 Um cancelamento agendado para o fim do período não muda o estado (o membro mantém o acesso até lá).
 
-"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: contas da demo ou admins promovidos antes de os admins pagarem, que não têm subscrição). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
+"Ativo" não prova pagamento: é uma conta Active fora do trial e da carência (ex.: admins promovidos antes de os admins pagarem, que não têm subscrição; na demo, o `demo.membro` e o `demo.admin` têm uma subscrição de demonstração que o Stripe não conhece). Para saber se alguém paga, ver a subscrição (`GET /api/subscription` ou a tabela `subscriptions`).
 
 ### Faturas do membro
 
 - **Drivers (`INVOICING_DRIVER`):** `log` (por omissão; só regista a emissão no log, sem PDF), `demo` e `invoiceexpress`.
-- **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `storage/app/private/invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` (disco privado, nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
+- **Driver `demo` (apresentação):** cada pagamento gera um PDF "DOCUMENTO DE DEMONSTRAÇÃO — SEM VALIDADE FISCAL" com os dados de faturação do membro, guardado em `invoices/{user_id}/DEMO-AAAA-XXXXXXXX.pdf` no disco privado das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket `aspec-invoices` no R2; nunca em `public/storage`), e envia-o por email em anexo. Precisa de `php artisan queue:work` a correr.
 - **Email das faturas:** `MAIL_MAILER=log` é só para desenvolvimento local: o email da fatura (com o PDF, que tem NIF e morada) fica escrito no `storage/logs/laravel.log`, por isso limpar esse ficheiro depois de testar. Na apresentação usar um SMTP de teste (Mailpit, Mailtrap ou uma conta de email com password de aplicação).
 - **Endpoints (membro Active):** `GET /api/invoices` (10 por página, mais recentes primeiro; `status` `issued` ou `processing`; `pdf_available` diz se há PDF) e `GET /api/invoices/{id}/pdf` (descarrega o PDF; 120 por minuto e 2000 por hora). Faturas e PDFs nunca são apagados, nem na anonimização da conta (obrigação fiscal de 10 anos).
 - **Teste manual:** `INVOICING_DRIVER=demo` e `MAIL_MAILER=log` no `.env` + `php artisan config:clear`; ativar um membro (cartão `4242…`) → fatura `issued` com número `DEMO-…`; abrir o PDF (acentos e € corretos); no Postman, "Listar faturas" e "Descarregar PDF da fatura" com "Send and Download".
@@ -294,14 +438,14 @@ Definidos em `AppServiceProvider::configureRateLimiting()`. Ao exceder um limite
 | Cancelar / retomar a subscrição | 120/min e 10/dia por utilizador (partilhado pelas duas) | Ação rara que chama o Stripe e envia um email: sem limite diário, alternar as duas esgotava a quota de email da plataforma (o Gmail de demonstração tem ~500 destinatários/dia; um serviço de email de produção tem mais, mas o envio em massa continuaria a ser abuso) |
 | Diretório e eventos públicos | 120/min por utilizador ou IP | Visitantes por IP travam a recolha automática; membros pelo seu id não se bloqueiam atrás do mesmo IP (escritório, evento) |
 | Registo | 20/min por IP | Um grupo pode inscrever-se da mesma rede num evento; bots continuam travados |
-| Login e token | 5/min por email + IP | Valor habitual do Laravel; OWASP Authentication Cheat Sheet |
+| Login e token | 5/min por email + IP e 20 em 15 min por email | Valor habitual do Laravel; o limite por email não depende do IP, que atrás de um proxy pode ser forjado (OWASP Authentication Cheat Sheet: limite por conta e por IP) |
 | Falhas da password atual | 5 em 15 min por utilizador | NIST SP 800-63B e OWASP (limitar tentativas falhadas) |
-| Recuperar / redefinir password | 5/min (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
+| Recuperar / redefinir password | 5/min por email + IP e 20 em 15 min por email (+ 20/hora por IP no pedido de recuperação) | OWASP Forgot Password Cheat Sheet; evita envio massivo de emails |
 | Ativação; reenvio do link | 20/min por IP; 3 em 15 min por email + IP, 10/hora por IP, 5/dia por email | Cada pedido chama o Stripe ou envia um email |
 | Admin: anonimizar, links de pagamento, criar eventos, inscritos, geocodificação, distribuir cartões de oração | 5/hora; 30/hora + 3/hora por membro; 20/hora; 30/min; 30/min; 10/min | Proporcional ao risco: ação irreversível, emails, dados pessoais em lote, fornecedor externo |
 | Webhook do Stripe | sem limite | Autenticado pela assinatura; o Stripe envia em rajada e repete após erro |
 
-Em produção atrás de um proxy ou balanceador é preciso configurar os proxies de confiança (`$middleware->trustProxies(at: [...])` com os IPs do proxy), senão todos os visitantes contam com o IP do proxy. Nunca usar `at: '*'` com a API exposta diretamente: o header `X-Forwarded-For` passaria a ser falsificável e cada pedido teria um contador novo, também no login.
+**Atrás de um proxy** (ex. Render, ver [Deploy](#deploy-render--vercel--tidb)) é preciso `TRUSTED_PROXIES`, senão todos os visitantes contam com o IP do proxy. Com `TRUSTED_PROXIES=*` o Laravel aceita o `X-Forwarded-For`, que um pedido direto à API pode forjar: os limites só por IP (registo, diretório, geral) ficam contornáveis, e por isso o login, o token e a recuperação de password têm também um limite só por email. Vazio (local, testes) = os cabeçalhos `X-Forwarded-*` são ignorados.
 
 ## Mapas (Google)
 
@@ -309,6 +453,53 @@ A localização dos eventos está a passar do OpenStreetMap para o Google Maps (
 
 - **Projeto Google Cloud:** `aspec-plataforma`, na conta do projeto (`geral.teste.aspec@gmail.com`), em período experimental (crédito de teste, sem cobranças no cartão) e com alerta de orçamento de 1 €. As chaves são pedidas ao Mário e passadas em privado; nunca no `.env.example`, no git nem em mensagens públicas.
 - **Chave do backend** (`GOOGLE_MAPS_GEOCODING_KEY` no `.env` do backend): restrita só à **Geocoding API**. Para a usar: `GEOCODING_DRIVER=google`, depois `php artisan config:clear`.
-- **Chave do frontend** (`VITE_GOOGLE_MAPS_EMBED_KEY` no `.env` do frontend): restrita só à **Maps Embed API** e ao site `http://localhost:5173/*`. Abrir sempre o frontend em `localhost`, não em 127.0.0.1.
+- **Chave do frontend** (`VITE_GOOGLE_MAPS_EMBED_KEY` no `.env` do frontend): restrita só à **Maps Embed API** e aos sites `http://localhost:5173/*` e `https://aspec-plataforma.vercel.app/*` (deploy). Abrir sempre o frontend em `localhost`, não em 127.0.0.1.
 - **Termos do Google (confirmados a 27/10/2026):** a Geocoding API tem 10 000 pedidos grátis por mês; **só se guarda o `place_id`** (a latitude e a longitude só podem ficar em cache 30 dias); os resultados só podem ser mostrados em **mapas do Google** (por isso o Leaflet/OpenStreetMap sai do frontend); a Maps Embed API é gratuita e sem limite.
 - **Erros comuns:** `REQUEST_DENIED` → chave errada, API não ativada ou restrição de API errada; mapa em branco com `RefererNotAllowedMapError` → o frontend não está a correr em `http://localhost:5173`.
+
+## Deploy (Render + Vercel + TiDB)
+
+Plataforma online e gratuita, sem domínio próprio, para demonstração e avaliação: https://aspec-plataforma.vercel.app. **Não é produção**: Stripe em modo de teste, faturas com o driver `demo`, dados de demonstração.
+
+```
+browser → aspec-plataforma.vercel.app (React, Vercel)
+            ├─ /api/*, /sanctum/* → rewrite → aspec-api.onrender.com (Laravel, Docker, Render Free)
+            └─ resto → index.html (React Router)
+Render → TiDB Cloud Starter (MySQL, Frankfurt, TLS) · Cloudflare R2 (imagens e faturas) · Brevo (email) · Stripe (teste)
+```
+
+**Porquê o rewrite no Vercel:** o login usa o cookie de sessão do Sanctum e o cookie `XSRF-TOKEN`. Com o frontend em `vercel.app` e a API em `onrender.com` (domínios diferentes, ambos na Public Suffix List), o frontend não consegue ler o `XSRF-TOKEN` da API e os pedidos com CSRF davam 419. Com o rewrite, para o browser é tudo o mesmo site e a autenticação não muda. Configuração no `vercel.json` do repositório do frontend.
+
+### Ficheiros (pasta `Aspec_Backend/`)
+- `Dockerfile`: PHP 8.5 + Apache, extensões `intl`, `bcmath`, `gd`, `pdo_mysql`, `zip`; `composer install --no-dev` e `composer check-platform-reqs`.
+- `docker/start.sh`: no arranque corre `migrate --force` e `optimize`, põe `queue:work` e `schedule:work` a correr em segundo plano (o Render Free não tem worker nem cron) e arranca o Apache.
+- `docker/apache/000-default.conf`: `DocumentRoot public/`, porta `${PORT}` do Render, 6 processos (512 MB); o log não grava a query string (links de ativação assinados).
+- `docker/php.ini`: `upload_max_filesize` 6M (imagens até 5 MB).
+- `.dockerignore`: a imagem não leva `.env*`, `vendor/`, `tests/`, nem `storage/app/` (PDFs de faturas com NIF).
+
+### Variáveis
+- **Render** (Environment): as do `.env.example`, com `APP_ENV=staging`, `APP_DEBUG=false`, `APP_URL=https://aspec-api.onrender.com`, `FRONTEND_URL=https://aspec-plataforma.vercel.app`, `SANCTUM_STATEFUL_DOMAINS=aspec-plataforma.vercel.app`, `SESSION_DOMAIN=null`, `SESSION_SECURE_COOKIE=true`, `TRUSTED_PROXIES=*`, `LOG_CHANNEL=stderr`, base de dados da TiDB (`DB_PORT=4000`, `MYSQL_ATTR_SSL_CA=/etc/ssl/certs/ca-certificates.crt`), `MAIL_MAILER=brevo` + `BREVO_API_KEY`, `MEDIA_DISK=r2`, `INVOICES_DISK=r2-invoices` + chaves do R2, `INVOICING_DRIVER=demo`, chaves de teste do Stripe com o `STRIPE_WEBHOOK_SECRET` **do endpoint do Render** e `STRIPE_BILLING_PORTAL_CONFIGURATION` (obrigatória fora de local/testing), `GEOCODING_DRIVER=google`. A `APP_KEY` é a mesma de quem correu o DemoSeeder (os cartões de oração de demonstração ficam encriptados com ela).
+- **Vercel**: Root Directory `Aspec_Frontend`, `VITE_API_URL=https://aspec-plataforma.vercel.app` (o próprio site, para os pedidos passarem pelo rewrite) e `VITE_GOOGLE_MAPS_EMBED_KEY`.
+- **Stripe** (modo de teste): endpoint `https://aspec-api.onrender.com/api/stripe/webhook` com os eventos do `stripe listen` (ver [Pagamentos](#pagamentos-stripe-modo-de-teste)); o `stripe listen` local continua a funcionar em paralelo.
+- **Google Cloud**: site `https://aspec-plataforma.vercel.app/*` na chave do Maps Embed; quota diária baixa na chave do Geocoding (o Render não tem IP fixo, por isso a chave não pode ser restrita por IP).
+
+### Base de dados e dados de demonstração
+O Render Free não tem consola, por isso a base de dados é preparada a partir do PC, com um `Aspec_Backend/.env.tidb`: cópia do `.env` com `APP_ENV=staging`, os dados da TiDB, `MYSQL_ATTR_SSL_CA` com o `cacert.pem` local (ex. `C:\laragon\etc\ssl\cacert.pem`) e `DEMO_PASSWORD`. O ficheiro está ignorado pelo git (`.env.*`).
+
+```
+php artisan migrate --env=tidb
+php artisan db:seed --env=tidb
+php artisan db:seed --class=DemoSeeder --env=tidb
+```
+
+Fora de local/testing o DemoSeeder **recusa correr** sem `DEMO_PASSWORD` ou com `Demo#2026` (a password por omissão está no repositório público) e não a imprime no fim. As migrações novas também correm sozinhas no arranque do Render.
+
+### Atualizar o deploy
+O Render e o Vercel fazem deploy a cada push no branch de produção (`main`). Atualizar a demonstração = PR `dev → main` nos dois repositórios.
+
+### Limitações (plano grátis)
+- O Render adormece após 15 min sem pedidos e demora até ~1 min a acordar; o rewrite do Vercel desiste aos 30 s, por isso o primeiro pedido pode falhar e o seguinte funciona. Antes de uma demonstração, abrir https://aspec-api.onrender.com/up.
+- Enquanto dorme, a fila e o scheduler param: tarefas agendadas nesse intervalo perdem-se (ex. agenda semanal de sábado; o fim da carência volta a correr na hora seguinte).
+- Limites só por IP contornáveis com `X-Forwarded-For` forjado num pedido direto ao Render (ver [Limites de pedidos](#limites-de-pedidos)).
+- Brevo: 300 emails por dia; remetente Gmail sem DKIM próprio (spam possível).
+- Os deploys de pré-visualização do Vercel têm outro endereço: aí o login (Sanctum) e o mapa (restrição da chave) não funcionam. Só o endereço de produção.

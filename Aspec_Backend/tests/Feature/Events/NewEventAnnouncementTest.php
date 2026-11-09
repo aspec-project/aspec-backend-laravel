@@ -11,14 +11,18 @@ use App\Models\Location;
 use App\Models\MemberProfile;
 use App\Models\User;
 use App\Notifications\NewEventAnnouncementNotification;
+use DOMDocument;
+use DOMXPath;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Markdown;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\AssertsEventEmailLinks;
 use Tests\TestCase;
 
 /**
@@ -28,7 +32,7 @@ use Tests\TestCase;
  */
 class NewEventAnnouncementTest extends TestCase
 {
-    use RefreshDatabase;
+    use AssertsEventEmailLinks, RefreshDatabase;
 
     private const URL = '/api/admin/events';
 
@@ -447,5 +451,220 @@ class NewEventAnnouncementTest extends TestCase
         $this->assertFalse($notification->shouldSend($blocked->fresh(), 'mail'));
         $this->assertFalse($notification->shouldSend($optedOut->fresh(), 'mail'));
         $this->assertTrue($notification->shouldSend($stillActive->fresh(), 'mail'));
+    }
+
+    private function porto(): string
+    {
+        return Location::query()->where('name', 'Porto')->firstOrFail()->id;
+    }
+
+    private function announcementHtml(EventInstance $event, User $member): string
+    {
+        return $this->renderedMail(new NewEventAnnouncementNotification($event->fresh()), $member);
+    }
+
+    #[Test]
+    public function announcement_has_the_event_page_button_and_an_add_to_calendar_button(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent();
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertNotNull($this->anchorTagFor($html, self::FRONTEND.'/eventos/'.$event->id));
+        $this->assertStringContainsString('Ver o evento', $html);
+        $this->assertCalendarButton($html, $event->id);
+    }
+
+    #[Test]
+    public function calendar_link_uses_the_api_url_and_not_the_frontend(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent();
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertStringStartsWith('http', $this->calendarIcsUrl($event->id));
+        $this->assertStringContainsString(e($this->calendarIcsUrl($event->id)), $html);
+        $this->assertStringNotContainsString(self::FRONTEND.'/api/events/', $html);
+    }
+
+    #[Test]
+    public function announcement_links_the_venue_to_google_maps_with_the_district_and_hides_the_address(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent([
+            'location_id' => $this->porto(),
+            'venue_name' => 'Salão de eventos',
+            'address' => 'Rua de Santa Catarina 100',
+            'place_id' => 'ChIJ_abc-123',
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+        $maps = 'https://www.google.com/maps/search/?api=1&query='.rawurlencode('Rua de Santa Catarina 100')
+            .'&query_place_id=ChIJ_abc-123';
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertNotNull($this->anchorTagFor($html, $maps));
+        $this->assertStringContainsString('Salão de eventos</a>, Porto', $html);
+        $this->assertStringNotContainsString('Rua de Santa Catarina 100', $html);
+    }
+
+    #[Test]
+    public function announcement_without_venue_name_links_ver_no_mapa(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent([
+            'location_id' => $this->porto(),
+            'venue_name' => null,
+            'latitude' => 41.15,
+            'longitude' => -8.61,
+        ]);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertNotNull($this->anchorTagFor($html, 'https://www.google.com/maps/search/?api=1&query=41.15%2C-8.61'));
+        $this->assertStringContainsString('Ver no mapa</a>, Porto', $html);
+    }
+
+    #[Test]
+    public function online_announcement_has_no_map_link(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent([
+            'is_online' => true,
+            'online_url' => 'https://meet.example.com/segredo-123',
+            'address' => null,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertStringContainsString('Online', $html);
+        $this->assertStringNotContainsString('google.com/maps', $html);
+    }
+
+    #[Test]
+    public function markdown_in_the_venue_name_does_not_create_an_attacker_link_in_the_announcement(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent(['venue_name' => 'Sala](https://mau.pt) *x*']);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertStringNotContainsString('href="https://mau.pt', $html);
+        $this->assertSame(1, substr_count($html, 'google.com/maps/search'));
+    }
+
+    #[Test]
+    public function markdown_in_the_event_name_does_not_create_a_link_in_the_announcement(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent(['name' => 'Jantar [Confirme aqui](https://phish.pt)']);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertStringNotContainsString('href="https://phish.pt', $html);
+        $this->assertStringContainsString('>Jantar [Confirme aqui](https://phish.pt)</strong>', $html);
+    }
+
+    #[Test]
+    public function angle_brackets_in_the_event_and_venue_names_are_shown_as_text(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent(['name' => 'Jantar <b>VIP</b>', 'venue_name' => 'Sala A<B>']);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertStringNotContainsString('<b>', $html);
+        $this->assertStringNotContainsString('<B>', $html);
+        $this->assertStringContainsString('Jantar &lt;b&gt;VIP&lt;/b&gt;', $html);
+        $this->assertStringContainsString('Sala A&lt;B&gt;</a>', $html);
+        $this->assertStringNotContainsString('\&lt;', $html);
+    }
+
+    private function announcementText(EventInstance $event, User $member): string
+    {
+        $message = (new NewEventAnnouncementNotification($event->fresh()))->toMail($member);
+
+        return (string) app(Markdown::class)->renderText($message->markdown, $message->data());
+    }
+
+    /**
+     * Nome da tag do antepassado comum mais próximo dos dois links (para saber se estão na mesma linha da tabela).
+     */
+    private function commonAncestorTag(string $html, string $firstUrl, string $secondUrl): ?string
+    {
+        $dom = new DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML('<?xml encoding="utf-8"?>'.$html);
+        libxml_clear_errors();
+        $xpath = new DOMXPath($dom);
+
+        $first = $xpath->query('//a[@href="'.$firstUrl.'"]')->item(0);
+        $second = $xpath->query('//a[@href="'.$secondUrl.'"]')->item(0);
+        if ($first === null || $second === null) {
+            return null;
+        }
+
+        $ancestors = [];
+        for ($node = $first; $node !== null; $node = $node->parentNode) {
+            $ancestors[] = $node;
+        }
+        for ($node = $second; $node !== null; $node = $node->parentNode) {
+            if (in_array($node, $ancestors, true)) {
+                return strtolower($node->nodeName);
+            }
+        }
+
+        return null;
+    }
+
+    #[Test]
+    public function intro_and_event_name_are_on_separate_lines(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent(['name' => 'Almoço de Empresários']);
+
+        $html = $this->announcementHtml($event, $member);
+
+        $intro = strpos($html, 'A ASPEC tem um novo evento:');
+        $name = strpos($html, '>Almoço de Empresários</strong>');
+        $this->assertNotFalse($intro);
+        $this->assertNotFalse($name);
+        $this->assertGreaterThan($intro, $name);
+        $this->assertMatchesRegularExpression('/<br\s*\/?>|<\/p>/i', substr($html, $intro, $name - $intro));
+
+        $afterName = substr($html, $name + strlen('>Almoço de Empresários</strong>'));
+        $this->assertMatchesRegularExpression('/^\s*(<br\s*\/?>|<\/p>)/i', $afterName);
+    }
+
+    #[Test]
+    public function event_page_and_calendar_buttons_are_side_by_side_in_one_table_row(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent();
+
+        $html = $this->announcementHtml($event, $member);
+
+        $this->assertSame('tr', $this->commonAncestorTag(
+            $html,
+            self::FRONTEND.'/eventos/'.$event->id,
+            $this->calendarIcsUrl($event->id)
+        ));
+    }
+
+    #[Test]
+    public function text_version_lists_both_links_in_full(): void
+    {
+        $member = $this->memberWithProfile();
+        $event = $this->oneOffEvent();
+
+        $text = $this->announcementText($event, $member);
+
+        $this->assertStringContainsString('Ver o evento: '.self::FRONTEND.'/eventos/'.$event->id, $text);
+        $this->assertStringContainsString('Adicionar ao calendário: '.$this->calendarIcsUrl($event->id), $text);
     }
 }

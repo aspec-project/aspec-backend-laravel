@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Review extends Model
 {
@@ -18,6 +19,7 @@ class Review extends Model
         'rating',
         'comment',
         'status_id',
+        'hidden_reason',
     ];
 
     public function reviewerProfile(): BelongsTo
@@ -33,6 +35,11 @@ class Review extends Model
     public function status(): BelongsTo
     {
         return $this->belongsTo(ReviewStatus::class, 'status_id');
+    }
+
+    public function reports(): HasMany
+    {
+        return $this->hasMany(ReviewReport::class);
     }
 
     /**

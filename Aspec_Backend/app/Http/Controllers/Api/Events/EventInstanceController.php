@@ -19,6 +19,7 @@ class EventInstanceController extends Controller
         $filters = $request->validate([
             'category_id' => ['sometimes', 'uuid', 'exists:event_categories,id'],
             'location_id' => ['sometimes', 'uuid', 'exists:locations,id'],
+            'series_id' => ['sometimes', 'uuid', 'exists:event_series,id'],
             'page' => ['nullable', 'integer', 'between:1,10000'],
             'per_page' => ['sometimes', 'nullable', 'integer', 'between:1,100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
@@ -36,18 +37,28 @@ class EventInstanceController extends Controller
             ->when(
                 $viewerId !== null,
                 fn (Builder $query) => $query->withExists([
-                    'registrations as is_registered' => fn (Builder $registrationQuery) => $registrationQuery->where('user_id', $viewerId),
+                    'registrations as is_registered' => fn (Builder $registrationQuery) => $registrationQuery
+                        ->where('user_id', $viewerId),
                 ])
             )
-            ->where(function (Builder $query) use ($today, $currentTime) {
-                $query
-                    ->where('event_date', '>', $today)
-                    ->orWhere(function (Builder $query) use ($today, $currentTime) {
-                        $query
-                            ->where('event_date', $today)
-                            ->where('event_start_time', '>=', $currentTime);
-                    });
-            })
+            ->when(
+                // Mostrar apenas eventos futuros quando não é indicado o parâmetro series_id
+                ! isset($filters['series_id']),
+                fn (Builder $query) => $query->where(function (Builder $query) use ($today, $currentTime) {
+                    $query
+                        ->where('event_date', '>', $today)
+                        ->orWhere(function (Builder $query) use ($today, $currentTime) {
+                            $query
+                                ->where('event_date', $today)
+                                ->where('event_start_time', '>=', $currentTime);
+                        });
+                })
+            )
+            // Filtrar pelo series_id quando este é indicado
+            ->when(
+                isset($filters['series_id']),
+                fn (Builder $query) => $query->where('series_id', $filters['series_id'])
+            )
             ->when(
                 isset($filters['category_id']),
                 fn (Builder $query) => $query->where('category_id', $filters['category_id'])
@@ -76,6 +87,7 @@ class EventInstanceController extends Controller
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->paginate((int) ($filters['per_page'] ?? 9));
+
         if ($viewerId === null) {
             $events->getCollection()->each(
                 fn (EventInstance $event) => $event->setAttribute('is_registered', false)
