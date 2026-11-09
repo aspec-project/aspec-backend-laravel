@@ -6,17 +6,17 @@ use App\Models\EventCategory;
 use Illuminate\Database\Seeder;
 
 /**
- * Categorias de eventos reais da ASPEC, cada uma com uma cor distinta (#RRGGBB, em maiúsculas).
+ * Categorias de eventos reais da ASPEC, cada uma com uma cor distinta da paleta (config/event_categories.php).
  */
 class EventCategorySeeder extends Seeder
 {
     /** @var array<string, string> Nome da categoria => cor. */
     private const CATEGORIES = [
-        'Pequeno-almoço' => '#B84A00',
-        'Almoço' => '#2E7D32',
-        'Jantar' => '#6A1B9A',
-        'Workshop' => '#C62828',
-        'Formação' => '#1565C0',
+        'Pequeno-almoço' => '#94591A',
+        'Almoço' => '#0E784F',
+        'Jantar' => '#763B82',
+        'Workshop' => '#1C747E',
+        'Formação' => '#1E449A',
     ];
 
     /**
