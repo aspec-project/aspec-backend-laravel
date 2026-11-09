@@ -31,7 +31,7 @@ class EventInstanceRequest extends FormRequest
             'description' => ['required', 'string', 'max:5000'],
             'is_online' => ['required', 'boolean'],
             'online_url' => $isOnline
-                ? ['required', 'url', 'max:255']
+                ? ['required', 'url:http,https', 'max:255']
                 : ['prohibited'],
             'address' => $isOnline
                 ? ['prohibited']
