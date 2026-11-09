@@ -135,6 +135,35 @@ class AuthControllerTest extends TestCase
     }
 
     #[Test]
+    public function registration_rejects_email_with_parentheses(): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'a(x)@b.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'www.example.com',
+            'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000 100',
+            'city' => 'Lisboa',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['email']);
+    }
+
+    #[Test]
     public function registration_requires_commercial_email(): void
     {
         $sector = Sector::firstOrFail();

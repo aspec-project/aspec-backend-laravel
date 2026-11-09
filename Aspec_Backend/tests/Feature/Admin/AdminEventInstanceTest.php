@@ -925,6 +925,52 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
+    public function admin_can_create_an_online_event_with_http_url(): void
+    {
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'http://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        $response = $this->postJson(self::URL, $payload)
+            ->assertCreated();
+
+        $this->assertDatabaseHas('event_instances', [
+            'id' => $response->json('data.id'),
+            'is_online' => true,
+            'online_url' => 'http://meet.example.com/event',
+            'address' => null,
+            'latitude' => null,
+            'longitude' => null,
+        ]);
+    }
+
+    #[Test]
+    public function online_event_rejects_non_http_online_url_schemes(): void
+    {
+        $this->actingAsAdmin();
+
+        $event = EventInstance::factory()->create();
+        $payload = $this->validPayload();
+        $payload['is_online'] = true;
+        $payload['online_url'] = 'ftp://meet.example.com/event';
+
+        unset($payload['address'], $payload['latitude'], $payload['longitude']);
+
+        foreach ([
+            ['method' => 'post', 'url' => self::URL],
+            ['method' => 'put', 'url' => self::URL."/{$event->id}"],
+        ] as $request) {
+            $this->{$request['method'].'Json'}($request['url'], $payload)
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['online_url']);
+        }
+    }
+
+    #[Test]
     public function admin_can_delete_an_event(): void
     {
         $this->actingAsAdmin();
