@@ -64,6 +64,8 @@ class UpdateMemberProfileRequest extends FormRequest
     /**
      * Regras da atualização parcial do perfil: campo ausente fica inalterado,
      * campos obrigatórios usam sometimes|required e mudar o email exige a password atual.
+     * O email usa email:filter só quando o valor difere do guardado, para uma conta antiga fora
+     * desta regra não ficar impedida de gravar.
      * A morada é obrigatória por decisão da equipa (6/10), mas a coluna continua nullable:
      * há linhas antigas sem morada e o anonymizeAndDelete() limpa-a. O mesmo vale para o email e o
      * telefone comerciais (obrigatórios só quando enviados, para um perfil antigo sem eles poder
@@ -84,7 +86,7 @@ class UpdateMemberProfileRequest extends FormRequest
             'email' => [
                 'sometimes',
                 'required',
-                'email',
+                Rule::when($this->input('email') !== $this->user()->email, 'email:filter'),
                 'max:255',
                 Rule::unique('users')->ignore($this->user()->id),
             ],

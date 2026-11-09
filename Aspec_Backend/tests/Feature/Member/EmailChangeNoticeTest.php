@@ -266,15 +266,15 @@ class EmailChangeNoticeTest extends TestCase
     }
 
     #[Test]
-    public function kelvin_sign_is_a_different_mailbox_and_sends_the_notice(): void
+    public function stored_kelvin_sign_is_a_different_mailbox_and_sends_the_notice(): void
     {
-        $user = $this->member('kate@x.pt');
         $lookalike = "\u{212A}ate@x.pt";
+        $user = $this->member($lookalike);
 
-        $this->changeEmail($user, $lookalike);
+        $this->changeEmail($user, 'kate@x.pt');
 
-        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $lookalike]);
-        $this->assertNoticeSentTo('kate@x.pt');
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'kate@x.pt']);
+        $this->assertNoticeSentTo($lookalike);
         Notification::assertSentOnDemandTimes(self::NOTICE, 1);
     }
 
@@ -543,6 +543,7 @@ class EmailChangeNoticeTest extends TestCase
     /**
      * Muda o email pelo endpoint, para provar que o endereço passa a validação real do pedido,
      * e devolve o HTML do aviso que saiu, pelo mesmo caminho que o email percorre em produção.
+     * Só serve para endereços que o pedido aceita; os recusados testam-se com renderNotice().
      */
     private function renderNoticeSentFor(string $newEmail): string
     {
@@ -554,7 +555,7 @@ class EmailChangeNoticeTest extends TestCase
     #[Test]
     public function markdown_link_in_the_new_email_does_not_become_a_link(): void
     {
-        $html = $this->renderNoticeSentFor('a@b.[Clique aqui para recuperar a sua conta ASPEC](https://134744072/)');
+        $html = $this->renderNotice('a@b.[Clique aqui para recuperar a sua conta ASPEC](https://134744072/)');
 
         $this->assertStringNotContainsString('<a ', $this->bodyCell($html));
         $this->assertStringNotContainsString('134744072', $html);
@@ -568,9 +569,8 @@ class EmailChangeNoticeTest extends TestCase
     public static function topLevelDomains(): array
     {
         return [
-            'hostil: link Markdown' => ['a@b.[Clique aqui](https://134744072/)', 'a•••@b•••'],
             'hostil: etiqueta longa' => ['a@b.pt-'.str_repeat('x', 57), 'a•••@b•••'],
-            'hostil: ponto de largura total' => ['a@evil．com', 'a•••@e•••'],
+            'hostil: Markdown entre aspas' => ['"[Clique](https://x/)"@b.com', '"[•••@b•••.com'],
             'normal: .com' => ['a@b.com', 'a•••@b•••.com'],
             'normal: .pt' => ['a@b.pt', 'a•••@b•••.pt'],
             'normal: .museum' => ['a@b.museum', 'a•••@b•••.museum'],
@@ -582,6 +582,27 @@ class EmailChangeNoticeTest extends TestCase
     public function top_level_domain_is_shown_only_when_it_looks_like_one(string $email, string $expected): void
     {
         $html = $this->renderNoticeSentFor($email);
+
+        $this->assertStringContainsString("Novo email: {$expected}. O endereço anterior", $this->visibleText($html));
+        $this->assertStringNotContainsString('<a ', $this->bodyCell($html));
+    }
+
+    /**
+     * @return array<string, array{string, string}>
+     */
+    public static function addressesTheRequestRefuses(): array
+    {
+        return [
+            'link Markdown' => ['a@b.[Clique aqui](https://134744072/)', 'a•••@b•••'],
+            'ponto de largura total' => ['a@evil．com', 'a•••@e•••'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('addressesTheRequestRefuses')]
+    public function notification_masks_addresses_the_request_refuses(string $email, string $expected): void
+    {
+        $html = $this->renderNotice($email);
 
         $this->assertStringContainsString("Novo email: {$expected}. O endereço anterior", $this->visibleText($html));
         $this->assertStringNotContainsString('<a ', $this->bodyCell($html));

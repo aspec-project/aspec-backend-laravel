@@ -7,10 +7,13 @@ use App\Models\MemberProfile;
 use App\Models\Role;
 use App\Models\SocialPlatform;
 use App\Models\User;
+use App\Notifications\AccountEmailChangedNotification;
 use App\Rules\InternationalPhone;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Notifications\AnonymousNotifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
@@ -1716,5 +1719,234 @@ class MemberProfileUpdateTest extends TestCase
             ->assertJsonValidationErrors([$errorKey]);
 
         $this->assertDatabaseMissing('social_links', ['profile_id' => $user->memberProfile->id]);
+    }
+
+    private const INVALID_EMAIL_MESSAGE = 'O campo email tem de ser um endereço de email válido.';
+
+    private const STORED_EMAIL = 'guardado@example.com';
+
+    /**
+     * Cria o membro diretamente na base de dados, porque o PUT recusa estes endereços: é assim
+     * que uma conta antiga fora da regra existe.
+     */
+    private function memberWithEmail(string $email): User
+    {
+        $user = User::factory()->create(['email' => $email]);
+        MemberProfile::factory()->create(['user_id' => $user->id]);
+
+        return $user;
+    }
+
+    private function insertOtherSession(string $userId): string
+    {
+        $id = Str::random(40);
+
+        DB::table('sessions')->insert([
+            'id' => $id,
+            'user_id' => $userId,
+            'ip_address' => '127.0.0.1',
+            'user_agent' => 'PHPUnit',
+            'payload' => base64_encode('a:0:{}'),
+            'last_activity' => now()->getTimestamp(),
+        ]);
+
+        return $id;
+    }
+
+    private function assertNoEmailChangeNotice(): void
+    {
+        Notification::assertSentOnDemandTimes(AccountEmailChangedNotification::class, 0);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function addressesRefusedOnChange(): array
+    {
+        return [
+            'link Markdown' => ['a@b.[Clique aqui](https://134744072/)'],
+            'comentário na parte local' => ['a(x)@b.com'],
+            'domínio sem ponto' => ['a@localhost'],
+            'K de Kelvin' => ["\u{212A}ate@x.pt"],
+            'acento na parte local' => ['joão@x.pt'],
+            'acento no domínio' => ['a@joão.pt'],
+            'ponto de largura total' => ['a@evil．com'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('addressesRefusedOnChange')]
+    public function changing_to_an_address_outside_the_rule_is_rejected_and_changes_nothing(string $email): void
+    {
+        Notification::fake();
+        $user = $this->memberWithEmail(self::STORED_EMAIL);
+        $otherSession = $this->insertOtherSession($user->id);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => $email, 'current_password' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Os dados enviados são inválidos.')
+            ->assertJsonPath('errors.email.0', self::INVALID_EMAIL_MESSAGE)
+            ->assertJsonMissingValidationErrors(['current_password']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => self::STORED_EMAIL]);
+        $this->assertDatabaseHas('sessions', ['id' => $otherSession, 'user_id' => $user->id]);
+        $this->assertNoEmailChangeNotice();
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function addressesAcceptedOnChange(): array
+    {
+        return [
+            'normal' => ['novo.email@example.com'],
+            'com etiqueta' => ['a+tag@x.pt'],
+            'com apóstrofo' => ["o'neil@x.pt"],
+            'domínio .test' => ['x@aspec.test'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('addressesAcceptedOnChange')]
+    public function changing_to_a_valid_address_is_accepted(string $email): void
+    {
+        Notification::fake();
+        $user = $this->memberWithEmail(self::STORED_EMAIL);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => $email, 'current_password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('data.email', $email);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $email]);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function storedAddressesOutsideTheRule(): array
+    {
+        return [
+            'acento na parte local' => ['joão@x.pt'],
+            'K de Kelvin' => ["\u{212A}ate@x.pt"],
+            'comentário na parte local' => ['a(x)@b.com'],
+            'domínio sem ponto' => ['a@localhost'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('storedAddressesOutsideTheRule')]
+    public function resending_a_stored_address_outside_the_rule_with_password_changes_nothing(string $email): void
+    {
+        Notification::fake();
+        $user = $this->memberWithEmail($email);
+        $otherSession = $this->insertOtherSession($user->id);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => $email, 'current_password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('data.email', $email);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $email]);
+        $this->assertDatabaseHas('sessions', ['id' => $otherSession, 'user_id' => $user->id]);
+        $this->assertNoEmailChangeNotice();
+    }
+
+    #[Test]
+    #[DataProvider('storedAddressesOutsideTheRule')]
+    public function resending_a_stored_address_outside_the_rule_without_password_fails_only_on_the_password(string $email): void
+    {
+        $user = $this->memberWithEmail($email);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => $email])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['current_password'])
+            ->assertJsonMissingValidationErrors(['email']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $email]);
+    }
+
+    #[Test]
+    public function changing_only_the_case_of_a_stored_address_outside_the_rule_is_rejected(): void
+    {
+        Notification::fake();
+        $user = $this->memberWithEmail('joão@x.pt');
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => 'João@x.pt', 'current_password' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.email.0', self::INVALID_EMAIL_MESSAGE);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'joão@x.pt']);
+        $this->assertNoEmailChangeNotice();
+    }
+
+    #[Test]
+    public function stored_address_outside_the_rule_can_change_to_a_valid_one_and_is_notified(): void
+    {
+        Notification::fake();
+        $user = $this->memberWithEmail('joão@x.pt');
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => 'novo@example.com', 'current_password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('data.email', 'novo@example.com');
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => 'novo@example.com']);
+        Notification::assertSentOnDemandTimes(AccountEmailChangedNotification::class, 1);
+        Notification::assertSentOnDemand(
+            AccountEmailChangedNotification::class,
+            fn ($notification, array $channels, AnonymousNotifiable $notifiable) => $notifiable->routes['mail'] === 'joão@x.pt'
+        );
+    }
+
+    #[Test]
+    public function email_sent_as_an_array_is_rejected_not_500(): void
+    {
+        $user = $this->memberWithEmail(self::STORED_EMAIL);
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, ['email' => [self::STORED_EMAIL], 'current_password' => 'password'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['email']);
+
+        $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => self::STORED_EMAIL]);
+    }
+
+    #[Test]
+    public function refused_email_with_the_correct_password_neither_counts_a_failure_nor_clears_the_counter(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+        $this->failEmailChange(4);
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->putJson(self::URL, ['email' => 'a(x)@b.com', 'current_password' => 'password'])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['email'])
+                ->assertJsonMissingValidationErrors(['current_password']);
+        }
+
+        $this->failEmailChange(1);
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertTooManyRequests();
+    }
+
+    #[Test]
+    public function refused_email_with_a_wrong_password_counts_a_failure(): void
+    {
+        Sanctum::actingAs($this->memberWithProfile());
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->putJson(self::URL, ['email' => 'a(x)@b.com', 'current_password' => "errada{$i}xx"])
+                ->assertUnprocessable()
+                ->assertJsonValidationErrors(['current_password']);
+        }
+
+        $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'password'])
+            ->assertTooManyRequests();
     }
 }
