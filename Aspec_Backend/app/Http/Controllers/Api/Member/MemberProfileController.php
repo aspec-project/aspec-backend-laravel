@@ -5,14 +5,24 @@ namespace App\Http\Controllers\Api\Member;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateMemberProfileRequest;
 use App\Http\Resources\MemberProfileResource;
+use App\Models\User;
+use App\Notifications\AccountEmailChangedNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\RateLimiter;
 use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 class MemberProfileController extends Controller
 {
+    private const EMAIL_CHANGE_NOTICE_DAILY_LIMIT = 5;
+
+    private const EMAIL_CHANGE_NOTICE_DECAY_SECONDS = 86400;
+
     /**
      * Devolve o perfil do membro autenticado, com horário, redes sociais, portfólio e média das avaliações Visible.
      * Atua sempre sobre o próprio utilizador (sem id na rota); 404 se o user não tiver perfil (ex. admin).
@@ -40,6 +50,7 @@ class MemberProfileController extends Controller
      * Campos sensíveis (role_id, account_status_id, password, ...) nunca são aceites.
      * Mudar o email termina as outras sessões SPA e os outros tokens, mantém o acesso atual e apaga os tokens
      * de reposição do email antigo (senão voltariam a valer se esse email voltasse a existir).
+     * Depois do commit avisa o endereço anterior, exceto se só mudarem maiúsculas (é a mesma caixa de correio).
      */
     public function update(UpdateMemberProfileRequest $request): JsonResponse
     {
@@ -50,7 +61,7 @@ class MemberProfileController extends Controller
             return $this->errorResponse('Perfil de membro não encontrado.', Response::HTTP_NOT_FOUND);
         }
 
-        DB::transaction(function () use ($request, $user, $profile) {
+        $previousEmail = DB::transaction(function () use ($request, $user, $profile) {
             $profile->update($request->safe()->only([
                 'name',
                 'business_name',
@@ -70,8 +81,9 @@ class MemberProfileController extends Controller
             $oldEmail = $user->email;
 
             $user->update($request->safe()->only(['email', 'phone']));
+            $emailChanged = $user->wasChanged('email');
 
-            if ($user->wasChanged('email')) {
+            if ($emailChanged) {
                 $user->deletePasswordResetTokens($oldEmail);
 
                 $currentToken = $user->currentAccessToken();
@@ -104,7 +116,13 @@ class MemberProfileController extends Controller
                     ])->all()
                 );
             }
+
+            return $emailChanged ? $oldEmail : null;
         });
+
+        if ($previousEmail !== null && strcasecmp($previousEmail, $user->email) !== 0) {
+            $this->notifyPreviousEmail($user, $previousEmail);
+        }
 
         $profile->load(['user', 'sector', 'location', 'weekDays', 'socialPlatforms', 'portfolios']);
 
@@ -113,5 +131,31 @@ class MemberProfileController extends Controller
             'Perfil atualizado com sucesso.',
             Response::HTTP_OK
         );
+    }
+
+    /**
+     * Avisa o endereço anterior, no máximo 5 vezes por dia por conta: esse endereço não está verificado
+     * e alternar o email serviria para enviar emails a terceiros e gastar a quota diária de envios.
+     * Uma falha aqui só fica no log, porque a alteração já foi gravada e não pode resultar num 500.
+     * Regista só a classe da exceção: a mensagem de uma falha de transporte pode trazer o endereço.
+     */
+    private function notifyPreviousEmail(User $user, string $previousEmail): void
+    {
+        try {
+            $key = "email-change-notice:{$user->id}";
+
+            if (RateLimiter::tooManyAttempts($key, self::EMAIL_CHANGE_NOTICE_DAILY_LIMIT)) {
+                Log::warning('Limite diário de avisos de alteração de email atingido.', ['user_id' => $user->id]);
+
+                return;
+            }
+
+            RateLimiter::hit($key, self::EMAIL_CHANGE_NOTICE_DECAY_SECONDS);
+
+            Notification::route('mail', $previousEmail)
+                ->notify(new AccountEmailChangedNotification($user->email, now()));
+        } catch (Throwable $e) {
+            Log::error('Falha ao enviar o aviso de alteração de email.', ['user_id' => $user->id, 'exception' => $e::class]);
+        }
     }
 }

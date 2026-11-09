@@ -7,4 +7,6 @@ return [
     ],
 
     'demo_password' => env('DEMO_PASSWORD'),
+
+    'contact_email' => env('ASPEC_CONTACT_EMAIL', 'aspec@aspec.pt'),
 ];
