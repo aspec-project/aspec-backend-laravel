@@ -113,7 +113,8 @@ class AdminEventInstanceController extends Controller
 
         $eventsQuery = (clone $filteredEvents)
             ->with(['category', 'location'])
-            ->withCount(['registrations', 'prayerCards']);
+            ->withCount(['registrations', 'prayerCards'])
+            ->withSeriesPosition();
 
         if ($period === 'past') {
             $eventsQuery
@@ -297,10 +298,9 @@ class AdminEventInstanceController extends Controller
         if ($recurrence === null) {
             $event = EventInstance::create($validated);
             AnnounceNewEventJob::dispatch($event->id);
-            $event->load(['category', 'location']);
 
             return $this->successResponse(
-                new EventInstanceResource($event),
+                new EventInstanceResource($this->findForAdmin($event->id)),
                 'Evento criado com sucesso.',
                 Response::HTTP_CREATED
             );
@@ -350,6 +350,7 @@ class AdminEventInstanceController extends Controller
 
         $sessions = $series->eventInstances()
             ->with(['category', 'location'])
+            ->withSeriesPosition()
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->get();
@@ -367,13 +368,25 @@ class AdminEventInstanceController extends Controller
 
     public function show(EventInstance $eventInstance): JsonResponse
     {
-        $eventInstance->load(['category', 'location']);
-        $eventInstance->loadCount(['registrations', 'prayerCards']);
-
         return $this->successResponse(
-            new EventInstanceResource($eventInstance),
+            new EventInstanceResource($this->findForAdmin($eventInstance->id)),
             'Evento obtido com sucesso.'
         );
+    }
+
+    /**
+     * Lê o evento como o backoffice o mostra: categoria, localização, contagens de inscrições e de cartões
+     * de oração e a posição na série ("Sessão X/Y"), numa só consulta e num modelo novo, só para a resposta.
+     *
+     * @param  string  $id  Id (UUID) do evento.
+     * @return EventInstance Evento com as relações e as contagens carregadas.
+     */
+    private function findForAdmin(string $id): EventInstance
+    {
+        return EventInstance::with(['category', 'location'])
+            ->withCount(['registrations', 'prayerCards'])
+            ->withSeriesPosition()
+            ->findOrFail($id);
     }
 
     public function update(
@@ -480,11 +493,8 @@ class AdminEventInstanceController extends Controller
                 }
             }
 
-            $event->load(['category', 'location']);
-            $event->loadCount(['registrations', 'prayerCards']);
-
             return $this->successResponse(
-                new EventInstanceResource($event),
+                new EventInstanceResource($this->findForAdmin($event->id)),
                 'Evento atualizado com sucesso.'
             );
         });

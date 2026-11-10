@@ -39,6 +39,8 @@ class EventInstanceResource extends JsonResource
         $hasPrayerCardsCount = array_key_exists('prayer_cards_count', $attributes);
         $prayerCardsCount = $hasPrayerCardsCount ? (int) $attributes['prayer_cards_count'] : null;
 
+        $hasSeriesPosition = array_key_exists('series_position', $attributes);
+
         $hasIsRegistered = array_key_exists('is_registered', $attributes);
         $isRegistered = $hasIsRegistered && (bool) $attributes['is_registered'];
 
@@ -65,6 +67,10 @@ class EventInstanceResource extends JsonResource
         return [
             'id' => $this->id,
             'series_id' => $this->series_id,
+            'series' => $this->when($hasSeriesPosition, fn () => $this->series_id === null ? null : [
+                'position' => (int) $attributes['series_position'],
+                'total' => (int) $attributes['series_total'],
+            ]),
             'name' => $this->name,
             'category' => $this->whenLoaded('category', fn () => [
                 'id' => $this->category->id,
