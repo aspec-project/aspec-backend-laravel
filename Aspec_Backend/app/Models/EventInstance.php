@@ -3,12 +3,15 @@
 namespace App\Models;
 
 use Database\Factories\EventInstanceFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class EventInstance extends Model
 {
@@ -133,5 +136,34 @@ class EventInstance extends Model
     public function series(): BelongsTo
     {
         return $this->belongsTo(EventSeries::class, 'series_id');
+    }
+
+    /**
+     * Acrescenta series_position (posição da sessão na série, por data, hora de início e id, contando as
+     * sessões passadas) e series_total (número de sessões da série). Calculados em subconsultas no select,
+     * sem queries extra por evento; nos eventos avulsos não têm significado (o resource devolve null).
+     */
+    public function scopeWithSeriesPosition(Builder $query): void
+    {
+        if ($query->getQuery()->columns === null) {
+            $query->select($query->qualifyColumn('*'));
+        }
+
+        $sameSeries = fn () => DB::table('event_instances as s')
+            ->selectRaw('count(*)')
+            ->whereColumn('s.series_id', 'event_instances.series_id');
+
+        $query->addSelect([
+            'series_total' => $sameSeries(),
+            'series_position' => $sameSeries()->where(fn (QueryBuilder $earlier) => $earlier
+                ->whereColumn('s.event_date', '<', 'event_instances.event_date')
+                ->orWhere(fn (QueryBuilder $sameDay) => $sameDay
+                    ->whereColumn('s.event_date', 'event_instances.event_date')
+                    ->where(fn (QueryBuilder $time) => $time
+                        ->whereColumn('s.event_start_time', '<', 'event_instances.event_start_time')
+                        ->orWhere(fn (QueryBuilder $sameTime) => $sameTime
+                            ->whereColumn('s.event_start_time', 'event_instances.event_start_time')
+                            ->whereColumn('s.id', '<=', 'event_instances.id'))))),
+        ]);
     }
 }

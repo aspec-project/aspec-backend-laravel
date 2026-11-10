@@ -1264,9 +1264,9 @@ class AdminEventInstanceTest extends TestCase
                 $user,
                 EventCancelledNotification::class,
                 function (EventCancelledNotification $notification) use ($user, $justification): bool {
-                    $this->assertContains(
+                    $this->assertStringContainsString(
                         "Justificação: {$justification}",
-                        $notification->toMail($user)->introLines
+                        (string) $notification->toMail($user)->render()
                     );
 
                     return $notification->justification === $justification;
@@ -1537,9 +1537,9 @@ class AdminEventInstanceTest extends TestCase
             $registrant,
             EventUpdatedNotification::class,
             function (EventUpdatedNotification $notification) use ($registrant): bool {
-                $this->assertContains(
+                $this->assertStringContainsString(
                     'Justificação: Alteração do horário do evento.',
-                    $notification->toMail($registrant)->introLines
+                    (string) $notification->toMail($registrant)->render()
                 );
 
                 return $notification->justification === 'Alteração do horário do evento.';

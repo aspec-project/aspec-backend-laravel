@@ -6,8 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EventCategoryRequest;
 use App\Http\Resources\EventCategoryResource;
 use App\Models\EventCategory;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -36,13 +39,21 @@ class AdminEventCategoryController extends Controller
 
     /**
      * Cria uma categoria só com os campos validados (nome e cor) e devolve-a com o número de eventos (0).
+     * Se outro admin gravar o mesmo nome ou a mesma cor entre a validação e o INSERT, devolve o mesmo 422.
      *
      * @param  EventCategoryRequest  $request  Pedido com o nome e a cor.
      * @return JsonResponse 201 com a categoria criada.
+     *
+     * @throws ValidationException Nome ou cor gravados entretanto por outro admin (422).
      */
     public function store(EventCategoryRequest $request): JsonResponse
     {
-        $category = EventCategory::create($request->validated());
+        try {
+            $category = EventCategory::create($request->validated());
+        } catch (UniqueConstraintViolationException $e) {
+            $this->failOnDuplicate($request, $e);
+        }
+
         $category->loadCount('eventInstances');
 
         return $this->successResponse(
@@ -54,14 +65,22 @@ class AdminEventCategoryController extends Controller
 
     /**
      * Atualiza o nome e a cor de uma categoria e devolve-a com o número de eventos.
+     * Se outro admin gravar o mesmo nome ou a mesma cor entre a validação e o UPDATE, devolve o mesmo 422.
      *
      * @param  EventCategoryRequest  $request  Pedido com o nome e a cor.
      * @param  EventCategory  $eventCategory  Categoria obtida pelo id da rota.
      * @return JsonResponse 200 com a categoria atualizada.
+     *
+     * @throws ValidationException Nome ou cor gravados entretanto por outro admin (422).
      */
     public function update(EventCategoryRequest $request, EventCategory $eventCategory): JsonResponse
     {
-        $eventCategory->update($request->validated());
+        try {
+            $eventCategory->update($request->validated());
+        } catch (UniqueConstraintViolationException $e) {
+            $this->failOnDuplicate($request, $e);
+        }
+
         $eventCategory->loadCount('eventInstances');
 
         return $this->successResponse(
@@ -88,5 +107,23 @@ class AdminEventCategoryController extends Controller
         $eventCategory->delete();
 
         return $this->successResponse(null, 'Categoria eliminada com sucesso.');
+    }
+
+    /**
+     * Trata a violação do índice unique quando dois admins gravam ao mesmo tempo: a validação repetida
+     * já vê a linha do outro admin e lança o mesmo 422, com a mensagem e o campo da validação normal.
+     * Se a validação passar, relança a exceção original (500 registado).
+     *
+     * @param  EventCategoryRequest  $request  Pedido original, com as regras e as mensagens da categoria.
+     * @param  UniqueConstraintViolationException  $e  Violação devolvida pela base de dados.
+     *
+     * @throws ValidationException Nome ou cor já usados (422).
+     * @throws UniqueConstraintViolationException Violação que a validação não explica.
+     */
+    private function failOnDuplicate(EventCategoryRequest $request, UniqueConstraintViolationException $e): never
+    {
+        Validator::make($request->all(), $request->rules(), $request->messages(), $request->attributes())->validate();
+
+        throw $e;
     }
 }

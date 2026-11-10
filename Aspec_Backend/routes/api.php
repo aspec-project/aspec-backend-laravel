@@ -39,7 +39,10 @@ use App\Http\Controllers\Api\Payments\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
-Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
+// Só para o Postman obter um Bearer token: no deploy é mais uma entrada por password que o frontend não usa.
+if (app()->environment(['local', 'testing'])) {
+    Route::post('/auth/token', [AuthController::class, 'token'])->middleware('throttle:auth-token');
+}
 
 Route::prefix('auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:auth-register');
@@ -95,12 +98,12 @@ Route::post('/stripe/webhook', [StripeWebhookController::class, 'handleWebhook']
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'account.active', 'admin'])
     ->group(function () {
-        Route::patch('/users/{id}/approve', [AdminUserController::class, 'approve']);
-        Route::patch('/users/{id}/reject', [AdminUserController::class, 'reject']);
-        Route::patch('/users/{id}/block', [AdminUserController::class, 'block']);
-        Route::patch('/users/{id}/unblock', [AdminUserController::class, 'unblock']);
-        Route::patch('/users/{id}/promote', [AdminUserController::class, 'promote']);
-        Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote']);
+        Route::patch('/users/{id}/approve', [AdminUserController::class, 'approve'])->whereUuid('id');
+        Route::patch('/users/{id}/reject', [AdminUserController::class, 'reject'])->whereUuid('id');
+        Route::patch('/users/{id}/block', [AdminUserController::class, 'block'])->whereUuid('id');
+        Route::patch('/users/{id}/unblock', [AdminUserController::class, 'unblock'])->whereUuid('id');
+        Route::patch('/users/{id}/promote', [AdminUserController::class, 'promote'])->whereUuid('id');
+        Route::patch('/users/{id}/demote', [AdminUserController::class, 'demote'])->whereUuid('id');
         Route::get('/users', [AdminUserController::class, 'index']);
         Route::get('/users/{id}', [AdminUserController::class, 'show'])->whereUuid('id');
         Route::post('/users/{user}/anonymize', [AdminUserAnonymizationController::class, 'store'])

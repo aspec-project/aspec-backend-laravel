@@ -350,6 +350,8 @@ class UpdatePasswordTest extends TestCase
     #[Test]
     public function sixth_request_after_five_failures_is_blocked_even_with_correct_password(): void
     {
+        $this->freezeTime();
+
         $user = $this->makeUser();
         $hashBefore = $this->storedHash($user);
         Sanctum::actingAs($user);
@@ -372,6 +374,8 @@ class UpdatePasswordTest extends TestCase
     #[Test]
     public function block_message_shows_the_remaining_minutes_rounded_up(): void
     {
+        $this->freezeTime();
+
         Sanctum::actingAs($this->makeUser());
 
         $this->failCurrentPassword(5);
