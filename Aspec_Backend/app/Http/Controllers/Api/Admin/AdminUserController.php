@@ -214,10 +214,11 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Bloqueia um utilizador: a conta passa a Inactive (motivo blocked), as sessões terminam, a subscrição
+     * Bloqueia um utilizador: a conta passa a Inactive (motivo blocked), as sessões terminam, as inscrições
+     * em eventos que ainda não começaram são apagadas (sem emails; não voltam ao desbloquear), a subscrição
      * é cancelada e é enviado o email de bloqueio. O estado é lido e alterado com o utilizador bloqueado
-     * na transação (o segundo de dois admins recebe 409); o cancelamento no Stripe e o email correm
-     * depois do commit, fora de qualquer transação.
+     * na transação (o segundo de dois admins recebe 409 e nada é apagado); o cancelamento no Stripe e o
+     * email correm depois do commit, fora de qualquer transação.
      *
      * @param  Request  $request  The incoming HTTP request.
      * @param  string  $id  The ID of the user to block.
@@ -249,6 +250,7 @@ class AdminUserController extends Controller
             ]);
 
             $user->deactivate(InactiveReason::Blocked->value);
+            $user->deleteUpcomingEventRegistrations();
 
             return null;
         });

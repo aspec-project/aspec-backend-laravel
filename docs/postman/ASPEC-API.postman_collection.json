@@ -13803,7 +13803,7 @@
                 }
               ]
             },
-            "description": "Passa a conta a **Inactive** (motivo: bloqueada), termina as sessões e revoga os tokens; depois cancela a subscrição no Stripe e expira uma sessão de Checkout que esteja aberta (um bloqueado não é cobrado nem consegue ativar-se a pagar). O membro deixa de poder entrar e sai do diretório. Só sai deste estado com *Desbloquear utilizador*.\n\nErros: 409 a própria conta, um administrador ou um utilizador já bloqueado · 404 utilizador inexistente.\n\n(contrato atualizado para pagamentos — pendente de acordo do Guilherme)"
+            "description": "Passa a conta a **Inactive** (motivo: bloqueada), termina as sessões e revoga os tokens; depois cancela a subscrição no Stripe e expira uma sessão de Checkout que esteja aberta (um bloqueado não é cobrado nem consegue ativar-se a pagar). O membro deixa de poder entrar e sai do diretório. Só sai deste estado com *Desbloquear utilizador*.\n\nApaga as inscrições do membro em eventos que ainda não começaram (as de eventos já começados ou passados ficam); não são repostas ao desbloquear. Nenhum email aos inscritos.\n\nErros: 409 a própria conta, um administrador ou um utilizador já bloqueado · 404 utilizador inexistente.\n\n(contrato atualizado para pagamentos — pendente de acordo do Guilherme)"
           },
           "response": [
             {
@@ -17353,7 +17353,7 @@
                 }
               ]
             },
-            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início).\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice."
+            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). `upcoming` = eventos que ainda não começaram (data e hora de início, hora de Lisboa); `past` = eventos já começados (a decorrer ou terminados). Eventos upcoming são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início).\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice."
           },
           "response": [
             {
@@ -17884,7 +17884,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`. Numa série, as duas opções são copiadas para todas as sessões.\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1, **máximo 365**. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`. Numa série, as duas opções são copiadas para todas as sessões.\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar recorrente — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-11-05\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"ends_on\": \"2030-11-12\",\n    \"registration_deadline_days_before\": 3\n  }\n}",
@@ -17963,6 +17963,40 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"recurrence.ends_on\": [\n      \"Uma série não pode exceder 52 sessões.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Antecedência acima de 365 dias",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Antecedência acima de 365 dias"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"recurrence.registration_deadline_days_before\": [\n      \"A antecedência do prazo de inscrição não pode ser superior a 365 dias.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -18435,7 +18469,7 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, `address` é obrigatória. Envia `place_id` (Google) ou `latitude` e `longitude` em conjunto; não envies `place_id` com coordenadas. Se esses campos forem omitidos, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n- Depois de existir o primeiro cartão preenchido, não é possível alterar `prayer_cards_enabled`, `prayer_verse`, `event_date` nem `event_start_time` (422): todos os cartões do evento ficam com o mesmo versículo e o mesmo prazo. Ver `prayer_cards_locked` em \"Ver evento (admin)\".\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- Se `event_date` ou `event_start_time` mudarem, o novo início tem de ser no futuro (422 em `event_date` ou `event_start_time`). 409 se o evento já começou.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, `address` é obrigatória. Envia `place_id` (Google) ou `latitude` e `longitude` em conjunto; não envies `place_id` com coordenadas. Se esses campos forem omitidos, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n- Depois de existir o primeiro cartão preenchido, não é possível alterar `prayer_cards_enabled`, `prayer_verse`, `event_date` nem `event_start_time` (422): todos os cartões do evento ficam com o mesmo versículo e o mesmo prazo. Ver `prayer_cards_locked` em \"Ver evento (admin)\".\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa atualizado\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Estacionamento gratuito no local.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"justification\": \"A lotação foi ajustada a pedido do espaço.\"\n}",
@@ -18562,6 +18596,76 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"prayer_verse\": [\n      \"Não é possível alterar os cartões de oração, a data ou a hora depois de existirem cartões preenchidos.\"\n    ]\n  }\n}"
             },
             {
+              "name": "422 Data no passado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Data no passado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"event_date\": [\n      \"A data do evento não pode ser anterior a hoje.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Hora de início já passou",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Hora de início já passou"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"event_start_time\": [\n      \"A hora de início tem de ser posterior à hora atual.\"\n    ]\n  }\n}"
+            },
+            {
               "name": "401 Não autenticado",
               "originalRequest": {
                 "method": "PUT",
@@ -18632,13 +18736,13 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\" \n}"
             },
             {
-              "name": "409 Evento já decorreu",
+              "name": "409 Evento já começou",
               "originalRequest": {
                 "method": "PUT",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "409 Evento já decorreu"
+                    "value": "409 Evento já começou"
                   }
                 ],
                 "url": {
@@ -18655,7 +18759,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n  \"name\": \"Workshop — Porto\",\n  \"description\": \"Workshop de partilha entre membros.\",\n  \"event_date\": \"2030-11-12\",\n  \"event_start_time\": \"20:00\",\n  \"event_end_time\": \"21:30\",\n  \"address\": \"Avenida dos Aliados, Porto\",\n  \"venue_name\": \"Centro de Congressos do Porto\",\n  \"latitude\": 41.1496,\n  \"longitude\": -8.6109,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-11-11\",\n  \"organizer_notes\": null,\n  \"justification\": \"Atualização solicitada para um evento que já decorreu.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n  \"name\": \"Workshop — Porto\",\n  \"description\": \"Workshop de partilha entre membros.\",\n  \"event_date\": \"2030-11-12\",\n  \"event_start_time\": \"20:00\",\n  \"event_end_time\": \"21:30\",\n  \"address\": \"Avenida dos Aliados, Porto\",\n  \"venue_name\": \"Centro de Congressos do Porto\",\n  \"latitude\": 41.1496,\n  \"longitude\": -8.6109,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-11-11\",\n  \"organizer_notes\": null,\n  \"justification\": \"Atualização solicitada para um evento que já começou.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -18673,7 +18777,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já começou.\"\n}"
             }
           ]
         },
@@ -18705,7 +18809,7 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nElimina o evento e as respetivas inscrições. Se houver inscritos, `justification` é obrigatória; se não houver, pode ser omitida. Os inscritos recebem um email de cancelamento com a justificação. A notificação só é enfileirada após a eliminação ser confirmada.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nElimina o evento e as respetivas inscrições. Se houver inscritos, `justification` é obrigatória; se não houver, pode ser omitida. Os inscritos recebem um email de cancelamento com a justificação. A notificação só é enfileirada após a eliminação ser confirmada. 409 se o evento já começou.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"justification\": \"O evento foi cancelado pela organização.\"\n}",
@@ -18876,13 +18980,13 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
             },
             {
-              "name": "409 Evento já decorreu",
+              "name": "409 Evento já começou",
               "originalRequest": {
                 "method": "DELETE",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "409 Evento já decorreu"
+                    "value": "409 Evento já começou"
                   }
                 ],
                 "url": {
@@ -18899,7 +19003,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"justification\": \"O evento já decorreu e não pode ser eliminado.\"\n}",
+                  "raw": "{\n  \"justification\": \"O evento já começou e não pode ser eliminado.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -18917,7 +19021,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já começou.\"\n}"
             }
           ]
         },

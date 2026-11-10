@@ -67,6 +67,48 @@ class EventInstance extends Model
     }
 
     /**
+     * Indica se o início do evento (data + hora, hora de Lisboa) já passou, com a mesma regra do scope
+     * notStarted: comparado ao segundo, por isso à hora de início em ponto o evento ainda não começou.
+     *
+     * @return bool true se o evento já começou (a decorrer ou terminado).
+     */
+    public function hasStarted(): bool
+    {
+        return $this->startsAt()->lessThan(
+            now(config('app.event_timezone', 'Europe/Lisbon'))->startOfSecond()
+        );
+    }
+
+    /**
+     * Eventos que ainda não começaram: data futura, ou hoje com hora de início igual ou posterior à
+     * atual (hora de Lisboa).
+     *
+     * @param  Builder<EventInstance>  $query  Consulta de eventos.
+     */
+    public function scopeNotStarted(Builder $query): void
+    {
+        $now = now(config('app.event_timezone', 'Europe/Lisbon'));
+        $today = $now->toDateString();
+        $currentTime = $now->format('H:i:s');
+
+        $query->where(fn (Builder $notStarted) => $notStarted
+            ->where($notStarted->qualifyColumn('event_date'), '>', $today)
+            ->orWhere(fn (Builder $startsLaterToday) => $startsLaterToday
+                ->where($startsLaterToday->qualifyColumn('event_date'), $today)
+                ->where($startsLaterToday->qualifyColumn('event_start_time'), '>=', $currentTime)));
+    }
+
+    /**
+     * Eventos que já começaram (a decorrer ou terminados): o contrário de notStarted.
+     *
+     * @param  Builder<EventInstance>  $query  Consulta de eventos.
+     */
+    public function scopeStarted(Builder $query): void
+    {
+        $query->whereNot(fn (Builder $started) => $started->notStarted());
+    }
+
+    /**
      * Indica se o prazo de inscrição já passou. O prazo está guardado na hora de Portugal, por isso
      * é lido a partir do valor em bruto (o cast datetime interpretá-lo-ia em UTC), como no EventInstanceResource.
      */

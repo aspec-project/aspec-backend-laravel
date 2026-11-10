@@ -639,6 +639,28 @@ class AdminUserAnonymizationTest extends TestCase
         $this->assertDatabaseMissing('event_registrations', ['id' => $future->id]);
     }
 
+    #[Test]
+    public function anonymization_keeps_registrations_of_events_already_started_today(): void
+    {
+        $this->travelTo(Carbon::parse('2026-11-10 15:00:00', 'Europe/Lisbon'));
+        $this->actingAsAdmin();
+        $member = $this->memberWithProfile();
+
+        $eventAt = fn (string $startTime): EventInstance => EventInstance::factory()->create([
+            'event_date' => '2026-11-10',
+            'event_start_time' => $startTime,
+            'event_end_time' => '23:00:00',
+            'registration_deadline' => '2026-11-09 23:59:00',
+        ]);
+        $started = EventRegistration::query()->create(['event_instance_id' => $eventAt('10:00:00')->id, 'user_id' => $member->id]);
+        $notStarted = EventRegistration::query()->create(['event_instance_id' => $eventAt('18:00:00')->id, 'user_id' => $member->id]);
+
+        $this->postJson($this->url($member->id))->assertOk();
+
+        $this->assertDatabaseHas('event_registrations', ['id' => $started->id]);
+        $this->assertDatabaseMissing('event_registrations', ['id' => $notStarted->id]);
+    }
+
     /**
      * Estados que o webhook do fim da subscrição trataria se a conta continuasse como estava.
      *
