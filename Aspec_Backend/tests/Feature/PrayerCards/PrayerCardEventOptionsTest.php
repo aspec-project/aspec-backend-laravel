@@ -300,9 +300,25 @@ class PrayerCardEventOptionsTest extends TestCase
     }
 
     #[Test]
-    public function deleting_an_event_on_its_own_day_deletes_its_cards(): void
+    public function deleting_an_event_after_it_started_is_refused_and_keeps_its_cards(): void
     {
         $this->travelToLisbon('2027-06-10 20:00');
+        $this->actingAsAdmin();
+        $event = $this->prayerEvent('2027-06-10 19:00');
+        $card = $this->cardFor($this->registeredMember($event), $event);
+
+        $this->deleteJson(self::URL."/{$event->id}", ['justification' => 'Evento cancelado por motivos de saúde.'])
+            ->assertConflict()
+            ->assertJsonPath('message', 'Não é possível alterar um evento que já começou.');
+
+        $this->assertDatabaseHas('event_instances', ['id' => $event->id]);
+        $this->assertDatabaseHas('prayer_cards', ['id' => $card->id]);
+    }
+
+    #[Test]
+    public function deleting_an_event_before_it_starts_deletes_its_cards(): void
+    {
+        $this->travelToLisbon('2027-06-10 18:00');
         $this->actingAsAdmin();
         $event = $this->eventWithACard();
         $other = $this->prayerEvent('2027-06-12 19:00');

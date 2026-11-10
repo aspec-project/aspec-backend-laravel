@@ -16,7 +16,6 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
@@ -128,6 +127,27 @@ class User extends Authenticatable
     public function eventRegistrations(): HasMany
     {
         return $this->hasMany(EventRegistration::class);
+    }
+
+    /**
+     * Apaga as inscrições do utilizador em eventos que ainda não começaram (scope notStarted, hora de
+     * Lisboa); as de eventos já começados ou passados ficam (histórico de presença). Os ids são lidos
+     * primeiro e apagados depois, para o DELETE não trancar as linhas dos eventos que as inscrições de
+     * outros membros trancam com lockForUpdate.
+     *
+     * @return int Número de inscrições apagadas.
+     */
+    public function deleteUpcomingEventRegistrations(): int
+    {
+        $registrationIds = $this->eventRegistrations()
+            ->whereHas('eventInstance', fn (Builder $event) => $event->notStarted())
+            ->pluck('id');
+
+        if ($registrationIds->isEmpty()) {
+            return 0;
+        }
+
+        return EventRegistration::query()->whereKey($registrationIds)->delete();
     }
 
     /**
@@ -424,27 +444,7 @@ class User extends Authenticatable
                 $profile->delete();
             }
 
-            $timezone = config('app.event_timezone', 'Europe/Lisbon');
-            $now = now($timezone);
-            $today = $now->toDateString();
-            $currentTime = $now->format('H:i:s');
-
-            $futureEventIds = DB::table('event_instances')
-                ->where(function (QueryBuilder $query) use ($today, $currentTime) {
-                    $query
-                        ->where('event_date', '>', $today)
-                        ->orWhere(function (QueryBuilder $query) use ($today, $currentTime) {
-                            $query
-                                ->where('event_date', $today)
-                                ->where('event_start_time', '>=', $currentTime);
-                        });
-                })
-                ->select('id');
-
-            DB::table('event_registrations')
-                ->where('user_id', $this->id)
-                ->whereIn('event_instance_id', $futureEventIds)
-                ->delete();
+            $this->deleteUpcomingEventRegistrations();
 
             PrayerCard::query()
                 ->where('author_user_id', $this->id)

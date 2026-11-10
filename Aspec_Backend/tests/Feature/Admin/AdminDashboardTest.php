@@ -733,7 +733,8 @@ class AdminDashboardTest extends TestCase
         $this->actingAsTechnicalAdmin();
 
         $anonymized = $this->withProfile(User::factory()->create());
-        $past = $this->register($anonymized, $this->event('2026-10-27'));
+        $tuesday = $this->event('2026-10-27');
+        $past = $this->register($anonymized, $tuesday);
         $future = $this->register($anonymized, $this->event('2026-10-31'));
         $anonymized->anonymizeAndDelete();
         $this->assertDatabaseHas('event_registrations', ['id' => $past->id]);
@@ -741,7 +742,7 @@ class AdminDashboardTest extends TestCase
 
         $friday = $this->event('2026-10-30');
         $blocked = $this->withProfile(User::factory()->create());
-        $this->register($blocked, $friday);
+        $this->register($blocked, $tuesday);
         $this->patchJson("/api/admin/users/{$blocked->id}/block")->assertOk();
         $this->register(User::factory()->admin()->create(), $friday);
 
@@ -749,6 +750,27 @@ class AdminDashboardTest extends TestCase
         $registrations = $this->dashboard()->json('data.stats.event_registrations');
         $this->assertSame(3, $registrations['this_week']);
         $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
+    }
+
+    #[Test]
+    public function blocking_lowers_this_week_registrations_on_the_dashboard(): void
+    {
+        $this->nowInLisbon('2026-10-29 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        $member = $this->withProfile(User::factory()->create());
+        $this->register($member, $this->event('2026-10-27'));
+        $this->register($member, $this->event('2026-10-30'));
+
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+        $this->assertSame(2, $registrations['this_week']);
+        $this->assertSame(2, $registrations['events_with_registrations'] ?? null);
+
+        $this->patchJson("/api/admin/users/{$member->id}/block")->assertOk();
+
+        $registrations = $this->dashboard()->json('data.stats.event_registrations');
+        $this->assertSame(1, $registrations['this_week']);
+        $this->assertSame(1, $registrations['events_with_registrations'] ?? null);
     }
 
     #[Test]

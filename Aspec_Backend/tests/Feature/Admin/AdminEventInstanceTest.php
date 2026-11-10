@@ -62,9 +62,78 @@ class AdminEventInstanceTest extends TestCase
         ];
     }
 
+    private function travelToLisbon(string $dateTime): void
+    {
+        $this->travelTo(Carbon::parse($dateTime, 'Europe/Lisbon'));
+    }
+
+    /**
+     * Evento presencial que começa em $startsAt (hora de Lisboa), dura 2 horas e tem o prazo em bruto $deadline.
+     */
+    private function eventStartingAt(string $startsAt, string $deadline): EventInstance
+    {
+        $start = Carbon::createFromFormat('Y-m-d H:i', $startsAt, 'Europe/Lisbon');
+
+        return EventInstance::factory()->create([
+            'event_date' => $start->toDateString(),
+            'event_start_time' => $start->format('H:i:s'),
+            'event_end_time' => $start->copy()->addHours(2)->format('H:i:s'),
+            'registration_deadline' => $deadline,
+        ]);
+    }
+
+    /**
+     * Corpo de atualização com os valores guardados do evento.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function updatePayloadFor(EventInstance $event, array $overrides = []): array
+    {
+        return [
+            'category_id' => $event->category_id,
+            'location_id' => $event->location_id,
+            'name' => $event->name,
+            'event_date' => $event->event_date->format('Y-m-d'),
+            'event_start_time' => substr((string) $event->event_start_time, 0, 5),
+            'event_end_time' => substr((string) $event->event_end_time, 0, 5),
+            'description' => $event->description,
+            'address' => $event->address,
+            'latitude' => 38.7223,
+            'longitude' => -9.1393,
+            'max_attendees' => $event->max_attendees,
+            'registration_deadline' => substr((string) $event->getRawOriginal('registration_deadline'), 0, 10),
+            'is_online' => false,
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * Corpo de uma série semanal sem prazo único (calculado por sessão).
+     *
+     * @return array<string, mixed>
+     */
+    private function seriesPayload(string $firstDate, string $endsOn, int|string $daysBefore, array $overrides = []): array
+    {
+        $payload = [
+            ...$this->validPayload(),
+            'event_date' => $firstDate,
+            'recurrence' => [
+                'frequency' => 'weekly',
+                'ends_on' => $endsOn,
+                'registration_deadline_days_before' => $daysBefore,
+            ],
+            ...$overrides,
+        ];
+        unset($payload['registration_deadline']);
+
+        return $payload;
+    }
+
     #[Test]
     public function admin_can_list_events_with_pagination(): void
     {
+        $this->travelTo(now('Europe/Lisbon')->setTime(7, 0));
         $this->actingAsAdmin();
 
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
@@ -114,6 +183,7 @@ class AdminEventInstanceTest extends TestCase
     #[Test]
     public function admin_can_filter_past_events_and_count_periods_using_combined_filters(): void
     {
+        $this->travelTo(now('Europe/Lisbon')->setTime(7, 0));
         $this->actingAsAdmin();
 
         $timezone = config('app.event_timezone', 'Europe/Lisbon');
@@ -626,7 +696,7 @@ class AdminEventInstanceTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath(
                 'message',
-                'Não é possível alterar um evento que já decorreu.'
+                'Não é possível alterar um evento que já começou.'
             );
 
         $this->assertDatabaseHas('event_instances', [
@@ -997,7 +1067,7 @@ class AdminEventInstanceTest extends TestCase
             ->assertStatus(409)
             ->assertJsonPath(
                 'message',
-                'Não é possível alterar um evento que já decorreu.'
+                'Não é possível alterar um evento que já começou.'
             );
 
         $this->assertDatabaseHas('event_instances', [
@@ -1092,21 +1162,18 @@ class AdminEventInstanceTest extends TestCase
     }
 
     #[Test]
-    public function admin_can_update_an_event_with_a_past_date_and_deadline(): void
+    public function update_keeps_working_when_the_date_is_unchanged_and_the_deadline_has_passed(): void
     {
+        $this->travelToLisbon('2026-11-10 15:00');
         $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-11-15 10:00', '2026-11-09 23:59:00');
 
-        $event = EventInstance::factory()->create();
-        $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $past = now($timezone)->subDays(2);
-        $payload = $this->validPayload();
-
-        $payload['event_date'] = $past->copy()->addDay()->format('Y-m-d');
-        $payload['registration_deadline'] = $past->format('Y-m-d');
-
-        $this->putJson(self::URL."/{$event->id}", $payload)
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'name' => 'Nome corrigido',
+        ]))
             ->assertOk()
-            ->assertJsonPath('message', 'Evento atualizado com sucesso.');
+            ->assertJsonPath('message', 'Evento atualizado com sucesso.')
+            ->assertJsonPath('data.name', 'Nome corrigido');
     }
 
     #[Test]
@@ -1673,5 +1740,198 @@ class AdminEventInstanceTest extends TestCase
         $this->assertDatabaseMissing('event_instances', ['id' => $event->id]);
 
         Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function update_rejects_moving_the_event_date_to_the_past(): void
+    {
+        Notification::fake();
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-11-20 10:00', '2026-11-19 23:59:00');
+        EventRegistration::query()->create([
+            'event_instance_id' => $event->id,
+            'user_id' => User::factory()->create()->id,
+        ]);
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_date' => '2026-11-09',
+            'registration_deadline' => '2026-11-08',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Os dados enviados são inválidos.')
+            ->assertJsonPath('errors.event_date.0', 'A data do evento não pode ser anterior a hoje.');
+
+        $this->assertSame('2026-11-20', $event->fresh()->event_date->format('Y-m-d'));
+        Notification::assertNothingSent();
+    }
+
+    #[Test]
+    public function update_rejects_moving_the_event_to_today_at_a_time_that_has_passed(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-11-20 19:00', '2026-11-19 23:59:00');
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_date' => '2026-11-10',
+            'event_start_time' => '09:00',
+            'event_end_time' => '10:00',
+            'registration_deadline' => '2026-11-09',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.event_start_time.0', 'A hora de início tem de ser posterior à hora atual.');
+
+        $this->assertSame('2026-11-20', $event->fresh()->event_date->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function update_rejects_changing_only_the_start_time_of_today_event_to_the_past(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-11-10 20:00', '2026-11-09 23:59:00');
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_start_time' => '14:00',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.event_start_time.0', 'A hora de início tem de ser posterior à hora atual.');
+
+        $this->assertSame('20:00:00', (string) $event->fresh()->event_start_time);
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_start_time' => '16:00',
+        ]))->assertOk();
+
+        $this->assertSame('16:00:00', (string) $event->fresh()->event_start_time);
+    }
+
+    #[Test]
+    public function update_accepts_moving_the_event_to_today_later_than_now(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-11-20 10:00', '2026-11-19 23:59:00');
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_date' => '2026-11-10',
+            'event_start_time' => '20:00',
+            'event_end_time' => '22:00',
+            'registration_deadline' => '2026-11-09',
+        ]))->assertOk();
+
+        $this->assertSame('2026-11-10', $event->fresh()->event_date->format('Y-m-d'));
+    }
+
+    #[Test]
+    public function update_start_time_rule_uses_lisbon_time_in_summer(): void
+    {
+        $this->travelTo(Carbon::parse('2026-07-15 16:30:00', 'UTC'));
+        $this->actingAsAdmin();
+        $event = $this->eventStartingAt('2026-07-15 20:00', '2026-07-14 23:59:00');
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_start_time' => '17:00',
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.event_start_time.0', 'A hora de início tem de ser posterior à hora atual.');
+
+        $this->putJson(self::URL."/{$event->id}", $this->updatePayloadFor($event, [
+            'event_start_time' => '18:00',
+        ]))->assertOk();
+
+        $this->assertSame('18:00:00', (string) $event->fresh()->event_start_time);
+    }
+
+    #[Test]
+    public function create_rejects_a_past_event_date_with_the_new_message(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+
+        $payload = $this->validPayload();
+        $payload['event_date'] = '2026-11-09';
+        $payload['registration_deadline'] = '2026-11-08';
+
+        $this->postJson(self::URL, $payload)
+            ->assertUnprocessable()
+            ->assertJsonPath('errors.event_date.0', 'A data do evento não pode ser anterior a hoje.');
+
+        $this->assertDatabaseCount('event_instances', 0);
+    }
+
+    #[Test]
+    public function series_rejects_a_deadline_more_than_365_days_before(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+
+        foreach ([366, PHP_INT_MAX] as $daysBefore) {
+            $response = $this->postJson(self::URL, $this->seriesPayload('2027-12-20', '2027-12-27', $daysBefore))
+                ->assertUnprocessable();
+
+            $this->assertSame(
+                'A antecedência do prazo de inscrição não pode ser superior a 365 dias.',
+                $response->json('errors')['recurrence.registration_deadline_days_before'][0] ?? null
+            );
+            $this->assertDatabaseCount('event_series', 0);
+            $this->assertDatabaseCount('event_instances', 0);
+        }
+
+        $this->postJson(self::URL, $this->seriesPayload('2027-12-20', '2027-12-27', 365))
+            ->assertCreated()
+            ->assertJsonCount(2, 'data.sessions');
+
+        $this->assertDatabaseHas('event_instances', [
+            'event_date' => '2027-12-20',
+            'registration_deadline' => '2026-12-20 23:59:00',
+        ]);
+    }
+
+    #[Test]
+    public function series_session_deadlines_are_never_after_the_session_start(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+
+        $this->postJson(self::URL, $this->seriesPayload('2026-12-01', '2026-12-15', 1, [
+            'event_start_time' => '00:00',
+            'event_end_time' => '02:00',
+        ]))
+            ->assertCreated()
+            ->assertJsonCount(3, 'data.sessions');
+
+        $sessions = EventInstance::query()->whereNotNull('series_id')->get();
+        $this->assertCount(3, $sessions);
+
+        foreach ($sessions as $session) {
+            $deadline = Carbon::parse($session->getRawOriginal('registration_deadline'), 'Europe/Lisbon');
+
+            $this->assertTrue(
+                $deadline->lessThanOrEqualTo($session->startsAt()),
+                "O prazo da sessão de {$session->event_date->toDateString()} é depois do início."
+            );
+        }
+    }
+
+    #[Test]
+    public function series_deadline_is_computed_in_lisbon_across_the_dst_change(): void
+    {
+        $this->travelToLisbon('2026-11-10 15:00');
+        $this->actingAsAdmin();
+
+        $this->postJson(self::URL, $this->seriesPayload('2027-10-26', '2027-11-02', 3))
+            ->assertCreated()
+            ->assertJsonCount(2, 'data.sessions');
+
+        $deadlines = EventInstance::query()
+            ->whereNotNull('series_id')
+            ->orderBy('event_date')
+            ->get()
+            ->map(fn (EventInstance $session): string => (string) $session->getRawOriginal('registration_deadline'))
+            ->all();
+
+        $this->assertSame(['2027-10-23 23:59:00', '2027-10-30 23:59:00'], $deadlines);
     }
 }
