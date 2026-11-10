@@ -31,9 +31,9 @@ use Throwable;
  * Webhook do Stripe. A assinatura é verificada pelo middleware do Cashier (aplicado no
  * construtor dele quando há STRIPE_WEBHOOK_SECRET); os handlers do Cashier sincronizam as
  * subscrições locais e este controller acrescenta a idempotência, a ativação da conta quando a
- * subscrição é criada ou passa a ativa, a fatura de cada pagamento (com o período pago), o período
- * de carência quando a cobrança falha, a desativação quando a subscrição termina e o aviso de
- * renovação da quota anual.
+ * subscrição é criada ou passa a ativa, a sincronização do fim do trial na conta, a fatura de cada
+ * pagamento (com o período pago), o período de carência quando a cobrança falha, a desativação
+ * quando a subscrição termina e o aviso de renovação da quota anual.
  */
 class StripeWebhookController extends WebhookController
 {
@@ -172,7 +172,10 @@ class StripeWebhookController extends WebhookController
     }
 
     /**
-     * Subscrição alterada no Stripe. Quando fica trialing/active: numa conta Active termina o
+     * Subscrição alterada no Stripe. Numa conta Active, uma transição real do trial acerta
+     * users.trial_ends_at, em qualquer estado e antes da guarda de trialing/active, porque um trial
+     * pode terminar logo em past_due (ver syncTrialEnd).
+     * Quando fica trialing/active: numa conta Active termina o
      * período de carência, mas só numa passagem real de past_due/unpaid (previous_attributes),
      * a única que prova que a dívida foi paga (um updated antigo, ex. só metadata, entregue depois
      * da falha não pode limpar a carência); noutra conta aplica a mesma regra de ativação do
@@ -205,6 +208,8 @@ class StripeWebhookController extends WebhookController
             return $response;
         }
 
+        $this->syncTrialEnd($user, $data, $payload['data']['previous_attributes'] ?? []);
+
         if (! in_array($data['status'] ?? null, self::RUNNING_STATUSES, true)) {
             return $response;
         }
@@ -218,6 +223,37 @@ class StripeWebhookController extends WebhookController
         }
 
         return $response;
+    }
+
+    /**
+     * Acerta users.trial_ends_at quando o trial muda no Stripe (ex.: terminado mais cedo), porque
+     * a lista do admin filtra e conta por essa coluna. Só escreve numa transição real do trial
+     * (previous_attributes): um evento antigo sem alteração do trial, entregue tarde, não pode
+     * repor a data anterior.
+     * Ignora contas que não estão Active (a ativação trata delas), subscrições terminadas e as que
+     * não são a subscrição atual do membro (ex.: evento da antiga depois de uma reativação).
+     * Fora de trialing a data nunca fica no futuro: com um test clock o trial_end pode estar à
+     * frente do relógio real, e a conta voltaria a parecer em trial.
+     *
+     * @param  array<string, mixed>  $data  Objeto subscrição do evento.
+     * @param  array<string, mixed>  $previous  data.previous_attributes do evento.
+     */
+    private function syncTrialEnd(User $user, array $data, array $previous): void
+    {
+        $trialChanged = array_key_exists('trial_end', $previous)
+            || ($previous['status'] ?? null) === StripeSubscription::STATUS_TRIALING;
+
+        if (! $trialChanged
+            || $user->accountStatus?->name !== 'Active'
+            || in_array($data['status'] ?? null, self::ENDED_STATUSES, true)
+            || $user->currentSubscription()?->stripe_id !== $data['id']) {
+            return;
+        }
+
+        $trialEnd = isset($data['trial_end']) ? Carbon::createFromTimestamp($data['trial_end']) : null;
+        $isTrialing = ($data['status'] ?? null) === StripeSubscription::STATUS_TRIALING;
+
+        $user->forceFill(['trial_ends_at' => $isTrialing ? $trialEnd : $trialEnd?->min(now())])->save();
     }
 
     /**
