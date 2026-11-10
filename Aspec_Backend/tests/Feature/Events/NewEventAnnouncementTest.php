@@ -110,6 +110,13 @@ class NewEventAnnouncementTest extends TestCase
         return (string) $notification->toMail($notifiable)->render();
     }
 
+    private function eventLoginUrl(EventInstance|string $event): string
+    {
+        $eventId = $event instanceof EventInstance ? $event->id : $event;
+
+        return self::FRONTEND.'/login?redirect='.rawurlencode('/eventos/'.$eventId);
+    }
+
     #[Test]
     public function creating_a_one_off_event_queues_the_announcement_job(): void
     {
@@ -193,7 +200,7 @@ class NewEventAnnouncementTest extends TestCase
             NewEventAnnouncementNotification::class,
             fn (NewEventAnnouncementNotification $notification) => str_contains(
                 $this->renderedMail($notification, $member),
-                self::FRONTEND.'/eventos/'.$eventId
+                $this->eventLoginUrl($eventId)
             )
         );
         $this->assertNotNull(DB::table('event_instances')->where('id', $eventId)->value('announced_at'));
@@ -405,7 +412,7 @@ class NewEventAnnouncementTest extends TestCase
                     && str_contains($mail, 'Almoço de Empresários do Norte')
                     && str_contains($mail, $date->format('d/m/Y'))
                     && str_contains($mail, '12:30')
-                    && str_contains($mail, self::FRONTEND.'/eventos/'.$event->id)
+                    && str_contains($mail, $this->eventLoginUrl($event))
                     && str_contains($mail, self::FRONTEND.'/perfil/conta');
             }
         );
@@ -471,7 +478,7 @@ class NewEventAnnouncementTest extends TestCase
 
         $html = $this->announcementHtml($event, $member);
 
-        $this->assertNotNull($this->anchorTagFor($html, self::FRONTEND.'/eventos/'.$event->id));
+        $this->assertNotNull($this->anchorTagFor($html, $this->eventLoginUrl($event)));
         $this->assertStringContainsString('Ver o evento', $html);
         $this->assertCalendarButton($html, $event->id);
     }
@@ -651,7 +658,7 @@ class NewEventAnnouncementTest extends TestCase
 
         $this->assertSame('tr', $this->commonAncestorTag(
             $html,
-            self::FRONTEND.'/eventos/'.$event->id,
+            $this->eventLoginUrl($event),
             $this->calendarIcsUrl($event->id)
         ));
     }
@@ -664,7 +671,7 @@ class NewEventAnnouncementTest extends TestCase
 
         $text = $this->announcementText($event, $member);
 
-        $this->assertStringContainsString('Ver o evento: '.self::FRONTEND.'/eventos/'.$event->id, $text);
+        $this->assertStringContainsString('Ver o evento: '.$this->eventLoginUrl($event), $text);
         $this->assertStringContainsString('Adicionar ao calendário: '.$this->calendarIcsUrl($event->id), $text);
     }
 }
