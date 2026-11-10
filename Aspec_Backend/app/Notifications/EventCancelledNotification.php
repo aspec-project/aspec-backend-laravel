@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\EscapesMarkdown;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class EventCancelledNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use EscapesMarkdown, Queueable;
 
     public function __construct(
         public string $eventName,
@@ -31,12 +32,12 @@ class EventCancelledNotification extends Notification implements ShouldQueue
             ->subject("Evento cancelado: {$this->eventName}")
             ->greeting('Olá,')
             ->line(
-                "O evento {$this->eventName}, previsto para {$this->eventDate} às {$this->eventStartTime}, foi cancelado."
+                "O evento {$this->markdownText($this->eventName)}, previsto para {$this->eventDate} às {$this->eventStartTime}, foi cancelado."
             )
             ->line('A sua inscrição foi cancelada.');
 
         if ($this->justification !== null && trim($this->justification) !== '') {
-            $mail->line("Justificação: {$this->justification}");
+            $mail->line('Justificação: '.$this->markdownText($this->justification));
         }
 
         return $mail->line('Lamentamos o incómodo.');
