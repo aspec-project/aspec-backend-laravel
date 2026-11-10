@@ -147,11 +147,11 @@ trait DescribesEvent
     }
 
     /**
-     * Página do evento no frontend.
+     * Página de login, com regresso ao evento depois da autenticação.
      */
     protected function eventUrl(EventInstance $event): string
     {
-        return $this->frontendUrl("/eventos/{$event->id}");
+        return $this->frontendUrl('/login?redirect='.rawurlencode("/eventos/{$event->id}"));
     }
 
     /**
