@@ -86,6 +86,7 @@ class AdminDashboardController extends Controller
 
     /**
      * Calcula os seis grupos de números dos cartões do painel.
+     * Os membros ativos trazem o total, os novos deste mês e a divisão em trial, ativos e administradores.
      *
      * @param  array{month_start: CarbonImmutable, month_end: CarbonImmutable, week_start: CarbonImmutable, week_end: CarbonImmutable}  $periods  Limites do mês e da semana em Lisboa.
      * @return array<string, array<string, int>>
@@ -125,10 +126,13 @@ class AdminDashboardController extends Controller
             ->where('created_at', '<', $periods['week_start']->addWeek()->utc()->toDateTimeString())
             ->count();
 
+        $activeSplit = $this->activeMemberCounts();
+
         return [
             'active_members' => [
-                'total' => (int) $this->activeMembers()->count(),
+                'total' => $activeSplit['trial'] + $activeSplit['active'],
                 'new_this_month' => (int) $newThisMonth,
+                ...$activeSplit,
             ],
             'pending_applications' => [
                 'total' => (int) $pendingTotal,
@@ -143,6 +147,40 @@ class AdminDashboardController extends Controller
             ],
             'overdue_payments' => $this->overduePayments(),
             'event_registrations' => $this->registrationsThisWeek($periods),
+        ];
+    }
+
+    /**
+     * Membros ativos divididos por estado (trial e ativo) e quantos deles são administradores,
+     * numa só consulta. O total é a soma dos dois estados, que nunca se sobrepõem.
+     * O admin técnico (isento) e os admins em carência ou inativos não contam.
+     *
+     * @return array{trial: int, active: int, admins: int}
+     */
+    private function activeMemberCounts(): array
+    {
+        $trialQuery = User::query()
+            ->inSubscriptionState(SubscriptionState::Trial)
+            ->selectRaw("'trial' as bucket, COUNT(*) as aggregate")
+            ->toBase();
+
+        $adminsQuery = $this->activeMembers()
+            ->whereHas('role', fn (Builder $role) => $role->where('name', 'Admin'))
+            ->selectRaw("'admins' as bucket, COUNT(*) as aggregate")
+            ->toBase();
+
+        $counts = User::query()
+            ->inSubscriptionState(SubscriptionState::Active)
+            ->selectRaw("'active' as bucket, COUNT(*) as aggregate")
+            ->toBase()
+            ->unionAll($trialQuery)
+            ->unionAll($adminsQuery)
+            ->pluck('aggregate', 'bucket');
+
+        return [
+            'trial' => (int) ($counts['trial'] ?? 0),
+            'active' => (int) ($counts['active'] ?? 0),
+            'admins' => (int) ($counts['admins'] ?? 0),
         ];
     }
 

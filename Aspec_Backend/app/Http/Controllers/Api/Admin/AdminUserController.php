@@ -523,7 +523,7 @@ class AdminUserController extends Controller
      * (só números). Inclui admins e a própria conta, só para leitura.
      *
      * @param  string  $id  Id (UUID) do utilizador.
-     * @return JsonResponse 200 com o AdminUserDetailResource; 404 se não existir ou estiver apagado.
+     * @return JsonResponse 200 com o AdminUserDetailResource, com Cache-Control private, no-store (tem dados pessoais); 404 se não existir ou estiver apagado.
      */
     public function show(string $id): JsonResponse
     {
@@ -533,7 +533,7 @@ class AdminUserController extends Controller
         return $this->successResponse(
             new AdminUserDetailResource($user),
             'Utilizador obtido com sucesso.'
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**

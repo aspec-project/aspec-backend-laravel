@@ -196,7 +196,7 @@ class AdminDashboardTest extends TestCase
             ['active_members', 'event_registrations', 'events', 'overdue_payments', 'pending_applications', 'reviews'],
             $this->sortedKeys($data['stats'])
         );
-        $this->assertSame(['new_this_month', 'total'], $this->sortedKeys($data['stats']['active_members']));
+        $this->assertSame(['active', 'admins', 'new_this_month', 'total', 'trial'], $this->sortedKeys($data['stats']['active_members']));
         $this->assertSame(['total'], $this->sortedKeys($data['stats']['pending_applications']));
         $this->assertSame(['this_month', 'this_week'], $this->sortedKeys($data['stats']['events']));
         $this->assertSame(['flagged', 'new_this_week'], $this->sortedKeys($data['stats']['reviews']));
@@ -205,6 +205,9 @@ class AdminDashboardTest extends TestCase
 
         $this->assertSame(0, $data['stats']['active_members']['total']);
         $this->assertSame(0, $data['stats']['active_members']['new_this_month']);
+        $this->assertSame(0, $data['stats']['active_members']['trial']);
+        $this->assertSame(0, $data['stats']['active_members']['active']);
+        $this->assertSame(0, $data['stats']['active_members']['admins']);
         $this->assertSame(0, $data['stats']['pending_applications']['total']);
         $this->assertSame(0, $data['stats']['events']['this_month']);
         $this->assertSame(0, $data['stats']['events']['this_week']);
@@ -249,6 +252,64 @@ class AdminDashboardTest extends TestCase
             ->json('data.subscription_state_counts');
         $this->assertSame(4, $counts['trial'] + $counts['active']);
         $this->assertSame(1, $counts['grace']);
+    }
+
+    #[Test]
+    public function active_members_are_split_into_trial_and_active_and_count_promoted_admins(): void
+    {
+        $this->nowInLisbon('2026-11-11 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        User::factory()->create();
+        User::factory()->create(['trial_ends_at' => now()->addDays(10)]);
+        $this->inGrace(User::factory()->create());
+        User::factory()->admin()->create();
+        User::factory()->admin()->create(['trial_ends_at' => now()->addDays(10)]);
+
+        User::factory()->technicalAdmin()->create();
+        User::factory()->pending()->create();
+        User::factory()->approved()->create();
+        User::factory()->inactive(InactiveReason::Blocked)->create();
+        User::factory()->inactive(InactiveReason::Unpaid)->create();
+        User::factory()->inactive(InactiveReason::Cancelled)->create();
+        $this->withProfile(User::factory()->create())->anonymizeAndDelete();
+
+        $activeMembers = $this->dashboard()->json('data.stats.active_members');
+
+        $this->assertSame(4, $activeMembers['total'] ?? null);
+        $this->assertSame(0, $activeMembers['new_this_month'] ?? null);
+        $this->assertSame(2, $activeMembers['trial'] ?? null);
+        $this->assertSame(2, $activeMembers['active'] ?? null);
+        $this->assertSame(2, $activeMembers['admins'] ?? null);
+        $this->assertSame($activeMembers['total'], $activeMembers['trial'] + $activeMembers['active']);
+
+        $counts = $this->getJson('/api/admin/users?include_admins=1')
+            ->assertOk()
+            ->json('data.subscription_state_counts');
+        $this->assertSame($counts['trial'], $activeMembers['trial']);
+        $this->assertSame($counts['active'], $activeMembers['active']);
+    }
+
+    #[Test]
+    public function admins_in_active_members_leave_out_the_technical_admin_and_admins_in_grace_or_inactive(): void
+    {
+        $this->nowInLisbon('2026-11-11 12:00:00');
+        $this->actingAsTechnicalAdmin();
+
+        User::factory()->create();
+        User::factory()->create(['trial_ends_at' => now()->addDays(10)]);
+
+        User::factory()->technicalAdmin()->create();
+        $this->inGrace(User::factory()->admin()->create());
+        User::factory()->admin()->inactive(InactiveReason::Unpaid)->create();
+
+        $stats = $this->dashboard()->json('data.stats');
+
+        $this->assertSame(0, $stats['active_members']['admins'] ?? null);
+        $this->assertSame(1, $stats['active_members']['trial'] ?? null);
+        $this->assertSame(1, $stats['active_members']['active'] ?? null);
+        $this->assertSame(2, $stats['active_members']['total']);
+        $this->assertSame(1, $stats['overdue_payments']['grace']);
     }
 
     #[Test]
