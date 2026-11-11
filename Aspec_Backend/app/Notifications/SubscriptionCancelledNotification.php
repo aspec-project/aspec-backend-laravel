@@ -47,6 +47,6 @@ class SubscriptionCancelledNotification extends Notification implements ShouldQu
             ->line("Pediu o cancelamento da subscrição. Mantém o acesso até {$date}; depois a conta fica inativa e não há mais cobranças.")
             ->line('Mudou de ideias? Pode retomar a subscrição até essa data.')
             ->action('Gerir subscrição', rtrim(config('app.frontend_url'), '/').'/conta/subscricao')
-            ->line('Se não foi você, altere a password e retome a subscrição.');
+            ->line('Se não foi você, altere a palavra-passe e retome a subscrição.');
     }
 }

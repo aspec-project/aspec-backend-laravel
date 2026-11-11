@@ -20,11 +20,13 @@ use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\FillsRateLimits;
+use Tests\Concerns\PostalCodeMessage;
 use Tests\TestCase;
 
 class MemberProfileUpdateTest extends TestCase
 {
     use FillsRateLimits;
+    use PostalCodeMessage;
     use RefreshDatabase;
 
     private const URL = '/api/member-profile';
@@ -611,7 +613,7 @@ class MemberProfileUpdateTest extends TestCase
 
         $this->putJson(self::URL, ['email' => 'novo@exemplo.pt', 'current_password' => 'errada123'])
             ->assertUnprocessable()
-            ->assertJsonPath('errors.current_password.0', 'A password atual está incorreta.');
+            ->assertJsonPath('errors.current_password.0', 'A palavra-passe atual está incorreta.');
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
     }
@@ -625,7 +627,7 @@ class MemberProfileUpdateTest extends TestCase
 
         $this->putJson(self::URL, ['email' => $other->email, 'current_password' => 'password'])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['email']);
+            ->assertJsonValidationErrors(['email' => 'O valor do campo email já está a ser utilizado.']);
 
         $this->assertDatabaseHas('users', ['id' => $user->id, 'email' => $user->email]);
     }
@@ -1315,8 +1317,6 @@ class MemberProfileUpdateTest extends TestCase
         $this->assertCommercialContactsUnchanged($user);
     }
 
-    private const POSTAL_CODE_FORMAT_MESSAGE = 'O campo código postal tem de ter o formato 0000-000.';
-
     private function memberWithPostalAddress(string $status = 'Active'): User
     {
         return $this->memberWithProfile($status, [
@@ -1400,6 +1400,8 @@ class MemberProfileUpdateTest extends TestCase
             'letras' => ['ABCD-EFG'],
             'oito dígitos' => ['10001000'],
             'estrangeiro' => ['SW1A 1AA'],
+            'zeros' => ['0000-000'],
+            'começa por 0' => ['0999-999'],
         ];
     }
 
@@ -1414,7 +1416,7 @@ class MemberProfileUpdateTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath('success', false)
             ->assertJsonPath('message', 'Os dados enviados são inválidos.')
-            ->assertJsonValidationErrors(['postal_code' => self::POSTAL_CODE_FORMAT_MESSAGE]);
+            ->assertJsonValidationErrors(['postal_code' => self::POSTAL_CODE_MESSAGE]);
 
         $this->assertPostalAddressUnchanged($user);
     }

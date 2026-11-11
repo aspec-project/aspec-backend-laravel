@@ -170,7 +170,7 @@ class AuthController extends Controller
 
         if (! $user || ! $passwordIsValid) {
             return $this->errorResponse(
-                'Credenciais inválidas. Verifique o seu email e password.',
+                'Credenciais inválidas. Verifique o seu email e palavra-passe.',
                 Response::HTTP_UNAUTHORIZED
             );
         }
@@ -251,7 +251,7 @@ class AuthController extends Controller
 
         if (! $user || ! $passwordIsValid) {
             return $this->errorResponse(
-                'Credenciais inválidas. Verifique o seu email e password.',
+                'Credenciais inválidas. Verifique o seu email e palavra-passe.',
                 Response::HTTP_UNAUTHORIZED
             );
         }
@@ -307,7 +307,7 @@ class AuthController extends Controller
 
         return $this->successResponse(
             null,
-            'Se o email estiver registado e a conta ativa, receberá um link para redefinir a password.'
+            'Se o email estiver registado e a conta ativa, receberá um link para redefinir a palavra-passe.'
         );
     }
 
@@ -354,7 +354,7 @@ class AuthController extends Controller
 
         if ($status !== Password::PASSWORD_RESET) {
             return $this->errorResponse(
-                'Não foi possível redefinir a password. O token é inválido ou expirou.',
+                'O link é inválido ou expirou. Peça um novo link de recuperação.',
                 Response::HTTP_UNPROCESSABLE_ENTITY
             );
         }
@@ -367,7 +367,7 @@ class AuthController extends Controller
 
         return $this->successResponse(
             null,
-            'Password redefinida com sucesso. Inicie sessão novamente.',
+            'Palavra-passe redefinida com sucesso. Inicie sessão novamente.',
             Response::HTTP_OK
         );
     }

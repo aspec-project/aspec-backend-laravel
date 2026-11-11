@@ -45,9 +45,9 @@ class AccountEmailChangedNotification extends Notification
             ->subject('O email da sua conta ASPEC foi alterado')
             ->greeting('Olá!')
             ->line("O email de acesso à sua conta ASPEC foi alterado em {$changedAt->format('d/m/Y')} às {$changedAt->format('H:i')} (hora de Portugal).")
-            ->line("Novo email: {$this->maskedNewEmail()}. O endereço anterior deixa de servir para iniciar sessão ou recuperar a password.")
+            ->line("Novo email: {$this->maskedNewEmail()}. O endereço anterior deixa de servir para iniciar sessão ou recuperar a palavra-passe.")
             ->line('Se foi você, não precisa de fazer nada.')
-            ->line("Se não foi você, a sua password pode ter sido descoberta. Contacte já a ASPEC em {$contactEmail}, indicando o seu nome e o nome da sua empresa. Se usa a mesma password noutros serviços, altere-a também.")
+            ->line("Se não foi você, a sua palavra-passe pode ter sido descoberta. Contacte já a ASPEC em {$contactEmail}, indicando o seu nome e o nome da sua empresa. Se usa a mesma palavra-passe noutros serviços, altere-a também.")
             ->salutation("Cumprimentos,\nASPEC");
     }
 

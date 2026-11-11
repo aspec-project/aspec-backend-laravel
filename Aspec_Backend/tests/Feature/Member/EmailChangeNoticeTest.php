@@ -425,9 +425,9 @@ class EmailChangeNoticeTest extends TestCase
         $text = $this->visibleText($this->renderNotice());
 
         $this->assertStringContainsString('O email de acesso à sua conta ASPEC foi alterado em 09/11/2026 às 22:41 (hora de Portugal).', $text);
-        $this->assertStringContainsString('Novo email: jo•••@g•••.com. O endereço anterior deixa de servir para iniciar sessão ou recuperar a password.', $text);
+        $this->assertStringContainsString('Novo email: jo•••@g•••.com. O endereço anterior deixa de servir para iniciar sessão ou recuperar a palavra-passe.', $text);
         $this->assertStringContainsString('Se foi você, não precisa de fazer nada.', $text);
-        $this->assertStringContainsString('Se não foi você, a sua password pode ter sido descoberta. Contacte já a ASPEC em aspec@aspec.pt, indicando o seu nome e o nome da sua empresa. Se usa a mesma password noutros serviços, altere-a também.', $text);
+        $this->assertStringContainsString('Se não foi você, a sua palavra-passe pode ter sido descoberta. Contacte já a ASPEC em aspec@aspec.pt, indicando o seu nome e o nome da sua empresa. Se usa a mesma palavra-passe noutros serviços, altere-a também.', $text);
         $this->assertStringContainsString('Cumprimentos, ASPEC', $text);
     }
 
