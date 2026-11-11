@@ -23,7 +23,7 @@ class PasswordChangedNotification extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Password alterada')
-            ->line('A sua password foi alterada. Se não foi você, contacte a ASPEC.');
+            ->subject('Palavra-passe alterada')
+            ->line('A sua palavra-passe foi alterada. Se não foi você, contacte a ASPEC.');
     }
 }

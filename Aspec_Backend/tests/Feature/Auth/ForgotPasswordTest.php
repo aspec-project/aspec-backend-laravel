@@ -27,7 +27,8 @@ class ForgotPasswordTest extends TestCase
 
         $this->postJson(self::URL, ['email' => $user->email])
             ->assertOk()
-            ->assertJsonPath('success', true);
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Se o email estiver registado e a conta ativa, receberá um link para redefinir a palavra-passe.');
 
         Queue::assertPushed(
             SendPasswordResetLinkJob::class,

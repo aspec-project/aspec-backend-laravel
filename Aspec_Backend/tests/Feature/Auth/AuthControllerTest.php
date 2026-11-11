@@ -10,10 +10,12 @@ use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\PostalCodeMessage;
 use Tests\TestCase;
 
 class AuthControllerTest extends TestCase
 {
+    use PostalCodeMessage;
     use RefreshDatabase;
 
     private const FRONTEND_ORIGIN = 'http://localhost:5173';
@@ -320,6 +322,67 @@ class AuthControllerTest extends TestCase
             ->assertJsonValidationErrors(['commercial_email']);
     }
 
+    private function registrationPayload(array $overrides = []): array
+    {
+        return [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => Sector::firstOrFail()->id,
+            'location_id' => Location::firstOrFail()->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'description' => 'Descrição do perfil de teste.',
+            'website_url' => 'https://example.com',
+            'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
+            'commercial_email' => 'geral@empresa-teste.pt',
+            'commercial_phone' => '213 456 789',
+            'terms_accepted' => true,
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * Quem já tem conta e volta ao formulário de candidatura deve saber o que fazer a seguir.
+     */
+    #[Test]
+    public function registration_with_an_already_registered_email_is_rejected_with_a_specific_message(): void
+    {
+        $existing = $this->activeUser();
+        $usersBefore = User::withTrashed()->count();
+
+        $this->postJson('/api/auth/register', $this->registrationPayload(['email' => $existing->email]))
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonValidationErrors([
+                'email' => 'Este email já está registado. Inicie sessão ou recupere a palavra-passe.',
+            ]);
+
+        $this->assertSame($usersBefore, User::withTrashed()->count());
+    }
+
+    #[Test]
+    public function registration_rejects_postal_code_starting_with_zero(): void
+    {
+        $this->postJson('/api/auth/register', $this->registrationPayload(['postal_code' => '0000-000']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['postal_code' => self::POSTAL_CODE_MESSAGE]);
+
+        $this->assertDatabaseMissing('users', ['email' => 'novo.membro@example.com']);
+    }
+
+    #[Test]
+    public function registration_password_errors_say_palavra_passe(): void
+    {
+        $this->postJson('/api/auth/register', $this->registrationPayload(['password' => 'SemSimbolo123']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password' => 'O campo palavra-passe tem de conter pelo menos um símbolo.']);
+    }
+
     #[Test]
     public function active_user_can_login_with_spa_session(): void
     {
@@ -369,7 +432,7 @@ class AuthControllerTest extends TestCase
             ->assertUnauthorized()
             ->assertJson([
                 'success' => false,
-                'message' => 'Credenciais inválidas. Verifique o seu email e password.',
+                'message' => 'Credenciais inválidas. Verifique o seu email e palavra-passe.',
             ]);
 
         $this->assertGuest('web');
@@ -389,7 +452,7 @@ class AuthControllerTest extends TestCase
             ->assertUnauthorized()
             ->assertJson([
                 'success' => false,
-                'message' => 'Credenciais inválidas. Verifique o seu email e password.',
+                'message' => 'Credenciais inválidas. Verifique o seu email e palavra-passe.',
             ]);
 
         $this->assertGuest('web');
@@ -563,7 +626,7 @@ class AuthControllerTest extends TestCase
             ->assertUnauthorized()
             ->assertJson([
                 'success' => false,
-                'message' => 'Credenciais inválidas. Verifique o seu email e password.',
+                'message' => 'Credenciais inválidas. Verifique o seu email e palavra-passe.',
             ]);
 
         $this->assertDatabaseMissing('personal_access_tokens', [
@@ -934,7 +997,7 @@ class AuthControllerTest extends TestCase
             ->assertUnauthorized()
             ->assertJson([
                 'success' => false,
-                'message' => 'Credenciais inválidas. Verifique o seu email e password.',
+                'message' => 'Credenciais inválidas. Verifique o seu email e palavra-passe.',
             ]);
 
         $this->assertGuest('web');

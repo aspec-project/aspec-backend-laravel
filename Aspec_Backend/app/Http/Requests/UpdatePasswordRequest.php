@@ -32,4 +32,17 @@ class UpdatePasswordRequest extends FormRequest
             'password' => ['required', 'string', Password::default(), 'confirmed', 'different:current_password'],
         ];
     }
+
+    /**
+     * Mensagem própria para a nova palavra-passe igual à atual; a genérica do "different"
+     * juntaria os dois nomes de campo numa frase pouco natural.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'password.different' => 'A nova palavra-passe tem de ser diferente da atual.',
+        ];
+    }
 }

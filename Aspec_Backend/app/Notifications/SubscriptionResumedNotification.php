@@ -45,6 +45,6 @@ class SubscriptionResumedNotification extends Notification implements ShouldQueu
             ->line('A sua subscrição foi retomada e continua ativa.')
             ->line("A renovação mantém-se a {$this->renewsAt->format('d/m/Y')}, com a cobrança da quota de {$this->formattedPrice()} €.")
             ->action('Gerir subscrição', rtrim(config('app.frontend_url'), '/').'/conta/subscricao')
-            ->line('Se não foi você, altere a password e cancele de novo a subscrição.');
+            ->line('Se não foi você, altere a palavra-passe e cancele de novo a subscrição.');
     }
 }

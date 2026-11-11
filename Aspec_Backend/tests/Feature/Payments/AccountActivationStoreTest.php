@@ -17,6 +17,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Stripe\Exception\ApiConnectionException;
 use Tests\Concerns\BuildsActivationLinks;
+use Tests\Concerns\PostalCodeMessage;
 use Tests\TestCase;
 
 /**
@@ -26,7 +27,7 @@ use Tests\TestCase;
  */
 class AccountActivationStoreTest extends TestCase
 {
-    use BuildsActivationLinks, RefreshDatabase;
+    use BuildsActivationLinks, PostalCodeMessage, RefreshDatabase;
 
     private const CHECKOUT_URL = 'https://checkout.stripe.com/c/pay/cs_test_1';
 
@@ -193,6 +194,8 @@ class AccountActivationStoreTest extends TestCase
             'prefixo com 5 dígitos' => ['10001-00'],
             'letras' => ['ABCD-EFG'],
             'oito dígitos' => ['10001000'],
+            'zeros' => ['0000-000'],
+            'começa por 0' => ['0999-999'],
         ];
     }
 
@@ -206,7 +209,7 @@ class AccountActivationStoreTest extends TestCase
         $this->postJson($this->activationPath($user), $this->billing(['billing_postal_code' => $postalCode]))
             ->assertStatus(422)
             ->assertJsonPath('success', false)
-            ->assertJsonValidationErrors(['billing_postal_code' => 'O campo código postal tem de ter o formato 0000-000.']);
+            ->assertJsonValidationErrors(['billing_postal_code' => self::POSTAL_CODE_MESSAGE]);
 
         $this->assertNull($user->fresh()->billing_postal_code);
     }

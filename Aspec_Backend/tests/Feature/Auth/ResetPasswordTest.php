@@ -21,6 +21,8 @@ class ResetPasswordTest extends TestCase
 
     private const NEW_PASSWORD = 'NewSecret456!';
 
+    private const INVALID_LINK = 'O link é inválido ou expirou. Peça um novo link de recuperação.';
+
     private function payload(User $user, string $token, array $overrides = []): array
     {
         return [
@@ -44,7 +46,7 @@ class ResetPasswordTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'success' => true,
-                'message' => 'Password redefinida com sucesso. Inicie sessão novamente.',
+                'message' => 'Palavra-passe redefinida com sucesso. Inicie sessão novamente.',
                 'data' => null,
             ]);
 
@@ -102,7 +104,7 @@ class ResetPasswordTest extends TestCase
             ->assertUnprocessable()
             ->assertExactJson([
                 'success' => false,
-                'message' => 'Não foi possível redefinir a password. O token é inválido ou expirou.',
+                'message' => self::INVALID_LINK,
             ]);
 
         $this->assertSame($oldPassword, $user->fresh()->password);
@@ -119,7 +121,7 @@ class ResetPasswordTest extends TestCase
             ->assertUnprocessable()
             ->assertExactJson([
                 'success' => false,
-                'message' => 'Não foi possível redefinir a password. O token é inválido ou expirou.',
+                'message' => self::INVALID_LINK,
             ]);
 
         $this->assertSame($oldPassword, $user->fresh()->password);
@@ -173,5 +175,33 @@ class ResetPasswordTest extends TestCase
         ))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
+    }
+
+    /**
+     * O membro vê um link no email, não um "token".
+     */
+    #[Test]
+    public function missing_token_is_reported_as_the_recovery_link(): void
+    {
+        $user = User::factory()->create();
+
+        $this->postJson(self::URL, [
+            'email' => $user->email,
+            'password' => self::NEW_PASSWORD,
+            'password_confirmation' => self::NEW_PASSWORD,
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['token' => 'O campo link de recuperação é obrigatório.']);
+    }
+
+    #[Test]
+    public function password_validation_messages_say_palavra_passe(): void
+    {
+        $user = User::factory()->create();
+        $token = Password::broker()->createToken($user);
+
+        $this->postJson(self::URL, $this->payload($user, $token, ['password_confirmation' => 'DifferentSecret789!']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password' => 'A confirmação do campo palavra-passe não corresponde.']);
     }
 }

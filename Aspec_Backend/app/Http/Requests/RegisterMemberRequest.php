@@ -88,4 +88,17 @@ class RegisterMemberRequest extends FormRequest
 
         ];
     }
+
+    /**
+     * Mensagem própria para o email já registado, que diz o que fazer a seguir. Fica neste request
+     * e não em lang/pt_PT/validation.php porque no perfil (sessão iniciada) "Inicie sessão" não faz sentido.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'Este email já está registado. Inicie sessão ou recupere a palavra-passe.',
+        ];
+    }
 }
