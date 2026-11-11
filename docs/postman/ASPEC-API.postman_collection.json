@@ -151,6 +151,48 @@
                 }
               ],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"commercial_email\": [\n      \"O campo email comercial é obrigatório.\"\n    ],\n    \"commercial_phone\": [\n      \"O campo telefone comercial é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Email já registado",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Email já registado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/auth/register",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "auth",
+                    "register"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"Password123!\",\n  \"phone\": \"+351912345678\",\n  \"name\": \"João Silva\",\n  \"business_name\": \"Silva Consultoria Unipessoal\",\n  \"sector_id\": \"{{sector_id}}\",\n  \"location_id\": \"{{location_id}}\",\n  \"congregation\": \"Igreja Evangélica de Lisboa\",\n  \"role_in_congregation\": \"Diácono\",\n  \"address\": \"Av. da Liberdade 100\",\n  \"postal_code\": \"1250-146\",\n  \"city\": \"Lisboa\",\n  \"commercial_email\": \"geral@silvaconsultoria.pt\",\n  \"commercial_phone\": \"+351212345678\",\n  \"terms_accepted\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"email\": [\n      \"Este email já está registado. Inicie sessão ou recupere a palavra-passe.\"\n    ]\n  }\n}"
             }
           ]
         },
@@ -360,7 +402,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Credenciais inválidas. Verifique o seu email e password.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Credenciais inválidas. Verifique o seu email e palavra-passe.\"\n}"
             },
             {
               "name": "403 Conta pendente",
@@ -643,7 +685,7 @@
                 "token"
               ]
             },
-            "description": "Para Postman e outras ferramentas sem browser: autentica e devolve um **token Sanctum (Bearer)** em `data.token`, com o utilizador em `data.user`. Não precisa de `Origin` nem de sessão. O script de teste guarda o token em `token` (membro) ou `admin_token` (admin).\n\nMesmas regras de estado da conta e mensagens do Login (401 credenciais, 403 conta não ativa). Limite: 5 pedidos por minuto por email + IP (429).\n\nO frontend usa o Login (sessão), não este endpoint.\n\nResponsável: colega da auth.",
+            "description": "Para Postman e outras ferramentas sem browser: autentica e devolve um **token Sanctum (Bearer)** em `data.token`, com o utilizador em `data.user`. Não precisa de `Origin` nem de sessão. O script de teste guarda o token em `token` (membro) ou `admin_token` (admin).\n\nMesmas regras de estado da conta e mensagens do Login (401 credenciais, 403 conta não ativa). Limite: 5 pedidos por minuto por email + IP (429).\n\nO frontend usa o Login (sessão), não este endpoint.\n\nSó existe com `APP_ENV=local` ou `testing`; no deploy devolve 404.\n\nResponsável: colega da auth.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"joao.silva@silvaconsultoria.pt\",\n  \"password\": \"password123\"\n}",
@@ -885,7 +927,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Se o email existir, receberá um link de recuperação em breve.\",\n  \"data\": null\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Se o email estiver registado e a conta ativa, receberá um link para redefinir a palavra-passe.\",\n  \"data\": null\n}"
             },
             {
               "name": "429 Demasiados pedidos",
@@ -1009,7 +1051,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"A sua password foi redefinida. Já pode iniciar sessão.\",\n  \"data\": null\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Palavra-passe redefinida com sucesso. Inicie sessão novamente.\",\n  \"data\": null\n}"
             },
             {
               "name": "422 Token inválido",
@@ -1052,7 +1094,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"email\": [\n      \"O link de recuperação é inválido ou expirou.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"O link é inválido ou expirou. Peça um novo link de recuperação.\"\n}"
             }
           ]
         },
@@ -1731,7 +1773,7 @@
                 "member-profile"
               ]
             },
-            "description": "Atualização **parcial** do perfil e dos dados de conta.\n\n- Campo não enviado → fica igual.\n- Campo opcional com `null` ou `\"\"` → fica vazio.\n- Campos obrigatórios (`name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `email`, `phone`, `address`, `postal_code`, `city`, `commercial_email`, `commercial_phone`) não podem vir vazios.\n- `phone`: aceita números de qualquer país; os estrangeiros precisam do indicativo (`+44 7911 123456`), sem indicativo assume-se Portugal (`912 345 678`). Espaços, `-`, `.` e `()` são aceites; guarda-se e devolve-se em formato E.164 (`+351 912 345 678` → `+351912345678`).\n- `email` e `phone` são os contactos **pessoais** da conta (login): nunca aparecem no diretório.\n- `commercial_email` e `commercial_phone` são os contactos **comerciais** do negócio, visíveis só a membros com conta Active (perfil público, `members_only`). Podem ser iguais aos pessoais. Mudar o `commercial_email` não pede a password atual.\n- `commercial_phone`: aceita números portugueses (`213 456 789`) e estrangeiros com indicativo (`+44 7911 123456`); guarda-se e devolve-se em formato internacional E.164 (`+351213456789`).\n- Perfis antigos podem ter os contactos comerciais a `null`: um PUT sem esses campos continua a funcionar, mas se forem enviados não podem vir vazios.\n- `address` é só a rua (rua, nº, andar); `postal_code` (formato `0000-000`; `1000100` ou `1000 100` são aceites e guardados como `1000-100`) e `city` (localidade, máx. 100) vêm em campos próprios. Perfis antigos podem tê-los a `null`: um PUT sem eles continua a funcionar, mas se forem enviados não podem vir vazios.\n- `website_url` e `social_links[].url`: podem vir sem esquema (`www.empresa.pt`, `linkedin.com/in/nome`): o servidor acrescenta `https://` e devolve o link completo. Outros esquemas (`javascript:`, `mailto:`, `ftp://`) ou `//empresa.pt` dão 422.\n- `business_hours` / `social_links`: se enviados, **substituem** a lista atual (`[]` apaga tudo). Um intervalo por dia; dia sem registo = fechado; `close_time` > `open_time`; formato `HH:MM`.\n- Mudar o `email` exige `current_password`. Enviar `email` só quando muda.\n- `password` não se altera aqui (ver *Alterar password*).\n\nRequer conta **Active**.",
+            "description": "Atualização **parcial** do perfil e dos dados de conta.\n\n- Campo não enviado → fica igual.\n- Campo opcional com `null` ou `\"\"` → fica vazio.\n- Campos obrigatórios (`name`, `business_name`, `sector_id`, `location_id`, `congregation`, `role_in_congregation`, `email`, `phone`, `address`, `postal_code`, `city`, `commercial_email`, `commercial_phone`) não podem vir vazios.\n- `phone`: aceita números de qualquer país; os estrangeiros precisam do indicativo (`+44 7911 123456`), sem indicativo assume-se Portugal (`912 345 678`). Espaços, `-`, `.` e `()` são aceites; guarda-se e devolve-se em formato E.164 (`+351 912 345 678` → `+351912345678`).\n- `email` e `phone` são os contactos **pessoais** da conta (login): nunca aparecem no diretório.\n- `commercial_email` e `commercial_phone` são os contactos **comerciais** do negócio, visíveis só a membros com conta Active (perfil público, `members_only`). Podem ser iguais aos pessoais. Mudar o `commercial_email` não pede a password atual.\n- `commercial_phone`: aceita números portugueses (`213 456 789`) e estrangeiros com indicativo (`+44 7911 123456`); guarda-se e devolve-se em formato internacional E.164 (`+351213456789`).\n- Perfis antigos podem ter os contactos comerciais a `null`: um PUT sem esses campos continua a funcionar, mas se forem enviados não podem vir vazios.\n- `address` é só a rua (rua, nº, andar); `postal_code` (formato `NNNN-NNN`, a começar por 1–9; `1000100` ou `1000 100` são aceites e guardados como `1000-100`) e `city` (localidade, máx. 100) vêm em campos próprios. Perfis antigos podem tê-los a `null`: um PUT sem eles continua a funcionar, mas se forem enviados não podem vir vazios.\n- `website_url` e `social_links[].url`: podem vir sem esquema (`www.empresa.pt`, `linkedin.com/in/nome`): o servidor acrescenta `https://` e devolve o link completo. Outros esquemas (`javascript:`, `mailto:`, `ftp://`) ou `//empresa.pt` dão 422.\n- `business_hours` / `social_links`: se enviados, **substituem** a lista atual (`[]` apaga tudo). Um intervalo por dia; dia sem registo = fechado; `close_time` > `open_time`; formato `HH:MM`.\n- Mudar o `email` exige `current_password`. Enviar `email` só quando muda.\n- Mudar o `email` termina as outras sessões e tokens; o acesso atual mantém-se.\n- Mudar o `email` envia um aviso para o endereço anterior.\n- `password` não se altera aqui (ver *Alterar password*).\n\nRequer conta **Active**.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"business_name\": \"Silva Consultoria Unipessoal, Lda.\",\n  \"website_url\": \"www.silvaconsultoria.pt\",\n  \"address\": \"Av. da Liberdade 100\",\n  \"postal_code\": \"1250146\",\n  \"city\": \"Lisboa\",\n  \"commercial_email\": \"geral@silvaconsultoria.pt\",\n  \"commercial_phone\": \"213 456 789\",\n  \"business_hours\": [\n    {\n      \"week_day_id\": 1,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"18:00\"\n    },\n    {\n      \"week_day_id\": 5,\n      \"open_time\": \"09:00\",\n      \"close_time\": \"17:00\"\n    }\n  ],\n  \"social_links\": [\n    {\n      \"platform_id\": \"a1b2c3d4-0001-4a00-8000-000000000001\",\n      \"url\": \"www.linkedin.com/company/silva-consultoria\"\n    }\n  ]\n}",
@@ -1909,7 +1951,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A palavra-passe atual está incorreta.\"\n    ]\n  }\n}"
             },
             {
               "name": "200 Telefone estrangeiro",
@@ -2077,7 +2119,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"postal_code\": [\n      \"O campo código postal tem de ter o formato 0000-000.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"postal_code\": [\n      \"O campo código postal tem de ser um código postal português válido, no formato 1234-567.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Website com esquema inválido",
@@ -2162,6 +2204,48 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"commercial_email\": [\n      \"O campo email comercial é obrigatório.\"\n    ],\n    \"commercial_phone\": [\n      \"O campo telefone comercial é obrigatório.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Email inválido",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Email inválido"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/member-profile",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "member-profile"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"joão@novodominio.pt\",\n  \"current_password\": \"password123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"email\": [\n      \"O campo email tem de ser um endereço de email válido.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Email comercial inválido",
@@ -3382,7 +3466,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Password alterada com sucesso. Inicie sessão novamente.\",\n  \"data\": null\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Palavra-passe alterada com sucesso. Inicie sessão novamente.\",\n  \"data\": null\n}"
             },
             {
               "name": "422 Validação",
@@ -3425,7 +3509,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A password atual está incorreta.\"\n    ],\n    \"password\": [\n      \"A confirmação do campo password não corresponde.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"current_password\": [\n      \"A palavra-passe atual está incorreta.\"\n    ],\n    \"password\": [\n      \"A confirmação do campo palavra-passe não corresponde.\"\n    ]\n  }\n}"
             },
             {
               "name": "422 Password fraca",
@@ -3468,7 +3552,50 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"password\": [\n      \"O campo password tem de conter pelo menos uma letra maiúscula e uma minúscula.\",\n      \"O campo password tem de conter pelo menos um símbolo.\",\n      \"O campo password tem de conter pelo menos um número.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"password\": [\n      \"O campo palavra-passe tem de conter pelo menos uma letra maiúscula e uma minúscula.\",\n      \"O campo palavra-passe tem de conter pelo menos um símbolo.\",\n      \"O campo palavra-passe tem de conter pelo menos um número.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Palavra-passe igual à atual",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Palavra-passe igual à atual"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/account/password",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "account",
+                    "password"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"current_password\": \"Password123!\",\n  \"password\": \"Password123!\",\n  \"password_confirmation\": \"Password123!\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"password\": [\n      \"A nova palavra-passe tem de ser diferente da atual.\"\n    ]\n  }\n}"
             },
             {
               "name": "429 Demasiados pedidos",
@@ -4662,7 +4789,7 @@
                 }
               ]
             },
-            "description": "Requer autenticação e conta Active. Cria uma avaliação de 1 a 5 estrelas para outro membro. Só é permitida uma avaliação por par de membros; se já existir uma avaliação do autor para esse membro, este pedido atualiza-a. `rating` é obrigatório e tem de estar entre 1 e 5. `comment` é obrigatório e pode ter até 2000 caracteres. Não é possível avaliar o próprio perfil.",
+            "description": "Requer autenticação e conta Active. Cria uma avaliação de 1 a 5 estrelas para outro membro. Só é permitida uma avaliação por par de membros; se já existir uma avaliação do autor para esse membro, este pedido atualiza-a. `rating` é obrigatório e tem de estar entre 1 e 5. `comment` é obrigatório e pode ter até 2000 caracteres. Não é possível avaliar o próprio perfil. A resposta traz `status` (Visible, Flagged ou Hidden), só para o autor; a lista pública não o mostra. Quando a avaliação fica sinalizada (Flagged), por exemplo pelo filtro automático de linguagem, a mensagem é «A sua avaliação ficou a aguardar moderação.» e a avaliação só fica pública depois de o admin a aprovar. Os códigos 201/200 não mudam.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excelente profissional, recomendo.\"\n}",
@@ -4707,7 +4834,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Avaliação criada com sucesso.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 5,\n    \"comment\": \"Excelente profissional, recomendo.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-01T10:00:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Avaliação criada com sucesso.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 5,\n    \"comment\": \"Excelente profissional, recomendo.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-01T10:00:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true,\n    \"status\": \"Visible\"\n  }\n}"
             },
             {
               "name": "200 Avaliação atualizada",
@@ -4742,7 +4869,77 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Avaliação atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 3,\n    \"comment\": \"Atualização do comentário.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-02T11:30:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Avaliação atualizada com sucesso.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 3,\n    \"comment\": \"Atualização do comentário.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-02T11:30:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true,\n    \"status\": \"Visible\"\n  }\n}"
+            },
+            {
+              "name": "201 Avaliação a aguardar moderação",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "201 Avaliação a aguardar moderação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/members/5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b/reviews",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "members",
+                    "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+                    "reviews"
+                  ]
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"A sua avaliação ficou a aguardar moderação.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 5,\n    \"comment\": \"Excelente profissional, recomendo.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-01T10:00:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true,\n    \"status\": \"Flagged\"\n  }\n}"
+            },
+            {
+              "name": "200 Avaliação editada a aguardar moderação",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "200 Avaliação editada a aguardar moderação"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/members/5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b/reviews",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "members",
+                    "5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b",
+                    "reviews"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": true,\n  \"message\": \"A sua avaliação ficou a aguardar moderação.\",\n  \"data\": {\n    \"id\": \"b8f9c1a0-8888-4e88-8888-888888888888\",\n    \"rating\": 3,\n    \"comment\": \"Atualização do comentário.\",\n    \"created_at\": \"2026-10-01T10:00:00+01:00\",\n    \"updated_at\": \"2026-10-02T11:30:00+01:00\",\n    \"reviewer\": {\n      \"id\": \"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"business_name\": \"Santos & Filhos Arquitetura\"\n    },\n    \"is_mine\": true,\n    \"status\": \"Flagged\"\n  }\n}"
             },
             {
               "name": "403 Auto-avaliação",
@@ -4952,7 +5149,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente nuevamente mais tarde.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Demasiados pedidos. Tente novamente mais tarde.\"\n}"
             }
           ]
         },
@@ -9495,7 +9692,7 @@
                 }
               ]
             },
-            "description": "**Link assinado, sem login** (middleware `signed:relative`; limite de pedidos `account-activation`).\n\nO email de ativação (depois da aprovação pelo admin) ou de reativação (conta inativa por falta de pagamento) aponta para o frontend: `{FRONTEND_URL}/ativacao/{user}?expires=…&signature=…`. O frontend chama a API com o **mesmo caminho e a mesma query** (`expires`, `signature`), sem os alterar: a assinatura é relativa, por isso não depende do host. O link pode ser usado várias vezes até expirar (ativação e reativação: 7 dias, configurável; quem chegar tarde pede outro em *Reenviar link de ativação*).\n\nA **assinatura é verificada antes de procurar a conta**: um link alterado ou expirado dá sempre 403, mesmo que o utilizador não exista. O 404 só aparece com assinatura válida e a conta já não existe (ex.: entretanto apagada).\n\nGrava os dados de faturação (para a fatura InvoiceExpress), cria o cliente no Stripe e uma sessão do **Stripe Checkout**. O frontend redireciona o browser para `data.checkout_url`, onde o membro insere o cartão. Os dados do cartão nunca passam pelo backend nem pelo frontend.\n\n**Body (ativação, todos obrigatórios):**\n- `billing_name` (string, máx. 255): nome da empresa na fatura;\n- `nif` (NIF português válido, 9 dígitos com dígito de controlo);\n- `billing_address` (string, máx. 255);\n- `billing_postal_code` (formato `0000-000`);\n- `billing_city` (string, máx. 100).\n\nNa **reativação** o body é **ignorado** (pode ser `{}`): usa os dados de faturação guardados na ativação, para que um link de reativação não permita trocar o NIF/morada das faturas. Por isso a reativação nunca dá 422.\n\n**Repetir o POST** (duplo clique, duas abas) enquanto a sessão de Checkout anterior estiver aberta devolve **o mesmo** `checkout_url`: não se criam duas subscrições. Se a conta já tiver uma subscrição em curso (ex.: pagamento feito, webhook ainda a chegar) → 409.\n\n**A conta não muda neste pedido.** Só o webhook do Stripe a ativa (Approved → Active com período experimental; Inactive por falta de pagamento → Active, cobrado logo, sem novo período experimental). Depois do pagamento o Stripe volta a `{FRONTEND_URL}/ativacao/sucesso` (\"Pagamento registado; já pode iniciar sessão\"); se o membro cancelar, volta ao link de ativação.\n\nErros: 403 link alterado ou expirado (sempre antes do 404) · 404 assinatura válida mas a conta já não existe · 409 a conta não está à espera de ativação ou já tem uma subscrição em curso · 422 validação (só ativação) · 429 demasiados pedidos · 502 falha a contactar o Stripe.\n\n**Limite:** `account-activation`, 20 pedidos por minuto por IP (contam também os links forjados: o limite é verificado antes da assinatura).",
+            "description": "**Link assinado, sem login** (middleware `signed:relative`; limite de pedidos `account-activation`).\n\nO email de ativação (depois da aprovação pelo admin) ou de reativação (conta inativa por falta de pagamento) aponta para o frontend: `{FRONTEND_URL}/ativacao/{user}?expires=…&signature=…`. O frontend chama a API com o **mesmo caminho e a mesma query** (`expires`, `signature`), sem os alterar: a assinatura é relativa, por isso não depende do host. O link pode ser usado várias vezes até expirar (ativação e reativação: 7 dias, configurável; quem chegar tarde pede outro em *Reenviar link de ativação*).\n\nA **assinatura é verificada antes de procurar a conta**: um link alterado ou expirado dá sempre 403, mesmo que o utilizador não exista. O 404 só aparece com assinatura válida e a conta já não existe (ex.: entretanto apagada).\n\nGrava os dados de faturação (para a fatura InvoiceExpress), cria o cliente no Stripe e uma sessão do **Stripe Checkout**. O frontend redireciona o browser para `data.checkout_url`, onde o membro insere o cartão. Os dados do cartão nunca passam pelo backend nem pelo frontend.\n\n**Body (ativação, todos obrigatórios):**\n- `billing_name` (string, máx. 255): nome da empresa na fatura;\n- `nif` (NIF português válido, 9 dígitos com dígito de controlo);\n- `billing_address` (string, máx. 255);\n- `billing_postal_code` (formato `NNNN-NNN`, a começar por 1–9);\n- `billing_city` (string, máx. 100).\n\nNa **reativação** o body é **ignorado** (pode ser `{}`): usa os dados de faturação guardados na ativação, para que um link de reativação não permita trocar o NIF/morada das faturas. Por isso a reativação nunca dá 422.\n\n**Repetir o POST** (duplo clique, duas abas) enquanto a sessão de Checkout anterior estiver aberta devolve **o mesmo** `checkout_url`: não se criam duas subscrições. Se a conta já tiver uma subscrição em curso (ex.: pagamento feito, webhook ainda a chegar) → 409.\n\n**A conta não muda neste pedido.** Só o webhook do Stripe a ativa (Approved → Active com período experimental; Inactive por falta de pagamento → Active, cobrado logo, sem novo período experimental). Depois do pagamento o Stripe volta a `{FRONTEND_URL}/ativacao/sucesso` (\"Pagamento registado; já pode iniciar sessão\"); se o membro cancelar, volta ao link de ativação.\n\nErros: 403 link alterado ou expirado (sempre antes do 404) · 404 assinatura válida mas a conta já não existe · 409 a conta não está à espera de ativação ou já tem uma subscrição em curso · 422 validação (só ativação) · 429 demasiados pedidos · 502 falha a contactar o Stripe.\n\n**Limite:** `account-activation`, 20 pedidos por minuto por IP (contam também os links forjados: o limite é verificado antes da assinatura).",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"billing_name\": \"Silva Consultoria Unipessoal, Lda.\",\n  \"nif\": \"509123457\",\n  \"billing_address\": \"Av. da Liberdade 100, 3.º Esq.\",\n  \"billing_postal_code\": \"1250-146\",\n  \"billing_city\": \"Lisboa\"\n}",
@@ -9932,7 +10129,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"nif\": [\n      \"O campo NIF tem de ser um NIF português válido.\"\n    ],\n    \"billing_postal_code\": [\n      \"O formato do campo código postal é inválido.\"\n    ]\n  }\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"nif\": [\n      \"O campo NIF tem de ser um NIF português válido.\"\n    ],\n    \"billing_postal_code\": [\n      \"O campo código postal tem de ser um código postal português válido, no formato 1234-567.\"\n    ]\n  }\n}"
             },
             {
               "name": "429 Demasiados pedidos",
@@ -10713,7 +10910,7 @@
                 "cancel"
               ]
             },
-            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`: é um POST porque muda o estado no Stripe.\n\nAgenda o cancelamento da subscrição para o **fim do período já pago** (no período experimental, para o fim do trial, sem cobrança). Sem reembolso. O membro **mantém o acesso até `ends_at`** e pode retomar até lá (\"Retomar subscrição\"). Recebe um email de confirmação (com o aviso \"Se não foi você, altere a password e retome a subscrição\"). No fim do período o Stripe termina a subscrição e a conta passa a **Inactive**, com o email \"A sua subscrição ASPEC terminou\" e o link de reativação (sem novo período experimental).\n\nSó com `status` `trialing`/`active` e sem cancelamento agendado. Com um pagamento em atraso (`past_due`/`unpaid`) é recusado: a subscrição já termina no fim do período de carência se não for paga. O portal de faturação **não** permite cancelar: este é o único caminho.\n\nResposta: a subscrição atualizada (mesmo formato de \"Ver a minha subscrição\"), com `cancel_at_period_end: true`, `ends_at` e `next_payment_at: null`.\n\n**Limite:** `subscription-change`, 120 pedidos por minuto e 10 por dia por utilizador (cada pedido envia um email), partilhado com \"Retomar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou cancelamento já agendado, pagamento em atraso ou estado que não permite cancelar · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`: é um POST porque muda o estado no Stripe.\n\nAgenda o cancelamento da subscrição para o **fim do período já pago** (no período experimental, para o fim do trial, sem cobrança). Sem reembolso. O membro **mantém o acesso até `ends_at`** e pode retomar até lá (\"Retomar subscrição\"). Recebe um email de confirmação (com o aviso \"Se não foi você, altere a palavra-passe e retome a subscrição\"). No fim do período o Stripe termina a subscrição e a conta passa a **Inactive**, com o email \"A sua subscrição ASPEC terminou\" e o link de reativação (sem novo período experimental).\n\nSó com `status` `trialing`/`active` e sem cancelamento agendado. Com um pagamento em atraso (`past_due`/`unpaid`) é recusado: a subscrição já termina no fim do período de carência se não for paga. O portal de faturação **não** permite cancelar: este é o único caminho.\n\nResposta: a subscrição atualizada (mesmo formato de \"Ver a minha subscrição\"), com `cancel_at_period_end: true`, `ends_at` e `next_payment_at: null`.\n\n**Limite:** `subscription-change`, 120 pedidos por minuto e 10 por dia por utilizador (cada pedido envia um email), partilhado com \"Retomar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou cancelamento já agendado, pagamento em atraso ou estado que não permite cancelar · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
           },
           "response": [
             {
@@ -11078,7 +11275,7 @@
                 "resume"
               ]
             },
-            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`.\n\nAnula um cancelamento agendado: a subscrição continua e a renovação mantém-se na data em que ia terminar (`ends_at` anterior), com a cobrança da quota. Só funciona antes de `ends_at`. O membro recebe um email de confirmação (com o aviso \"Se não foi você, altere a password e cancele de novo a subscrição\"); se o Stripe falhar, nada muda e não há email.\n\nResposta: a subscrição atualizada, com `cancel_at_period_end: false`, `ends_at: null` e `next_payment_at` de novo preenchido.\n\n**Limite:** `subscription-change`, 120 pedidos por minuto e 10 por dia por utilizador (cada pedido envia um email), partilhado com \"Cancelar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou sem cancelamento agendado (ou o período já terminou) · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
+            "description": "**Requer login e conta Active** (`auth:sanctum` + `account.active`). Sem body. Em modo SPA (cookie) envia o header `X-XSRF-TOKEN`.\n\nAnula um cancelamento agendado: a subscrição continua e a renovação mantém-se na data em que ia terminar (`ends_at` anterior), com a cobrança da quota. Só funciona antes de `ends_at`. O membro recebe um email de confirmação (com o aviso \"Se não foi você, altere a palavra-passe e cancele de novo a subscrição\"); se o Stripe falhar, nada muda e não há email.\n\nResposta: a subscrição atualizada, com `cancel_at_period_end: false`, `ends_at: null` e `next_payment_at` de novo preenchido.\n\n**Limite:** `subscription-change`, 120 pedidos por minuto e 10 por dia por utilizador (cada pedido envia um email), partilhado com \"Cancelar subscrição\".\n\nErros: 401 sem sessão/token · 403 conta não ativa · 404 sem subscrição (ex.: administrador) · 409 conta bloqueada enquanto o pedido estava em curso (\"A conta já não está ativa.\") ou sem cancelamento agendado (ou o período já terminou) · 419 sessão expirada (SPA) · 429 demasiados pedidos · 502 falha a contactar o Stripe."
           },
           "response": [
             {
@@ -12240,7 +12437,7 @@
                 "dashboard"
               ]
             },
-            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial ou ativos (os mesmos estados dos *chips* 'Em trial' e 'Ativos' da lista, admins incluídos; o admin técnico, isento, não conta; as contas em carência contam só em `overdue_payments`); `new_this_month` = destes, os que fizeram a 1.ª subscrição este mês. `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). `stats.event_registrations.events_with_registrations` = eventos distintos da semana com pelo menos uma inscrição (cada sessão de uma série conta como um evento). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (= página 1 de 'Dashboard — candidaturas pendentes'; mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário)."
+            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial ou ativos (os mesmos estados dos *chips* 'Em trial' e 'Ativos' da lista, admins incluídos; o admin técnico, isento, não conta; as contas em carência contam só em `overdue_payments`); `new_this_month` = destes, os que fizeram a 1.ª subscrição este mês. `trial` e `active` = a divisão do total pelos dois estados (os mesmos números dos *chips* 'Em trial' e 'Ativos' com 'Ver admins' ligado; `total` = `trial + active`); `admins` = quantos destes são administradores promovidos (o admin técnico nunca conta). `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). `stats.event_registrations.events_with_registrations` = eventos distintos da semana com pelo menos uma inscrição (cada sessão de uma série conta como um evento). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (= página 1 de 'Dashboard — candidaturas pendentes'; mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário)."
           },
           "response": [
             {
@@ -12279,7 +12476,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 320,\n        \"new_this_month\": 12\n      },\n      \"pending_applications\": {\n        \"total\": 3\n      },\n      \"events\": {\n        \"this_month\": 8,\n        \"this_week\": 2\n      },\n      \"reviews\": {\n        \"flagged\": 2,\n        \"new_this_week\": 5\n      },\n      \"overdue_payments\": {\n        \"total\": 7,\n        \"grace\": 4,\n        \"unpaid\": 3\n      },\n      \"event_registrations\": {\n        \"this_week\": 23,\n        \"events_with_registrations\": 2\n      }\n    },\n    \"pending_applications\": [\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000001\",\n        \"email\": \"filipa.rodrigues@example.pt\",\n        \"created_at\": \"2026-10-29T10:32:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Filipa Rodrigues\",\n          \"business_name\": \"Design Studio FiR\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Design\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000002\",\n        \"email\": \"tiago.marques@example.pt\",\n        \"created_at\": \"2026-10-28T16:05:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Tiago Marques\",\n          \"business_name\": \"Marques Contabilidade\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Contabilidade\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000003\",\n        \"email\": \"ines.costa@example.pt\",\n        \"created_at\": \"2026-10-27T09:47:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Inês Costa\",\n          \"business_name\": \"Costa Fotografia\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Fotografia\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Coimbra\"\n          }\n        }\n      }\n    ],\n    \"recent_reviews\": [\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000001\",\n        \"rating\": 5,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"TechBless Solutions\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000002\",\n        \"rating\": 1,\n        \"status\": \"Flagged\",\n        \"reviewed\": {\n          \"business_name\": \"Padaria São João\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Casa Moderna Decorações\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000003\",\n        \"rating\": 4,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"TechBless Solutions\"\n        }\n      }\n    ]\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 320,\n        \"new_this_month\": 12,\n        \"trial\": 41,\n        \"active\": 279,\n        \"admins\": 3\n      },\n      \"pending_applications\": {\n        \"total\": 3\n      },\n      \"events\": {\n        \"this_month\": 8,\n        \"this_week\": 2\n      },\n      \"reviews\": {\n        \"flagged\": 2,\n        \"new_this_week\": 5\n      },\n      \"overdue_payments\": {\n        \"total\": 7,\n        \"grace\": 4,\n        \"unpaid\": 3\n      },\n      \"event_registrations\": {\n        \"this_week\": 23,\n        \"events_with_registrations\": 2\n      }\n    },\n    \"pending_applications\": [\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000001\",\n        \"email\": \"filipa.rodrigues@example.pt\",\n        \"created_at\": \"2026-10-29T10:32:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Filipa Rodrigues\",\n          \"business_name\": \"Design Studio FiR\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Design\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000001\",\n            \"name\": \"Lisboa\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000002\",\n        \"email\": \"tiago.marques@example.pt\",\n        \"created_at\": \"2026-10-28T16:05:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Tiago Marques\",\n          \"business_name\": \"Marques Contabilidade\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Contabilidade\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000002\",\n            \"name\": \"Porto\"\n          }\n        }\n      },\n      {\n        \"id\": \"0f1e2d3c-0000-4000-8000-000000000003\",\n        \"email\": \"ines.costa@example.pt\",\n        \"created_at\": \"2026-10-27T09:47:00+00:00\",\n        \"role\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000002\",\n          \"name\": \"Member\"\n        },\n        \"account_status\": {\n          \"id\": \"a0000000-0000-4000-8000-000000000010\",\n          \"name\": \"Pending\"\n        },\n        \"subscription_state\": {\n          \"value\": \"pending\",\n          \"label\": \"Pendente\"\n        },\n        \"inactive_reason\": null,\n        \"member_profile\": {\n          \"name\": \"Inês Costa\",\n          \"business_name\": \"Costa Fotografia\",\n          \"sector\": {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Fotografia\"\n          },\n          \"location\": {\n            \"id\": \"c0000000-0000-4000-8000-000000000003\",\n            \"name\": \"Coimbra\"\n          }\n        }\n      }\n    ],\n    \"recent_reviews\": [\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000001\",\n        \"rating\": 5,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"TechBless Solutions\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000002\",\n        \"rating\": 1,\n        \"status\": \"Flagged\",\n        \"reviewed\": {\n          \"business_name\": \"Padaria São João\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"Casa Moderna Decorações\"\n        }\n      },\n      {\n        \"id\": \"9e8d7c6b-0000-4000-8000-000000000003\",\n        \"rating\": 4,\n        \"status\": \"Visible\",\n        \"reviewed\": {\n          \"business_name\": \"Construções Silva & Filhos\"\n        },\n        \"reviewer\": {\n          \"business_name\": \"TechBless Solutions\"\n        }\n      }\n    ]\n  }\n}"
             },
             {
               "name": "200 Painel sem dados",
@@ -12317,7 +12514,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 0,\n        \"new_this_month\": 0\n      },\n      \"pending_applications\": {\n        \"total\": 0\n      },\n      \"events\": {\n        \"this_month\": 0,\n        \"this_week\": 0\n      },\n      \"reviews\": {\n        \"flagged\": 0,\n        \"new_this_week\": 0\n      },\n      \"overdue_payments\": {\n        \"total\": 0,\n        \"grace\": 0,\n        \"unpaid\": 0\n      },\n      \"event_registrations\": {\n        \"this_week\": 0,\n        \"events_with_registrations\": 0\n      }\n    },\n    \"pending_applications\": [],\n    \"recent_reviews\": []\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Dados do painel obtidos com sucesso.\",\n  \"data\": {\n    \"stats\": {\n      \"active_members\": {\n        \"total\": 0,\n        \"new_this_month\": 0,\n        \"trial\": 0,\n        \"active\": 0,\n        \"admins\": 0\n      },\n      \"pending_applications\": {\n        \"total\": 0\n      },\n      \"events\": {\n        \"this_month\": 0,\n        \"this_week\": 0\n      },\n      \"reviews\": {\n        \"flagged\": 0,\n        \"new_this_week\": 0\n      },\n      \"overdue_payments\": {\n        \"total\": 0,\n        \"grace\": 0,\n        \"unpaid\": 0\n      },\n      \"event_registrations\": {\n        \"this_week\": 0,\n        \"events_with_registrations\": 0\n      }\n    },\n    \"pending_applications\": [],\n    \"recent_reviews\": []\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -13140,7 +13337,7 @@
                 }
               ]
             },
-            "description": "**Admin.** Detalhe de um utilizador para o backoffice: conta (`email`, `phone`, `created_at`, `role`, `account_status`, `inactive_reason`, `subscription_state`) e `member_profile` no mesmo formato do perfil do próprio membro (horário, redes sociais, portefólio), ou `null` sem perfil (ex.: admins). Não inclui faturação nem dados do Stripe.\n\n`subscription_state` = `{value, label}`, estado da subscrição derivado no servidor (sem datas): `pending` Pendente · `awaiting_activation` Por ativar · `blocked` Bloqueado · `lapsed` Subscrição caída · `inactive` Inativo · `exempt` Isento · `grace` Em carência · `trial` Em trial · `active` Ativo.\n\n`admins_count` (total global de administradores) só aparece quando o utilizador é administrador; usado no aviso do diálogo de despromover.\n\n`review_counts` = `{received, given}`, cada um `{total, hidden, flagged}` (inteiros, nunca `null`): `received` = avaliações ao perfil do utilizador, `given` = avaliações feitas por ele; `total` conta todos os estados (visíveis, ocultas e sinalizadas), `hidden` e `flagged` são partes do total. Só números, nunca o conteúdo. Sem perfil de membro, tudo a 0.\n\n`{id}` tem de ser um UUID. Erros: 401 · 403 sem permissão ou conta não ativa · 404 inexistente, apagado ou id inválido."
+            "description": "**Admin.** Detalhe de um utilizador para o backoffice: conta (`email`, `phone`, `created_at`, `role`, `account_status`, `inactive_reason`, `subscription_state`) e `member_profile` no mesmo formato do perfil do próprio membro (horário, redes sociais, portefólio), ou `null` sem perfil (ex.: admins). Não inclui faturação nem dados do Stripe. Sem cache (`Cache-Control: private, no-store`): tem email e telefone pessoais e a congregação.\n\n`subscription_state` = `{value, label}`, estado da subscrição derivado no servidor (sem datas): `pending` Pendente · `awaiting_activation` Por ativar · `blocked` Bloqueado · `lapsed` Subscrição caída · `inactive` Inativo · `exempt` Isento · `grace` Em carência · `trial` Em trial · `active` Ativo.\n\n`admins_count` (total global de administradores) só aparece quando o utilizador é administrador; usado no aviso do diálogo de despromover.\n\n`review_counts` = `{received, given}`, cada um `{total, hidden, flagged}` (inteiros, nunca `null`): `received` = avaliações ao perfil do utilizador, `given` = avaliações feitas por ele; `total` conta todos os estados (visíveis, ocultas e sinalizadas), `hidden` e `flagged` são partes do total. Só números, nunca o conteúdo. Sem perfil de membro, tudo a 0.\n\n`{id}` tem de ser um UUID. Erros: 401 · 403 sem permissão ou conta não ativa · 404 inexistente, apagado ou id inválido."
           },
           "event": [
             {
@@ -13209,6 +13406,10 @@
                 {
                   "key": "Content-Type",
                   "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
                 }
               ],
               "cookie": [],
@@ -13244,6 +13445,10 @@
                 {
                   "key": "Content-Type",
                   "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
                 }
               ],
               "cookie": [],
@@ -13279,6 +13484,10 @@
                 {
                   "key": "Content-Type",
                   "value": "application/json"
+                },
+                {
+                  "key": "Cache-Control",
+                  "value": "no-store, private"
                 }
               ],
               "cookie": [],
@@ -13761,7 +13970,7 @@
                 }
               ]
             },
-            "description": "Passa a conta a **Inactive** (motivo: bloqueada), termina as sessões e revoga os tokens; depois cancela a subscrição no Stripe e expira uma sessão de Checkout que esteja aberta (um bloqueado não é cobrado nem consegue ativar-se a pagar). O membro deixa de poder entrar e sai do diretório. Só sai deste estado com *Desbloquear utilizador*.\n\nErros: 409 a própria conta, um administrador ou um utilizador já bloqueado · 404 utilizador inexistente.\n\n(contrato atualizado para pagamentos — pendente de acordo do Guilherme)"
+            "description": "Passa a conta a **Inactive** (motivo: bloqueada), termina as sessões e revoga os tokens; depois cancela a subscrição no Stripe e expira uma sessão de Checkout que esteja aberta (um bloqueado não é cobrado nem consegue ativar-se a pagar). O membro deixa de poder entrar e sai do diretório. Só sai deste estado com *Desbloquear utilizador*.\n\nApaga as inscrições do membro em eventos que ainda não começaram (as de eventos já começados ou passados ficam); não são repostas ao desbloquear. Nenhum email aos inscritos.\n\nErros: 409 a própria conta, um administrador ou um utilizador já bloqueado · 404 utilizador inexistente.\n\n(contrato atualizado para pagamentos — pendente de acordo do Guilherme)"
           },
           "response": [
             {
@@ -17311,7 +17520,7 @@
                 }
               ]
             },
-            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). Eventos upcoming incluem os de hoje e são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início)."
+            "description": "Lista eventos no backoffice. `period` aceita `upcoming` ou `past` (predefinição: `upcoming`). `upcoming` = eventos que ainda não começaram (data e hora de início, hora de Lisboa); `past` = eventos já começados (a decorrer ou terminados). Eventos upcoming são ordenados por data e hora crescentes; eventos past são ordenados por data e hora decrescentes.\n\nFiltros opcionais e combináveis: `date_from` e `date_to` (formato `YYYY-MM-DD`; `date_to` tem de ser igual ou posterior a `date_from`), `category_id` e `location_id` (UUIDs existentes). `per_page` aceita valores de 1 a 50 (predefinição: 6); `page` aceita valores de 1 a 10000.\n\nA resposta inclui `registrations_count` por evento e `counts.upcoming`/`counts.past`, calculados com os filtros de data, categoria e localização, mas sem aplicar `period`. Cada evento devolve `series_id`: UUID da série ou `null` se for avulso. Valores inválidos devolvem 422.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início).\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice."
           },
           "response": [
             {
@@ -17360,7 +17569,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"series\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": \"a8b7c6d5-2222-4a22-8222-222222222222\",\n        \"series\": {\n          \"position\": 2,\n          \"total\": 6\n        },\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Passados",
@@ -17408,7 +17617,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"series_id\": null,\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#1C747E\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"series_id\": null,\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#94591A\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-4444-4c44-8444-444444444444\",\n        \"series_id\": null,\n        \"series\": null,\n        \"name\": \"Workshop — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n          \"name\": \"Workshop\",\n          \"color\": \"#1C747E\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"20:00\",\n        \"event_end_time\": \"21:30\",\n        \"description\": \"Workshop de partilha entre membros.\",\n        \"address\": \"Avenida dos Aliados, Porto\",\n        \"venue_name\": \"Centro de Congressos do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 50,\n        \"registration_deadline\": \"2030-11-11T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 45,\n        \"available_spots\": 5,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      },\n      {\n        \"id\": \"e5a6b7c8-3333-4c33-8333-333333333333\",\n        \"series_id\": null,\n        \"series\": null,\n        \"name\": \"Pequeno-almoço — Porto\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-4444-4b44-8444-444444444444\",\n          \"name\": \"Pequeno-almoço\",\n          \"color\": \"#94591A\"\n        },\n        \"location\": {\n          \"id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n          \"name\": \"Porto\"\n        },\n        \"event_date\": \"2030-11-10\",\n        \"event_start_time\": \"08:30\",\n        \"event_end_time\": \"10:30\",\n        \"description\": \"Pequeno-almoço de networking entre membros.\",\n        \"address\": \"Rua de Santa Catarina, Porto\",\n        \"venue_name\": \"Hotel do Porto\",\n        \"latitude\": 41.1496,\n        \"longitude\": -8.6109,\n        \"max_attendees\": 20,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 18,\n        \"available_spots\": 2,\n        \"registration_open\": false,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 9,\n        \"prayer_cards_locked\": true\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 2\n    }\n  }\n}"
             },
             {
               "name": "200 Eventos filtrados",
@@ -17472,7 +17681,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Lista de eventos obtida com sucesso.\",\n  \"data\": {\n    \"items\": [\n      {\n        \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n        \"series_id\": null,\n        \"series\": null,\n        \"name\": \"Jantar — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-15\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-14T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"registrations_count\": 28,\n        \"available_spots\": 12,\n        \"registration_open\": true,\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      },\n      {\n        \"id\": \"e5a6b7c8-6666-4c66-8666-666666666666\",\n        \"series_id\": null,\n        \"series\": null,\n        \"name\": \"Jantar online — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-20\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"21:00\",\n        \"description\": \"Encontro online para partilha de experiências entre membros.\",\n        \"address\": null,\n        \"venue_name\": null,\n        \"latitude\": null,\n        \"longitude\": null,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-19T23:59:00+00:00\",\n        \"organizer_notes\": null,\n        \"registrations_count\": 40,\n        \"available_spots\": 0,\n        \"registration_open\": false,\n        \"online_url\": \"https://meet.example.com/jantar-aspec\",\n        \"is_online\": true,\n        \"prayer_cards_enabled\": false,\n        \"prayer_verse\": null,\n        \"prayer_cards_count\": 0,\n        \"prayer_cards_locked\": false\n      }\n    ],\n    \"pagination\": {\n      \"current_page\": 1,\n      \"per_page\": 6,\n      \"total\": 2,\n      \"last_page\": 1\n    },\n    \"counts\": {\n      \"upcoming\": 2,\n      \"past\": 0\n    }\n  }\n}"
             },
             {
               "name": "422 Filtros inválidos",
@@ -17637,7 +17846,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento avulso, presencial ou online. Este pedido não cria uma série; na resposta, `series_id` é `null`.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, escolhe uma das opções: enviar `place_id` (Google) ou enviar `latitude` e `longitude` em conjunto (por exemplo, Nominatim). Não envies `place_id` com coordenadas. Se os três campos forem omitidos, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara criar uma série, usar o pedido **Criar série de eventos**. Para localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento avulso, presencial ou online. Este pedido não cria uma série; na resposta, `series_id` é `null`.\n\n- `event_date`: obrigatória, formato `YYYY-MM-DD` e hoje ou uma data futura.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: obrigatória, formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Se for `true`, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. Se for `false`, `address` é obrigatória e `online_url` não pode ser enviado.\n- `venue_name`: opcional, texto até 255 caracteres.\n- Para eventos presenciais, escolhe uma das opções: enviar `place_id` (Google) ou enviar `latitude` e `longitude` em conjunto (por exemplo, Nominatim). Não envies `place_id` com coordenadas. Se os três campos forem omitidos, o servidor tenta localizar a morada automaticamente. Uma morada não encontrada resulta em 404; indisponibilidade do serviço de geocodificação resulta em 503.\n- `max_attendees`: lotação máxima, pelo menos 1.\n\nPara criar uma série, usar o pedido **Criar série de eventos**. Para localizar a morada manualmente antes de criar o evento, também existe o pedido **Admin / Localizar morada**.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n}",
@@ -17681,7 +17890,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"series\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n  }\n}"
             },
             {
               "name": "422 Validação",
@@ -17842,7 +18051,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`. Numa série, as duas opções são copiadas para todas as sessões.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria uma série de eventos presenciais ou online. O primeiro evento é a primeira sessão da série.\n\n- `recurrence.frequency`: frequência da série; aceita `weekly`, `biweekly` ou `monthly`.\n- `recurrence.ends_on`: data final inclusiva, no formato `YYYY-MM-DD`.\n- `recurrence.registration_deadline_days_before`: número de dias de antecedência do prazo de inscrição, mínimo 1, **máximo 365**. O servidor calcula o prazo de cada sessão para as 23:59 em `Europe/Lisbon`.\n- A série pode gerar no máximo 52 sessões.\n- Ao enviar `recurrence`, **não enviar `registration_deadline`**; o prazo é calculado para cada sessão.\n- Os restantes campos do evento seguem as mesmas regras de `Criar evento`.\n\nA resposta contém os dados da série em `data.series` e as sessões geradas em `data.sessions`.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`. Numa série, as duas opções são copiadas para todas as sessões.\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar recorrente — Lisboa\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-11-05\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"latitude\": 38.7223,\n  \"longitude\": -9.1533,\n  \"is_online\": false,\n  \"max_attendees\": 40,\n  \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"recurrence\": {\n    \"frequency\": \"weekly\",\n    \"ends_on\": \"2030-11-12\",\n    \"registration_deadline_days_before\": 3\n  }\n}",
@@ -17886,7 +18095,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Série de eventos criada com sucesso.\",\n  \"data\": {\n    \"series\": {\n      \"id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n      \"frequency\": \"weekly\",\n      \"ends_on\": \"2030-11-12\",\n      \"registration_deadline_days_before\": 3\n    },\n    \"sessions\": [\n      {\n        \"id\": \"e5a6b7c8-1111-4c11-8111-111111111111\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-05\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-02T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      },\n      {\n        \"id\": \"e5a6b7c8-2222-4c22-8222-222222222222\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      }\n    ]\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Série de eventos criada com sucesso.\",\n  \"data\": {\n    \"series\": {\n      \"id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n      \"frequency\": \"weekly\",\n      \"ends_on\": \"2030-11-12\",\n      \"registration_deadline_days_before\": 3\n    },\n    \"sessions\": [\n      {\n        \"id\": \"e5a6b7c8-1111-4c11-8111-111111111111\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"series\": {\n          \"position\": 1,\n          \"total\": 2\n        },\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-05\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-02T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      },\n      {\n        \"id\": \"e5a6b7c8-2222-4c22-8222-222222222222\",\n        \"series_id\": \"a8b7c6d5-1111-4a11-8111-111111111111\",\n        \"series\": {\n          \"position\": 2,\n          \"total\": 2\n        },\n        \"name\": \"Jantar recorrente — Lisboa\",\n        \"category\": {\n          \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n          \"name\": \"Jantar\",\n          \"color\": \"#763B82\"\n        },\n        \"location\": {\n          \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n          \"name\": \"Lisboa\"\n        },\n        \"event_date\": \"2030-11-12\",\n        \"event_start_time\": \"19:30\",\n        \"event_end_time\": \"22:30\",\n        \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n        \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n        \"venue_name\": \"Centro de Congressos de Lisboa\",\n        \"latitude\": 38.7223,\n        \"longitude\": -9.1533,\n        \"max_attendees\": 40,\n        \"registration_deadline\": \"2030-11-09T23:59:00+00:00\",\n        \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n        \"is_online\": false,\n        \"prayer_cards_enabled\": true,\n        \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\"\n      }\n    ]\n  }\n}"
             },
             {
               "name": "422 Validação — série",
@@ -17921,6 +18130,40 @@
               ],
               "cookie": [],
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"recurrence.ends_on\": [\n      \"Uma série não pode exceder 52 sessões.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Antecedência acima de 365 dias",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Antecedência acima de 365 dias"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"recurrence.registration_deadline_days_before\": [\n      \"A antecedência do prazo de inscrição não pode ser superior a 365 dias.\"\n    ]\n  }\n}"
             },
             {
               "name": "401 Não autenticado",
@@ -18047,7 +18290,7 @@
                 "events"
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento online avulso; a resposta inclui `series_id: null`. `category_id`, `location_id`, nome, descrição, data, horas, lotação e prazo seguem as mesmas regras do pedido presencial.\n\n- `is_online`: obrigatório e `true`.\n- `online_url`: obrigatório e tem de ser um URL válido.\n- Não enviar `address`, `latitude` ou `longitude`; esses campos não são permitidos para eventos online.\n- `venue_name`: opcional.\n- `registration_deadline`: formato `YYYY-MM-DD`; o servidor define o prazo para as 23:59 em `Europe/Lisbon` e este tem de ser anterior ou igual ao início do evento.\n- `event_end_time` tem de ser posterior a `event_start_time`.\n\nNa resposta administrativa, o link online é devolvido. Nos endpoints públicos, só é visível para membros inscritos depois de o prazo de inscrição passar. Para criar uma série, usar o pedido **Criar série de eventos**.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nCria um evento online avulso; a resposta inclui `series_id: null`. `category_id`, `location_id`, nome, descrição, data, horas, lotação e prazo seguem as mesmas regras do pedido presencial.\n\n- `is_online`: obrigatório e `true`.\n- `online_url`: obrigatório e tem de ser um URL válido.\n- Não enviar `address`, `latitude` ou `longitude`; esses campos não são permitidos para eventos online.\n- `venue_name`: opcional.\n- `registration_deadline`: formato `YYYY-MM-DD`; o servidor define o prazo para as 23:59 em `Europe/Lisbon` e este tem de ser anterior ou igual ao início do evento.\n- `event_end_time` tem de ser posterior a `event_start_time`.\n\nNa resposta administrativa, o link online é devolvido. Nos endpoints públicos, só é visível para membros inscritos depois de o prazo de inscrição passar. Para criar uma série, usar o pedido **Criar série de eventos**.\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Workshop online — Lisboa\",\n  \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"21:00\",\n  \"is_online\": true,\n  \"online_url\": \"https://meet.example.com/workshop-aspec\",\n  \"max_attendees\": 40,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n  \"prayer_cards_enabled\": false,\n  \"prayer_verse\": null\n}",
@@ -18091,7 +18334,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"series_id\": null,\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#1C747E\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true,\n    \"prayer_cards_enabled\": false,\n    \"prayer_verse\": null\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento criado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-7777-4c77-8777-777777777777\",\n    \"series_id\": null,\n    \"series\": null,\n    \"name\": \"Workshop online — Lisboa\",\n    \"description\": \"Sessão online para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n      \"name\": \"Workshop\",\n      \"color\": \"#1C747E\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"21:00\",\n    \"address\": null,\n    \"venue_name\": null,\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"O link será disponibilizado aos inscritos após o fecho das inscrições.\",\n    \"online_url\": \"https://meet.example.com/workshop-aspec\",\n    \"is_online\": true,\n    \"prayer_cards_enabled\": false,\n    \"prayer_verse\": null\n  }\n}"
             },
             {
               "name": "422 Validação — link obrigatório",
@@ -18220,7 +18463,7 @@
                 }
               ]
             },
-            "description": "Detalhe do evento, incluindo inscrições. `series_id` devolve o UUID da série ou `null` se o evento for avulso.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início)."
+            "description": "Detalhe do evento, incluindo inscrições. `series_id` devolve o UUID da série ou `null` se o evento for avulso.\n\nCartões de oração: `prayer_cards_enabled`, `prayer_verse`, `prayer_cards_count` (cartões entregues, sem os retirados) e `prayer_cards_locked` (`true` quando já há cartões: o modal de edição deve desativar o interruptor dos cartões, o versículo, a data e a hora de início).\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice."
           },
           "response": [
             {
@@ -18256,7 +18499,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": null,\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento obtido com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"series\": null,\n    \"name\": \"Jantar — Lisboa\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2026-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": null,\n    \"latitude\": 38.7223,\n    \"longitude\": -9.1533,\n    \"max_attendees\": 40,\n    \"registration_deadline\": \"2026-10-13T23:59:00+01:00\",\n    \"organizer_notes\": \"Dress code: smart casual. Chegar 15 minutos antes para acreditação.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 12,\n    \"registration_open\": true,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
             },
             {
               "name": "404 Não encontrado",
@@ -18393,7 +18636,7 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, `address` é obrigatória. Envia `place_id` (Google) ou `latitude` e `longitude` em conjunto; não envies `place_id` com coordenadas. Se esses campos forem omitidos, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n- Depois de existir o primeiro cartão preenchido, não é possível alterar `prayer_cards_enabled`, `prayer_verse`, `event_date` nem `event_start_time` (422): todos os cartões do evento ficam com o mesmo versículo e o mesmo prazo. Ver `prayer_cards_locked` em \"Ver evento (admin)\".",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nAtualiza através de `PUT` **apenas a sessão correspondente ao `:id`**. Não altera as outras sessões da série nem a configuração da série. Os campos obrigatórios do evento têm de ser enviados novamente. `organizer_notes`, `venue_name` e `justification` são opcionais.\n\n- `event_date`: formato `YYYY-MM-DD`.\n- Se `event_date` ou `event_start_time` mudarem, o novo início tem de ser no futuro (422 em `event_date` ou `event_start_time`). 409 se o evento já começou.\n- `event_start_time` e `event_end_time`: obrigatórias; a hora de fim tem de ser posterior à de início.\n- `registration_deadline`: formato `YYYY-MM-DD`. O servidor define o prazo para as 23:59 em `Europe/Lisbon`; tem de ser anterior ou igual ao início do evento.\n- `is_online`: obrigatório. Para eventos presenciais, `address` é obrigatória. Envia `place_id` (Google) ou `latitude` e `longitude` em conjunto; não envies `place_id` com coordenadas. Se esses campos forem omitidos, o servidor tenta geocodificar a morada.\n- `justification`: opcional, texto até 2000 caracteres. Os inscritos recebem um email quando o evento é atualizado; a justificação aparece no email se tiver sido fornecida.\n- `max_attendees` não pode ser inferior ao número atual de inscrições.\n\nPara eventos online, `online_url` é obrigatório e não se enviam `address`, `place_id`, `latitude` ou `longitude`. A resposta inclui `series_id`: UUID da série ou `null` se for um evento avulso.\n\nCartões de oração (opcionais):\n- `prayer_cards_enabled`: booleano, `false` por omissão.\n- `prayer_verse`: versículo da semana, até 500 caracteres; obrigatório quando `prayer_cards_enabled` é `true`. Com os cartões desligados é gravado `null`.\n- Depois de existir o primeiro cartão preenchido, não é possível alterar `prayer_cards_enabled`, `prayer_verse`, `event_date` nem `event_start_time` (422): todos os cartões do evento ficam com o mesmo versículo e o mesmo prazo. Ver `prayer_cards_locked` em \"Ver evento (admin)\".\n\n`series`: posição da sessão na série (por data, hora e id, incluindo sessões passadas) e total de sessões; `null` em eventos avulsos. Só no backoffice.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"category_id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n  \"location_id\": \"{{location_id}}\",\n  \"name\": \"Jantar — Lisboa atualizado\",\n  \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n  \"event_date\": \"2030-10-15\",\n  \"event_start_time\": \"19:30\",\n  \"event_end_time\": \"22:30\",\n  \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n  \"venue_name\": \"Centro de Congressos de Lisboa\",\n  \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-10-14\",\n  \"organizer_notes\": \"Estacionamento gratuito no local.\",\n  \"prayer_cards_enabled\": true,\n  \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n  \"justification\": \"A lotação foi ajustada a pedido do espaço.\"\n}",
@@ -18438,7 +18681,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 22,\n    \"registration_open\": true,\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
+              "body": "{\n  \"success\": true,\n  \"message\": \"Evento atualizado com sucesso.\",\n  \"data\": {\n    \"id\": \"e5a6b7c8-5555-4c55-8555-555555555555\",\n    \"series_id\": null,\n    \"series\": null,\n    \"name\": \"Jantar — Lisboa atualizado\",\n    \"description\": \"Encontro mensal para partilha de experiências e criação de parcerias entre membros.\",\n    \"category\": {\n      \"id\": \"d1e2f3a4-3333-4b33-8333-333333333333\",\n      \"name\": \"Jantar\",\n      \"color\": \"#763B82\"\n    },\n    \"location\": {\n      \"id\": \"5f134912-321b-46e3-99ab-61d2f0981a8b\",\n      \"name\": \"Lisboa\"\n    },\n    \"event_date\": \"2030-10-15\",\n    \"event_start_time\": \"19:30\",\n    \"event_end_time\": \"22:30\",\n    \"address\": \"Rua Castilho 39, 1250-068 Lisboa\",\n    \"venue_name\": \"Centro de Congressos de Lisboa\",\n    \"place_id\": \"ChIJN1t_tDeuEmsRUsoyG83frY4\",\n    \"latitude\": null,\n    \"longitude\": null,\n    \"max_attendees\": 50,\n    \"registration_deadline\": \"2030-10-14T23:59:00+01:00\",\n    \"organizer_notes\": \"Estacionamento gratuito no local.\",\n    \"registrations_count\": 28,\n    \"available_spots\": 22,\n    \"registration_open\": true,\n    \"online_url\": null,\n    \"is_online\": false,\n    \"prayer_cards_enabled\": true,\n    \"prayer_verse\": \"Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)\",\n    \"prayer_cards_count\": 0,\n    \"prayer_cards_locked\": false\n  }\n}"
             },
             {
               "name": "422 Lotação inferior aos inscritos",
@@ -18520,6 +18763,76 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"prayer_verse\": [\n      \"Não é possível alterar os cartões de oração, a data ou a hora depois de existirem cartões preenchidos.\"\n    ]\n  }\n}"
             },
             {
+              "name": "422 Data no passado",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Data no passado"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"event_date\": [\n      \"A data do evento não pode ser anterior a hoje.\"\n    ]\n  }\n}"
+            },
+            {
+              "name": "422 Hora de início já passou",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "x-mock-response-name",
+                    "value": "422 Hora de início já passou"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/admin/events/e5a6b7c8-5555-4c55-8555-555555555555",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "admin",
+                    "events",
+                    "e5a6b7c8-5555-4c55-8555-555555555555"
+                  ]
+                }
+              },
+              "status": "Unprocessable Content",
+              "code": 422,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"success\": false,\n  \"message\": \"Os dados enviados são inválidos.\",\n  \"errors\": {\n    \"event_start_time\": [\n      \"A hora de início tem de ser posterior à hora atual.\"\n    ]\n  }\n}"
+            },
+            {
               "name": "401 Não autenticado",
               "originalRequest": {
                 "method": "PUT",
@@ -18590,13 +18903,13 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\" \n}"
             },
             {
-              "name": "409 Evento já decorreu",
+              "name": "409 Evento já começou",
               "originalRequest": {
                 "method": "PUT",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "409 Evento já decorreu"
+                    "value": "409 Evento já começou"
                   }
                 ],
                 "url": {
@@ -18613,7 +18926,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n  \"name\": \"Workshop — Porto\",\n  \"description\": \"Workshop de partilha entre membros.\",\n  \"event_date\": \"2030-11-12\",\n  \"event_start_time\": \"20:00\",\n  \"event_end_time\": \"21:30\",\n  \"address\": \"Avenida dos Aliados, Porto\",\n  \"venue_name\": \"Centro de Congressos do Porto\",\n  \"latitude\": 41.1496,\n  \"longitude\": -8.6109,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-11-11\",\n  \"organizer_notes\": null,\n  \"justification\": \"Atualização solicitada para um evento que já decorreu.\"\n}",
+                  "raw": "{\n  \"category_id\": \"d1e2f3a4-8888-4b88-8888-888888888888\",\n  \"location_id\": \"12f0e4b8-89c2-47d3-b1c4-90a8c2b7190e\",\n  \"name\": \"Workshop — Porto\",\n  \"description\": \"Workshop de partilha entre membros.\",\n  \"event_date\": \"2030-11-12\",\n  \"event_start_time\": \"20:00\",\n  \"event_end_time\": \"21:30\",\n  \"address\": \"Avenida dos Aliados, Porto\",\n  \"venue_name\": \"Centro de Congressos do Porto\",\n  \"latitude\": 41.1496,\n  \"longitude\": -8.6109,\n  \"is_online\": false,\n  \"max_attendees\": 50,\n  \"registration_deadline\": \"2030-11-11\",\n  \"organizer_notes\": null,\n  \"justification\": \"Atualização solicitada para um evento que já começou.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -18631,7 +18944,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já começou.\"\n}"
             }
           ]
         },
@@ -18663,7 +18976,7 @@
                 }
               ]
             },
-            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nElimina o evento e as respetivas inscrições. Se houver inscritos, `justification` é obrigatória; se não houver, pode ser omitida. Os inscritos recebem um email de cancelamento com a justificação. A notificação só é enfileirada após a eliminação ser confirmada.",
+            "description": "**Requer autenticação, conta Active e perfil Admin.**\n\nElimina o evento e as respetivas inscrições. Se houver inscritos, `justification` é obrigatória; se não houver, pode ser omitida. Os inscritos recebem um email de cancelamento com a justificação. A notificação só é enfileirada após a eliminação ser confirmada. 409 se o evento já começou.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"justification\": \"O evento foi cancelado pela organização.\"\n}",
@@ -18834,13 +19147,13 @@
               "body": "{\n  \"success\": false,\n  \"message\": \"Não tem permissão para aceder a este recurso.\"\n}"
             },
             {
-              "name": "409 Evento já decorreu",
+              "name": "409 Evento já começou",
               "originalRequest": {
                 "method": "DELETE",
                 "header": [
                   {
                     "key": "x-mock-response-name",
-                    "value": "409 Evento já decorreu"
+                    "value": "409 Evento já começou"
                   }
                 ],
                 "url": {
@@ -18857,7 +19170,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"justification\": \"O evento já decorreu e não pode ser eliminado.\"\n}",
+                  "raw": "{\n  \"justification\": \"O evento já começou e não pode ser eliminado.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -18875,7 +19188,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já decorreu.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Não é possível alterar um evento que já começou.\"\n}"
             }
           ]
         },

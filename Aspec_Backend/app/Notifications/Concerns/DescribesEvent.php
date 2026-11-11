@@ -13,6 +13,8 @@ use Illuminate\Support\Carbon;
  */
 trait DescribesEvent
 {
+    use EscapesMarkdown;
+
     /**
      * Email já com saudação ("Olá, {nome}!", com o nome profissional) e despedida da ASPEC.
      */
@@ -147,11 +149,11 @@ trait DescribesEvent
     }
 
     /**
-     * Página do evento no frontend.
+     * Página de login, com regresso ao evento depois da autenticação.
      */
     protected function eventUrl(EventInstance $event): string
     {
-        return $this->frontendUrl("/eventos/{$event->id}");
+        return $this->frontendUrl('/login?redirect='.rawurlencode("/eventos/{$event->id}"));
     }
 
     /**
@@ -168,15 +170,5 @@ trait DescribesEvent
     protected function frontendUrl(string $path): string
     {
         return rtrim(config('app.frontend_url'), '/').$path;
-    }
-
-    /**
-     * Escapa a pontuação Markdown no texto escrito pelos admins (nome do evento, espaço, distrito), para
-     * que um nome como "Sala](https://...)" não crie outro link nem formatação no email. O < e o > não
-     * entram: o {{ }} do Blade já os escapa em HTML, e com a barra apareceriam como "&lt;" no email.
-     */
-    protected function markdownText(string $text): string
-    {
-        return addcslashes($text, '\\`*_{}[]()#+-.!|');
     }
 }

@@ -31,7 +31,7 @@ class MemberProfileFactory extends Factory
             'commercial_email' => fake()->companyEmail(),
             'commercial_phone' => '+351'.fake()->randomElement(['91', '92', '93', '96']).fake()->numerify('#######'),
             'address' => fake()->streetAddress(),
-            'postal_code' => fake()->numerify('####-###'),
+            'postal_code' => fake()->numberBetween(1000, 9999).'-'.fake()->numerify('###'),
             'city' => fake()->city(),
         ];
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexMemberReviewsRequest;
 use App\Http\Requests\IndexMyReviewsRequest;
 use App\Http\Requests\StoreMemberReviewRequest;
+use App\Http\Resources\AuthorReviewResource;
 use App\Http\Resources\MyReviewResource;
 use App\Http\Resources\ReviewResource;
 use App\Models\MemberProfile;
@@ -252,6 +253,14 @@ class MemberReviewController extends Controller
             ->header('Vary', 'Cookie, Authorization');
     }
 
+    /**
+     * Cria ou atualiza a avaliação do membro autenticado a outro membro.
+     * Devolve o estado ao autor e, quando a avaliação fica sinalizada, uma mensagem de moderação.
+     *
+     * @param  StoreMemberReviewRequest  $request  Pedido validado com rating e comment.
+     * @param  string  $member  Id (UUID) do perfil avaliado.
+     * @return JsonResponse 201 ao criar, 200 ao editar, com a avaliação e o seu estado.
+     */
     public function store(
         StoreMemberReviewRequest $request,
         string $member
@@ -366,13 +375,19 @@ class MemberReviewController extends Controller
             return [$review, true];
         });
 
-        $review->load('reviewerProfile');
+        $review->load(['reviewerProfile', 'status']);
+
+        $message = $created
+            ? 'Avaliação criada com sucesso.'
+            : 'Avaliação atualizada com sucesso.';
+
+        if ($review->status?->name === 'Flagged') {
+            $message = 'A sua avaliação ficou a aguardar moderação.';
+        }
 
         return $this->successResponse(
-            new ReviewResource($review),
-            $created
-                ? 'Avaliação criada com sucesso.'
-                : 'Avaliação atualizada com sucesso.',
+            new AuthorReviewResource($review),
+            $message,
             $created ? Response::HTTP_CREATED : Response::HTTP_OK
         );
     }

@@ -2,11 +2,14 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\EscapesMarkdown;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class UserRejectedNotification extends Notification
 {
+    use EscapesMarkdown;
+
     public function __construct(public ?string $reason = null) {}
 
     /**
@@ -25,7 +28,7 @@ class UserRejectedNotification extends Notification
             ->line('A sua candidatura à ASPEC não foi aceite.');
 
         if ($this->reason !== null && trim($this->reason) !== '') {
-            $mail->line('Motivo: '.trim($this->reason));
+            $mail->line('Motivo: '.$this->markdownText(trim($this->reason)));
         }
 
         return $mail

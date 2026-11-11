@@ -49,7 +49,7 @@ class AccountPasswordController extends Controller
 
         return $this->successResponse(
             null,
-            'Password alterada com sucesso. Inicie sessão novamente.',
+            'Palavra-passe alterada com sucesso. Inicie sessão novamente.',
             Response::HTTP_OK
         );
     }

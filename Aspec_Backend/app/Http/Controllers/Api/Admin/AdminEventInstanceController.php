@@ -25,7 +25,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdminEventInstanceController extends Controller
 {
-    private const PAST_EVENT_MESSAGE = 'Não é possível alterar um evento que já decorreu.';
+    private const PAST_EVENT_MESSAGE = 'Não é possível alterar um evento que já começou.';
 
     private const PRAYER_CARDS_LOCK_MESSAGE = 'Não é possível alterar os cartões de oração, a data ou a hora depois de existirem cartões preenchidos.';
 
@@ -58,6 +58,14 @@ class AdminEventInstanceController extends Controller
         'place_id',
     ];
 
+    /**
+     * Lista os eventos do backoffice com filtros e paginação. "upcoming" (Agendados) são os eventos que
+     * ainda não começaram e "past" (Passados) os já começados, a decorrer ou terminados (hora de Lisboa);
+     * as contagens dos dois separadores seguem a mesma regra e respeitam os filtros.
+     *
+     * @param  Request  $request  Pedido com period, date_from, date_to, category_id, location_id, page e per_page.
+     * @return JsonResponse 200 com items, pagination e counts, ou 422 se os filtros forem inválidos.
+     */
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
@@ -79,9 +87,6 @@ class AdminEventInstanceController extends Controller
             ]);
         }
 
-        $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $today = now($timezone)->toDateString();
-
         $filteredEvents = EventInstance::query()
             ->when(
                 isset($filters['date_from']),
@@ -102,10 +107,10 @@ class AdminEventInstanceController extends Controller
 
         $counts = [
             'upcoming' => (clone $filteredEvents)
-                ->whereDate('event_date', '>=', $today)
+                ->notStarted()
                 ->count(),
             'past' => (clone $filteredEvents)
-                ->whereDate('event_date', '<', $today)
+                ->started()
                 ->count(),
         ];
 
@@ -113,16 +118,17 @@ class AdminEventInstanceController extends Controller
 
         $eventsQuery = (clone $filteredEvents)
             ->with(['category', 'location'])
-            ->withCount(['registrations', 'prayerCards']);
+            ->withCount(['registrations', 'prayerCards'])
+            ->withSeriesPosition();
 
         if ($period === 'past') {
             $eventsQuery
-                ->whereDate('event_date', '<', $today)
+                ->started()
                 ->orderByDesc('event_date')
                 ->orderByDesc('event_start_time');
         } else {
             $eventsQuery
-                ->whereDate('event_date', '>=', $today)
+                ->notStarted()
                 ->orderBy('event_date')
                 ->orderBy('event_start_time');
         }
@@ -141,14 +147,6 @@ class AdminEventInstanceController extends Controller
             ],
             'counts' => $counts,
         ], 'Lista de eventos obtida com sucesso.');
-    }
-
-    private function eventHasPassed(EventInstance $event): bool
-    {
-        $today = now(config('app.event_timezone', 'Europe/Lisbon'))
-            ->toDateString();
-
-        return $event->event_date->toDateString() < $today;
     }
 
     /**
@@ -279,7 +277,12 @@ class AdminEventInstanceController extends Controller
     }
 
     /**
-     * Armazena um novo evento ou série de eventos.
+     * Armazena um novo evento ou série de eventos. Nas séries, o prazo de cada sessão é calculado por
+     * EventSeriesSchedule::registrationDeadline (N dias antes, às 23:59 de Lisboa).
+     *
+     * @param  EventInstanceRequest  $request  Pedido validado com os dados do evento (e recurrence nas séries).
+     * @param  Geocoder  $geocoder  Serviço que localiza a morada quando não são enviadas coordenadas.
+     * @return JsonResponse 201 com o evento ou com a série e as sessões, 422 ou 503 (geocodificação indisponível).
      */
     public function store(EventInstanceRequest $request, Geocoder $geocoder): JsonResponse
     {
@@ -297,19 +300,18 @@ class AdminEventInstanceController extends Controller
         if ($recurrence === null) {
             $event = EventInstance::create($validated);
             AnnounceNewEventJob::dispatch($event->id);
-            $event->load(['category', 'location']);
 
             return $this->successResponse(
-                new EventInstanceResource($event),
+                new EventInstanceResource($this->findForAdmin($event->id)),
                 'Evento criado com sucesso.',
                 Response::HTTP_CREATED
             );
         }
 
-        $timezone = config('app.event_timezone', 'Europe/Lisbon');
         $deadlineDaysBefore = (int) $recurrence['registration_deadline_days_before'];
+        $schedule = app(EventSeriesSchedule::class);
 
-        $sessionDates = app(EventSeriesSchedule::class)->generate(
+        $sessionDates = $schedule->generate(
             $validated['event_date'],
             $recurrence['ends_on'],
             $recurrence['frequency']
@@ -320,7 +322,7 @@ class AdminEventInstanceController extends Controller
             $recurrence,
             $sessionDates,
             $deadlineDaysBefore,
-            $timezone
+            $schedule
         ): EventSeries {
             $series = EventSeries::create([
                 'frequency' => $recurrence['frequency'],
@@ -329,13 +331,7 @@ class AdminEventInstanceController extends Controller
             ]);
 
             foreach ($sessionDates as $sessionDate) {
-                $deadline = Carbon::createFromFormat(
-                    '!Y-m-d',
-                    $sessionDate,
-                    $timezone
-                )
-                    ->subDays($deadlineDaysBefore)
-                    ->setTime(23, 59);
+                $deadline = $schedule->registrationDeadline($sessionDate, $deadlineDaysBefore);
 
                 $sessionData = $validated;
                 $sessionData['series_id'] = $series->id;
@@ -350,6 +346,7 @@ class AdminEventInstanceController extends Controller
 
         $sessions = $series->eventInstances()
             ->with(['category', 'location'])
+            ->withSeriesPosition()
             ->orderBy('event_date')
             ->orderBy('event_start_time')
             ->get();
@@ -367,21 +364,42 @@ class AdminEventInstanceController extends Controller
 
     public function show(EventInstance $eventInstance): JsonResponse
     {
-        $eventInstance->load(['category', 'location']);
-        $eventInstance->loadCount(['registrations', 'prayerCards']);
-
         return $this->successResponse(
-            new EventInstanceResource($eventInstance),
+            new EventInstanceResource($this->findForAdmin($eventInstance->id)),
             'Evento obtido com sucesso.'
         );
     }
 
+    /**
+     * Lê o evento como o backoffice o mostra: categoria, localização, contagens de inscrições e de cartões
+     * de oração e a posição na série ("Sessão X/Y"), numa só consulta e num modelo novo, só para a resposta.
+     *
+     * @param  string  $id  Id (UUID) do evento.
+     * @return EventInstance Evento com as relações e as contagens carregadas.
+     */
+    private function findForAdmin(string $id): EventInstance
+    {
+        return EventInstance::with(['category', 'location'])
+            ->withCount(['registrations', 'prayerCards'])
+            ->withSeriesPosition()
+            ->findOrFail($id);
+    }
+
+    /**
+     * Atualiza um evento que ainda não começou e avisa por email os inscritos ativos quando mudam dados
+     * que lhes interessam. O início é verificado antes e outra vez dentro da transação, com o evento trancado.
+     *
+     * @param  EventInstanceRequest  $request  Pedido validado com os dados completos do evento.
+     * @param  EventInstance  $eventInstance  Evento a atualizar.
+     * @param  Geocoder  $geocoder  Serviço que localiza a morada quando não são enviadas coordenadas.
+     * @return JsonResponse 200 com o evento, 409 se já começou, 422 ou 503 (geocodificação indisponível).
+     */
     public function update(
         EventInstanceRequest $request,
         EventInstance $eventInstance,
         Geocoder $geocoder
     ): JsonResponse {
-        if ($this->eventHasPassed($eventInstance)) {
+        if ($eventInstance->hasStarted()) {
             return $this->errorResponse(
                 self::PAST_EVENT_MESSAGE,
                 Response::HTTP_CONFLICT
@@ -409,7 +427,7 @@ class AdminEventInstanceController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($this->eventHasPassed($event)) {
+            if ($event->hasStarted()) {
                 return $this->errorResponse(
                     self::PAST_EVENT_MESSAGE,
                     Response::HTTP_CONFLICT
@@ -480,16 +498,21 @@ class AdminEventInstanceController extends Controller
                 }
             }
 
-            $event->load(['category', 'location']);
-            $event->loadCount(['registrations', 'prayerCards']);
-
             return $this->successResponse(
-                new EventInstanceResource($event),
+                new EventInstanceResource($this->findForAdmin($event->id)),
                 'Evento atualizado com sucesso.'
             );
         });
     }
 
+    /**
+     * Apaga um evento que ainda não começou, com as inscrições, e avisa por email os inscritos ativos.
+     * A justificação é obrigatória quando há inscritos.
+     *
+     * @param  Request  $request  Pedido com a justificação opcional ou obrigatória.
+     * @param  EventInstance  $eventInstance  Evento a apagar.
+     * @return JsonResponse 200 se foi apagado, 409 se já começou ou 422 (justificação).
+     */
     public function destroy(Request $request, EventInstance $eventInstance): JsonResponse
     {
         $result = DB::transaction(function () use ($request, $eventInstance): ?JsonResponse {
@@ -498,7 +521,7 @@ class AdminEventInstanceController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($this->eventHasPassed($event)) {
+            if ($event->hasStarted()) {
                 return $this->errorResponse(
                     self::PAST_EVENT_MESSAGE,
                     Response::HTTP_CONFLICT

@@ -12,7 +12,11 @@ use Illuminate\Http\Request;
 class EventInstanceController extends Controller
 {
     /**
-     * Display a listing of the event instances.
+     * Agenda pública: eventos que ainda não começaram (scope notStarted, hora de Lisboa) ou, com series_id,
+     * todas as sessões da série, com filtros, pesquisa e paginação.
+     *
+     * @param  Request  $request  Pedido com category_id, location_id, series_id, search, page e per_page.
+     * @return JsonResponse 200 com items e pagination, ou 422 se os filtros forem inválidos.
      */
     public function index(Request $request): JsonResponse
     {
@@ -25,9 +29,6 @@ class EventInstanceController extends Controller
             'search' => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
 
-        $now = now(config('app.event_timezone', 'Europe/Lisbon'));
-        $today = $now->toDateString();
-        $currentTime = $now->format('H:i:s');
         $search = trim((string) ($filters['search'] ?? ''));
         $viewerId = $request->user('sanctum')?->getAuthIdentifier();
 
@@ -44,15 +45,7 @@ class EventInstanceController extends Controller
             ->when(
                 // Mostrar apenas eventos futuros quando não é indicado o parâmetro series_id
                 ! isset($filters['series_id']),
-                fn (Builder $query) => $query->where(function (Builder $query) use ($today, $currentTime) {
-                    $query
-                        ->where('event_date', '>', $today)
-                        ->orWhere(function (Builder $query) use ($today, $currentTime) {
-                            $query
-                                ->where('event_date', $today)
-                                ->where('event_start_time', '>=', $currentTime);
-                        });
-                })
+                fn (Builder $query) => $query->notStarted()
             )
             // Filtrar pelo series_id quando este é indicado
             ->when(

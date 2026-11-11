@@ -261,6 +261,21 @@ class AdminUserShowTest extends TestCase
     }
 
     #[Test]
+    public function user_detail_is_not_stored_in_caches(): void
+    {
+        $member = User::factory()->create();
+        MemberProfile::factory()->for($member)->create();
+
+        $memberCacheControl = (string) $this->show($member->id)->assertOk()->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $memberCacheControl);
+        $this->assertStringContainsString('private', $memberCacheControl);
+
+        $ownCacheControl = (string) $this->show($this->admin->id)->assertOk()->headers->get('Cache-Control');
+        $this->assertStringContainsString('no-store', $ownCacheControl);
+        $this->assertStringContainsString('private', $ownCacheControl);
+    }
+
+    #[Test]
     public function unknown_uuid_returns_generic_404(): void
     {
         $this->show(User::factory()->create()->id)->assertOk();

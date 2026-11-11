@@ -71,7 +71,7 @@ class UpdatePasswordTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'success' => true,
-                'message' => 'Password alterada com sucesso. Inicie sessão novamente.',
+                'message' => 'Palavra-passe alterada com sucesso. Inicie sessão novamente.',
                 'data' => null,
             ]);
     }
@@ -230,7 +230,28 @@ class UpdatePasswordTest extends TestCase
         $this->putJson(self::URL, $this->validPayload(['current_password' => 'WrongSecret000']))
             ->assertUnprocessable()
             ->assertJsonPath('success', false)
-            ->assertJsonValidationErrors(['current_password' => 'A password atual está incorreta.']);
+            ->assertJsonValidationErrors(['current_password' => 'A palavra-passe atual está incorreta.']);
+    }
+
+    #[Test]
+    public function new_password_equal_to_the_current_one_is_rejected_with_specific_message(): void
+    {
+        Sanctum::actingAs($this->makeUser());
+
+        $this->putJson(self::URL, $this->validPayload(['password' => self::OLD, 'password_confirmation' => self::OLD]))
+            ->assertUnprocessable()
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('errors.password.0', 'A nova palavra-passe tem de ser diferente da atual.');
+    }
+
+    #[Test]
+    public function weak_new_password_message_says_palavra_passe(): void
+    {
+        Sanctum::actingAs($this->makeUser());
+
+        $this->putJson(self::URL, $this->validPayload(['password' => 'NoSymbol123', 'password_confirmation' => 'NoSymbol123']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['password' => 'O campo palavra-passe tem de conter pelo menos um símbolo.']);
     }
 
     public static function invalidPayloads(): array
@@ -350,6 +371,8 @@ class UpdatePasswordTest extends TestCase
     #[Test]
     public function sixth_request_after_five_failures_is_blocked_even_with_correct_password(): void
     {
+        $this->freezeTime();
+
         $user = $this->makeUser();
         $hashBefore = $this->storedHash($user);
         Sanctum::actingAs($user);
@@ -372,6 +395,8 @@ class UpdatePasswordTest extends TestCase
     #[Test]
     public function block_message_shows_the_remaining_minutes_rounded_up(): void
     {
+        $this->freezeTime();
+
         Sanctum::actingAs($this->makeUser());
 
         $this->failCurrentPassword(5);
@@ -586,7 +611,7 @@ class UpdatePasswordTest extends TestCase
             ->assertOk()
             ->assertExactJson([
                 'success' => true,
-                'message' => 'Password alterada com sucesso. Inicie sessão novamente.',
+                'message' => 'Palavra-passe alterada com sucesso. Inicie sessão novamente.',
                 'data' => null,
             ]);
 

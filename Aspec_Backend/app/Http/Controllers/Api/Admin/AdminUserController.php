@@ -16,6 +16,7 @@ use App\Notifications\UserBlockedNotification;
 use App\Notifications\UserRejectedNotification;
 use App\Services\Payments\SubscriptionService;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -42,48 +43,98 @@ class AdminUserController extends Controller
     }
 
     /**
+     * Lê o utilizador com o papel e o estado e bloqueia a linha até ao fim da transação, para que
+     * duas ações de admins sobre a mesma conta se façam uma depois da outra.
+     *
+     * @param  string  $id  Id (UUID) do utilizador.
+     * @return User Utilizador bloqueado para escrita.
+     *
+     * @throws ModelNotFoundException Se não existir ou estiver apagado (404).
+     */
+    private function lockUserForStatusChange(string $id): User
+    {
+        return User::with(['role', 'accountStatus'])
+            ->lockForUpdate()
+            ->findOrFail($id);
+    }
+
+    /**
+     * Guardas comuns às mudanças de estado: um admin não altera a própria conta nem a de outro admin.
+     *
+     * @return string|null Código do erro ('self' ou 'admin'), ou null se a mudança for permitida.
+     */
+    private function statusChangeGuard(Request $request, User $user): ?string
+    {
+        if ($user->id === $request->user()->id) {
+            return 'self';
+        }
+
+        if ($user->role?->name === 'Admin') {
+            return 'admin';
+        }
+
+        return null;
+    }
+
+    /**
+     * Resposta 409 para o código de erro devolvido pela transação de uma mudança de estado.
+     *
+     * @param  string  $error  Código do erro.
+     * @return JsonResponse 409 com a mensagem correspondente.
+     */
+    private function statusConflictResponse(string $error): JsonResponse
+    {
+        $message = match ($error) {
+            'self' => 'Não pode alterar o estado da própria conta.',
+            'admin' => 'Não pode alterar o estado de um administrador.',
+            'approve_not_pending' => 'Apenas utilizadores pendentes podem ser aprovados.',
+            'reject_not_pending' => 'Apenas utilizadores pendentes podem ser rejeitados.',
+            'already_blocked' => 'O utilizador já está bloqueado.',
+            'not_blocked' => 'Apenas utilizadores bloqueados podem ser desbloqueados.',
+        };
+
+        return $this->errorResponse($message, Response::HTTP_CONFLICT);
+    }
+
+    /**
      * Aprova uma candidatura: Pending passa a Approved e é enviado o email com o link de ativação.
-     * A conta só fica Active quando o membro paga (webhook do Stripe). O email sai depois do commit.
+     * A conta só fica Active quando o membro paga (webhook do Stripe). O estado é lido com o utilizador
+     * bloqueado na transação: com dois admins em simultâneo, o segundo vê a conta já aprovada e recebe 409.
+     * O email sai depois do commit.
      *
      * @param  string  $id  The ID of the user to approve.
      * @return JsonResponse 200 com o UserResource, 404 ou 409 (próprio, admin ou não pendente).
      */
     public function approve(Request $request, string $id): JsonResponse
     {
-        $user = User::with(['role', 'accountStatus'])
-            ->findOrFail($id);
+        $error = DB::transaction(function () use ($request, $id) {
+            $user = $this->lockUserForStatusChange($id);
 
-        if ($user->id === $request->user()->id) {
-            return $this->errorResponse(
-                'Não pode alterar o estado da própria conta.',
-                Response::HTTP_CONFLICT
-            );
-        }
+            $error = $this->statusChangeGuard($request, $user);
 
-        if ($user->role?->name === 'Admin') {
-            return $this->errorResponse(
-                'Não pode alterar o estado de um administrador.',
-                Response::HTTP_CONFLICT
-            );
-        }
+            if ($error !== null) {
+                return $error;
+            }
 
-        if ($user->accountStatus?->name !== 'Pending') {
-            return $this->errorResponse(
-                'Apenas utilizadores pendentes podem ser aprovados.',
-                Response::HTTP_CONFLICT
-            );
-        }
+            if ($user->accountStatus?->name !== 'Pending') {
+                return 'approve_not_pending';
+            }
 
-        DB::transaction(function () use ($user) {
             $user->forceFill([
                 'account_status_id' => AccountStatus::where('name', 'Approved')->value('id'),
                 'inactive_reason' => null,
             ])->save();
 
             app(SubscriptionService::class)->sendActivationLink($user);
+
+            return null;
         });
 
-        $user = $this->loadUserRelations($user->fresh());
+        if ($error !== null) {
+            return $this->statusConflictResponse($error);
+        }
+
+        $user = $this->loadUserRelations(User::findOrFail($id));
 
         return $this->successResponse(
             new UserResource($user),
@@ -93,44 +144,48 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Rejeita uma candidatura: Pending passa a Inactive e é enviado o email de rejeição.
+     * Rejeita uma candidatura: Pending passa a Inactive, a conta é anonimizada e apagada e é enviado
+     * o email de rejeição. O estado é lido e alterado com o utilizador bloqueado na transação (o segundo
+     * de dois admins recebe 409); o cancelamento, a anonimização e o email correm depois do commit,
+     * porque falam com o Stripe ou com o servidor de email.
      *
      * @param  string  $id  The ID of the user to reject.
-     * @return JsonResponse 200 com sucesso, 404 ou 409 (próprio, admin ou não pendente).
+     * @return JsonResponse 200 com sucesso, 404, 409 (próprio, admin ou não pendente) ou 422 (motivo).
      */
     public function reject(Request $request, string $id): JsonResponse
     {
-        $user = User::with(['role', 'accountStatus'])
-            ->findOrFail($id);
+        $user = null;
+        $validated = [];
+        $originalEmail = null;
 
-        if ($user->id === $request->user()->id) {
-            return $this->errorResponse(
-                'Não pode alterar o estado da própria conta.',
-                Response::HTTP_CONFLICT
-            );
+        $error = DB::transaction(function () use ($request, $id, &$user, &$validated, &$originalEmail) {
+            $user = $this->lockUserForStatusChange($id);
+
+            $error = $this->statusChangeGuard($request, $user);
+
+            if ($error !== null) {
+                return $error;
+            }
+
+            if ($user->accountStatus?->name !== 'Pending') {
+                return 'reject_not_pending';
+            }
+
+            $validated = $request->validate([
+                'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            ]);
+
+            $originalEmail = $user->email;
+
+            $user->deactivate(InactiveReason::Deleted->value);
+
+            return null;
+        });
+
+        if ($error !== null) {
+            return $this->statusConflictResponse($error);
         }
 
-        if ($user->role?->name === 'Admin') {
-            return $this->errorResponse(
-                'Não pode alterar o estado de um administrador.',
-                Response::HTTP_CONFLICT
-            );
-        }
-
-        if ($user->accountStatus?->name !== 'Pending') {
-            return $this->errorResponse(
-                'Apenas utilizadores pendentes podem ser rejeitados.',
-                Response::HTTP_CONFLICT
-            );
-        }
-
-        $validated = $request->validate([
-            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
-        ]);
-
-        $originalEmail = $user->email;
-
-        $user->deactivate(InactiveReason::Deleted->value);
         app(SubscriptionService::class)->cancel($user);
 
         if (! $user->anonymizeAndDelete($request->user())) {
@@ -159,49 +214,50 @@ class AdminUserController extends Controller
     }
 
     /**
-     * Block a user by deactivating their account.
-     * Deactivates the user's account and sends a notification email about the block.
+     * Bloqueia um utilizador: a conta passa a Inactive (motivo blocked), as sessões terminam, as inscrições
+     * em eventos que ainda não começaram são apagadas (sem emails; não voltam ao desbloquear), a subscrição
+     * é cancelada e é enviado o email de bloqueio. O estado é lido e alterado com o utilizador bloqueado
+     * na transação (o segundo de dois admins recebe 409 e nada é apagado); o cancelamento no Stripe e o
+     * email correm depois do commit, fora de qualquer transação.
      *
      * @param  Request  $request  The incoming HTTP request.
      * @param  string  $id  The ID of the user to block.
-     * @return JsonResponse A JSON response containing the blocked user's data and a success message.
+     * @return JsonResponse 200 com o UserResource, 404, 409 (próprio, admin ou já bloqueado) ou 422 (motivo).
      */
     public function block(Request $request, string $id): JsonResponse
     {
-        $user = User::with([
-            'role',
-            'accountStatus',
-        ])->findOrFail($id);
+        $user = null;
+        $validated = [];
 
-        if ($user->id === $request->user()->id) {
-            return $this->errorResponse(
-                'Não pode alterar o estado da própria conta.',
-                Response::HTTP_CONFLICT
-            );
+        $error = DB::transaction(function () use ($request, $id, &$user, &$validated) {
+            $user = $this->lockUserForStatusChange($id);
+
+            $error = $this->statusChangeGuard($request, $user);
+
+            if ($error !== null) {
+                return $error;
+            }
+
+            if (
+                $user->accountStatus?->name === 'Inactive'
+                && $user->inactive_reason === InactiveReason::Blocked
+            ) {
+                return 'already_blocked';
+            }
+
+            $validated = $request->validate([
+                'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            ]);
+
+            $user->deactivate(InactiveReason::Blocked->value);
+            $user->deleteUpcomingEventRegistrations();
+
+            return null;
+        });
+
+        if ($error !== null) {
+            return $this->statusConflictResponse($error);
         }
-
-        if ($user->role?->name === 'Admin') {
-            return $this->errorResponse(
-                'Não pode alterar o estado de um administrador.',
-                Response::HTTP_CONFLICT
-            );
-        }
-
-        if (
-            $user->accountStatus?->name === 'Inactive'
-            && $user->inactive_reason === InactiveReason::Blocked
-        ) {
-            return $this->errorResponse(
-                'O utilizador já está bloqueado.',
-                Response::HTTP_CONFLICT
-            );
-        }
-
-        $validated = $request->validate([
-            'reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
-        ]);
-
-        $user->deactivate(InactiveReason::Blocked->value);
 
         app(SubscriptionService::class)->cancel($user);
 
@@ -229,8 +285,9 @@ class AdminUserController extends Controller
     /**
      * Desbloqueia um utilizador bloqueado, nunca para Active direto (o bloqueio cancelou o pagamento):
      * quem nunca subscreveu passa a Approved e recebe o link de ativação; quem já subscreveu fica
-     * Inactive por falta de pagamento e recebe o link de reativação. O email sai depois do commit.
-     * Esquece a sessão de Checkout guardada: uma sessão paga antes do bloqueio (subscrição já
+     * Inactive por falta de pagamento e recebe o link de reativação. O estado e as subscrições são lidos
+     * com o utilizador bloqueado na transação (o segundo de dois admins recebe 409). O email sai depois
+     * do commit. Esquece a sessão de Checkout guardada: uma sessão paga antes do bloqueio (subscrição já
      * cancelada pelo webhook) bloquearia para sempre o novo pagamento com 409.
      *
      * @param  string  $id  The ID of the user to unblock.
@@ -238,38 +295,25 @@ class AdminUserController extends Controller
      */
     public function unblock(Request $request, string $id): JsonResponse
     {
-        $user = User::with([
-            'role',
-            'accountStatus',
-        ])->findOrFail($id);
+        $neverSubscribed = false;
 
-        if ($user->id === $request->user()->id) {
-            return $this->errorResponse(
-                'Não pode alterar o estado da própria conta.',
-                Response::HTTP_CONFLICT
-            );
-        }
+        $error = DB::transaction(function () use ($request, $id, &$neverSubscribed) {
+            $user = $this->lockUserForStatusChange($id);
 
-        if ($user->role?->name === 'Admin') {
-            return $this->errorResponse(
-                'Não pode alterar o estado de um administrador.',
-                Response::HTTP_CONFLICT
-            );
-        }
+            $error = $this->statusChangeGuard($request, $user);
 
-        if (
-            $user->accountStatus?->name !== 'Inactive'
-            || $user->inactive_reason !== InactiveReason::Blocked
-        ) {
-            return $this->errorResponse(
-                'Apenas utilizadores bloqueados podem ser desbloqueados.',
-                Response::HTTP_CONFLICT
-            );
-        }
+            if ($error !== null) {
+                return $error;
+            }
 
-        $neverSubscribed = $user->subscriptions()->doesntExist();
+            if (
+                $user->accountStatus?->name !== 'Inactive'
+                || $user->inactive_reason !== InactiveReason::Blocked
+            ) {
+                return 'not_blocked';
+            }
 
-        DB::transaction(function () use ($user, $neverSubscribed) {
+            $neverSubscribed = $user->subscriptions()->doesntExist();
             $subscriptions = app(SubscriptionService::class);
 
             if ($neverSubscribed) {
@@ -281,7 +325,7 @@ class AdminUserController extends Controller
 
                 $subscriptions->sendActivationLink($user);
 
-                return;
+                return null;
             }
 
             $user->forceFill([
@@ -291,9 +335,15 @@ class AdminUserController extends Controller
             ])->save();
 
             $subscriptions->sendReactivationLink($user);
+
+            return null;
         });
 
-        $user = $this->loadUserRelations($user->fresh());
+        if ($error !== null) {
+            return $this->statusConflictResponse($error);
+        }
+
+        $user = $this->loadUserRelations(User::findOrFail($id));
 
         return $this->successResponse(
             new UserResource($user),
@@ -473,7 +523,7 @@ class AdminUserController extends Controller
      * (só números). Inclui admins e a própria conta, só para leitura.
      *
      * @param  string  $id  Id (UUID) do utilizador.
-     * @return JsonResponse 200 com o AdminUserDetailResource; 404 se não existir ou estiver apagado.
+     * @return JsonResponse 200 com o AdminUserDetailResource, com Cache-Control private, no-store (tem dados pessoais); 404 se não existir ou estiver apagado.
      */
     public function show(string $id): JsonResponse
     {
@@ -483,7 +533,7 @@ class AdminUserController extends Controller
         return $this->successResponse(
             new AdminUserDetailResource($user),
             'Utilizador obtido com sucesso.'
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**

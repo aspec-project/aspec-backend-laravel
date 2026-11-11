@@ -48,4 +48,18 @@ class EventSeriesSchedule
             $dates[] = $occurrence->toDateString();
         }
     }
+
+    /**
+     * Prazo de inscrição de uma sessão da série: N dias antes da data da sessão, às 23:59 (hora de Lisboa).
+     *
+     * @param  string  $sessionDate  Data da sessão (Y-m-d).
+     * @param  int  $daysBefore  Antecedência do prazo, em dias.
+     * @return CarbonImmutable Prazo de inscrição na hora de Lisboa.
+     */
+    public function registrationDeadline(string $sessionDate, int $daysBefore): CarbonImmutable
+    {
+        return CarbonImmutable::createFromFormat('!Y-m-d', $sessionDate, config('app.event_timezone', 'Europe/Lisbon'))
+            ->subDays($daysBefore)
+            ->setTime(23, 59);
+    }
 }

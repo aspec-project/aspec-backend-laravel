@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\EscapesMarkdown;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class EventUpdatedNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use EscapesMarkdown, Queueable;
 
     public function __construct(
         public string $eventName,
@@ -28,10 +29,10 @@ class EventUpdatedNotification extends Notification implements ShouldQueue
         $mail = (new MailMessage)
             ->subject("Evento atualizado: {$this->eventName}")
             ->greeting('Olá,')
-            ->line("O evento {$this->eventName} em que está inscrito foi atualizado.");
+            ->line("O evento {$this->markdownText($this->eventName)} em que está inscrito foi atualizado.");
 
         if ($this->justification !== null && trim($this->justification) !== '') {
-            $mail->line("Justificação: {$this->justification}");
+            $mail->line('Justificação: '.$this->markdownText($this->justification));
         }
 
         return $mail;

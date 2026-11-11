@@ -64,7 +64,7 @@ class RegisterMemberRequest extends FormRequest
     {
         return [
             'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => 'required|email:filter|unique:users,email',
             'password' => ['required', 'string', Password::default()],
             'phone' => ['required', 'string', new InternationalPhone],
             'business_name' => 'required|string|max:255',
@@ -86,6 +86,19 @@ class RegisterMemberRequest extends FormRequest
             'commercial_phone' => ['required', 'string', new InternationalPhone],
             'terms_accepted' => ['required', 'accepted'],
 
+        ];
+    }
+
+    /**
+     * Mensagem própria para o email já registado, que diz o que fazer a seguir. Fica neste request
+     * e não em lang/pt_PT/validation.php porque no perfil (sessão iniciada) "Inicie sessão" não faz sentido.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.unique' => 'Este email já está registado. Inicie sessão ou recupere a palavra-passe.',
         ];
     }
 }

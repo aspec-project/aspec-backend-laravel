@@ -30,10 +30,10 @@ class ResetPasswordNotification extends Notification
         ]);
 
         return (new MailMessage)
-            ->subject('Recuperação de password')
+            ->subject('Recuperação da palavra-passe')
             ->greeting($name ? "Olá, {$name}!" : 'Olá!')
-            ->line('Recebemos um pedido para redefinir a password da sua conta ASPEC.')
-            ->action('Redefinir password', $url)
+            ->line('Recebemos um pedido para redefinir a palavra-passe da sua conta ASPEC.')
+            ->action('Redefinir palavra-passe', $url)
             ->line("O link é válido durante {$minutes} minutos.")
             ->line('Se não fez este pedido, ignore este email.')
             ->salutation("Cumprimentos,\nASPEC");

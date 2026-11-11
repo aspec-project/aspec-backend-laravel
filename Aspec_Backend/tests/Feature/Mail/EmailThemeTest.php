@@ -6,6 +6,7 @@ use App\Mail\DemoInvoiceMail;
 use App\Models\EventInstance;
 use App\Models\MemberProfile;
 use App\Models\User;
+use App\Notifications\AccountEmailChangedNotification;
 use App\Notifications\ActivationLinkNotification;
 use App\Notifications\EventCancelledNotification;
 use App\Notifications\NewEventAnnouncementNotification;
@@ -213,6 +214,7 @@ class EmailThemeTest extends TestCase
             'ativação' => [fn () => new ActivationLinkNotification],
             'boas-vindas' => [fn () => new SubscriptionActivatedNotification(now()->addDays(30))],
             'password alterada' => [fn () => new PasswordChangedNotification],
+            'email alterado' => [fn () => new AccountEmailChangedNotification('joao.silva@gmail.com', now())],
             'recuperar password' => [fn () => new ResetPasswordNotification('token-de-teste')],
             'candidatura rejeitada' => [fn () => new UserRejectedNotification('Dados incompletos.')],
             'conta bloqueada' => [fn () => new UserBlockedNotification('Motivo de teste.')],

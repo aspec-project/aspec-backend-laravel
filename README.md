@@ -10,7 +10,7 @@ Na pasta `Aspec_Backend/`:
 4. `php artisan storage:link` — cria o atalho `public/storage` → `storage/app/public`. Sem ele, os ficheiros enviados (`logos/{profile_id}`, `portfolios/{profile_id}`) não ficam acessíveis por URL. O atalho é local a cada máquina e não vai para o git (`public/storage` está no `.gitignore`), por isso **cada pessoa tem de o criar uma vez**. Só é preciso com as imagens guardadas na máquina (`MEDIA_DISK=public`, o valor por omissão); com o Cloudflare R2 não se usa (ver "Armazenamento de ficheiros").
 5. `php artisan serve` — a API fica em `http://localhost:8000/api`.
 
-No Postman usar **Obter token (Postman)**; o **Login** devolve 400 sem sessão de browser.
+No Postman usar **Obter token (Postman)** (só em ambiente local); o **Login** devolve 400 sem sessão de browser.
 
 ### Já tinha o projeto instalado?
 
