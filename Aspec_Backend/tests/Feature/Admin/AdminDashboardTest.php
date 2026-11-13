@@ -541,7 +541,7 @@ class AdminDashboardTest extends TestCase
     }
 
     #[Test]
-    public function recent_review_by_an_anonymized_member_shows_the_removed_business_name(): void
+    public function recent_review_by_an_anonymized_member_shows_the_anonymized_business_name(): void
     {
         $this->actingAsTechnicalAdmin();
 
@@ -552,7 +552,7 @@ class AdminDashboardTest extends TestCase
 
         $item = $this->dashboard()->json('data.recent_reviews.0');
 
-        $this->assertSame('Empresa Removida', $item['reviewer']['business_name']);
+        $this->assertSame('Empresa anonimizada', $item['reviewer']['business_name']);
         $this->assertSame('Ana Lda.', $item['reviewed']['business_name']);
         $this->assertSame('Hidden', $item['status']);
     }
