@@ -623,6 +623,27 @@ class MemberProfileUpdateTest extends TestCase
     }
 
     #[Test]
+    public function website_url_with_numeric_host_is_rejected_and_kept(): void
+    {
+        $user = $this->memberWithProfile(profile: [
+            'website_url' => 'https://antigo.pt',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'website_url' => 'https://12',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'website_url' => 'https://antigo.pt',
+        ]);
+    }
+
+    #[Test]
     public function email_change_without_current_password_is_rejected(): void
     {
         $user = $this->memberWithProfile();
