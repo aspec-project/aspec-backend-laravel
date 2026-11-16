@@ -7,6 +7,7 @@ use App\Rules\InternationalPhone;
 use App\Rules\PortuguesePostalCode;
 use App\Rules\UrlWithoutCredentials;
 use App\Support\UrlNormalizer;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -72,7 +73,7 @@ class UpdateMemberProfileRequest extends FormRequest
      * mudar outros campos); podem repetir os contactos da conta e não são únicos (ex. geral@ partilhado).
      * Código postal e localidade seguem a mesma regra; a morada guarda só a rua.
      *
-     * @return array<string, ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|Closure|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -107,7 +108,29 @@ class UpdateMemberProfileRequest extends FormRequest
 
             'social_links' => 'sometimes|array',
             'social_links.*.platform_id' => 'required|uuid|distinct:ignore_case|exists:social_platforms,id',
-            'social_links.*.url' => ['required', 'url:http,https', 'max:255', new UrlWithoutCredentials],
+            'social_links.*.url' => [
+                'required',
+                'url:http,https',
+                'max:255',
+                new UrlWithoutCredentials(),
+                function (string $attribute, mixed $value, Closure $fail): void {
+                    $host = is_string($value) ? parse_url($value, PHP_URL_HOST) : null;
+
+                    if (! is_string($host)) {
+                        return; // A regra "url" trata o formato inválido.
+                    }
+
+                    $host = rtrim($host, '.');
+                    $labels = explode('.', $host);
+                    $tld = $labels[count($labels) - 1] ?? '';
+
+                    if (count($labels) < 2
+                        || filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
+                        || preg_match('/^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$/i', $tld) !== 1) {
+                        $fail('validation.url')->translate();
+                    }
+                },
+            ],
         ];
     }
 }
