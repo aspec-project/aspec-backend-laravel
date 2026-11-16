@@ -6,6 +6,7 @@ use App\Http\Requests\Concerns\LimitsCurrentPasswordAttempts;
 use App\Rules\InternationalPhone;
 use App\Rules\PortuguesePostalCode;
 use App\Rules\UrlWithoutCredentials;
+use App\Rules\ValidDomainUrl;
 use App\Support\UrlNormalizer;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -94,7 +95,7 @@ class UpdateMemberProfileRequest extends FormRequest
             'current_password' => 'bail|required_with:email|string|current_password:sanctum',
             'phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'description' => 'nullable|string|max:1000',
-            'website_url' => ['nullable', 'url:http,https', 'max:255', new UrlWithoutCredentials],
+            'website_url' => ['nullable', 'url:http,https', 'max:255', new UrlWithoutCredentials, new ValidDomainUrl],
             'commercial_email' => 'sometimes|required|string|email:rfc|max:255',
             'commercial_phone' => ['sometimes', 'required', 'string', new InternationalPhone],
             'address' => 'sometimes|required|string|max:255',
@@ -108,29 +109,7 @@ class UpdateMemberProfileRequest extends FormRequest
 
             'social_links' => 'sometimes|array',
             'social_links.*.platform_id' => 'required|uuid|distinct:ignore_case|exists:social_platforms,id',
-            'social_links.*.url' => [
-                'required',
-                'url:http,https',
-                'max:255',
-                new UrlWithoutCredentials(),
-                function (string $attribute, mixed $value, Closure $fail): void {
-                    $host = is_string($value) ? parse_url($value, PHP_URL_HOST) : null;
-
-                    if (! is_string($host)) {
-                        return; // A regra "url" trata o formato inválido.
-                    }
-
-                    $host = rtrim($host, '.');
-                    $labels = explode('.', $host);
-                    $tld = $labels[count($labels) - 1] ?? '';
-
-                    if (count($labels) < 2
-                        || filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false
-                        || preg_match('/^(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})$/i', $tld) !== 1) {
-                        $fail('validation.url')->translate();
-                    }
-                },
-            ],
+            'social_links.*.url' => ['required', 'url:http,https', 'max:255', new UrlWithoutCredentials, new ValidDomainUrl],
         ];
     }
 }
