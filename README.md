@@ -205,6 +205,52 @@ Para mostrar o portal, cancelar e retomar, usar uma conta ativada pelo Checkout 
 
 **Voltar a correr o seeder antes de cada demonstração:** não há webhooks para as subscrições demo, por isso as datas não avançam sozinhas. Com o `schedule:work` ligado vários dias, o `subscriptions:end-grace` passa o `demo.membro07` a inativo quando a carência acaba, e os trials terminam sem cobrança.
 
+## Dados de carga e medição de desempenho
+
+Servem para medir a API muito acima do volume real (a ASPEC prevê ~500 membros). **Só em local, com o MySQL local.** Os dois comandos recusam `production`, `staging` e qualquer base de dados que não seja SQLite ou um host local (`127.0.0.1`, `localhost`, `::1`, também no `DB_URL`; ligações com `read`/`write` são sempre recusadas), por isso nunca correm com `--env=tidb`; mesmo assim, nunca os corra contra o TiDB.
+
+Na pasta `Aspec_Backend/`:
+
+| Comando | O que faz | Tempo esperado |
+|---|---|---|
+| `php artisan aspec:load-data` | nível realista: 1 000 membros ativos (~1 160 contas, ~57 mil linhas) | menos de 30 s |
+| `php artisan aspec:load-data --level=stress` | nível de stress: 10 000 membros ativos (~11 600 contas, ~570 mil linhas) | 1 a 3 min |
+| `php artisan aspec:load-data --members=200` | volume à medida (mínimo 10) | — |
+| `php artisan aspec:load-data --clean` | só apaga os dados de carga | segundos |
+
+- As contas são `carga.0001@aspec.test`… e os administradores `carga.admin01@aspec.test`…, com a password das contas de demonstração (`Demo#2026`, ou `DEMO_PASSWORD`). Os eventos começam por "Carga: " e aparecem na agenda.
+- Correr outra vez apaga e cria de novo (os dados são sempre os mesmos, por causa da semente fixa, exceto os ids). Os dados de demonstração (`demo.*`) nunca são tocados, e o `DemoSeeder` também não toca nos `carga.*`: podem coexistir.
+- A geração não envia emails nem cria jobs e não chama o Stripe, o InvoiceExpress nem o R2. As contas de carga ficam com os emails de eventos desligados (anúncio de eventos novos e agenda semanal), por isso criar um evento ou correr `events:send-weekly-agenda` à mão nunca lhes envia emails. Os eventos de carga têm uma marca nas notas do organizador: a limpeza só apaga eventos com o prefixo e essa marca. Os logótipos e o portefólio das contas de carga apontam para ficheiros `carga/...` que não existem: no frontend aparecem **imagens partidas** (esperado).
+- **Antes de mostrar a demo localmente, corra `php artisan aspec:load-data --clean`.** Uma conta de carga anonimizada no backoffice perde o email `carga.` e já não é limpa: nesse caso, `php artisan migrate:fresh --seed`.
+
+### Medir
+
+```bash
+php artisan aspec:benchmark --label=antes
+php artisan aspec:benchmark --runs=100 --label=antes   # números para o relatório
+```
+
+Opções: `--runs=30` (corridas medidas), `--warmup=3` (corridas descartadas, para carregar classes e caches), `--queries` (as 3 consultas mais lentas de cada cenário, com os valores, para o `EXPLAIN ANALYZE`), `--skip-agenda`. Sem dados de carga, pede para correr primeiro o `aspec:load-data`. Termina com erro se algum cenário não responder 200.
+
+Mede 10 pedidos (diretório com e sem filtros, perfil e avaliações do perfil com mais avaliações, agenda filtrada, evento grande, lista de utilizadores e dashboard do backoffice e exportação CSV) e a agenda semanal. O resultado fica na consola e em `storage/app/benchmarks/benchmark-{etiqueta}-{AAAAMMDD-HHMM}.md` e `.csv` (fora do git).
+
+Como ler a tabela:
+
+- **Mediana**: o tempo típico. **p95**: 95% dos pedidos foram mais rápidos do que este valor (com 30 corridas é quase o 2.º maior; usar `--runs=100` para o relatório).
+- **Consultas**: número de consultas SQL por pedido; deve ser igual em todas as corridas (se variar, aparece um aviso). Não pode crescer com o volume (seria um N+1).
+- **SQL mediana**: tempo gasto na base de dados. Se for quase todo o tempo do pedido, o problema está numa consulta (ver `--queries`).
+- Os pedidos correm dentro do processo (HTTP Kernel, como nos testes). Ficam de fora o arranque do framework, o servidor web, a rede, o TLS, o frontend, a sessão e os limitadores de pedidos. Servem para comparar, não são tempos de produção.
+- A agenda semanal corre numa transação desfeita: os emails são construídos mas descartados (nunca saem, mesmo com o Gmail ou o Brevo no `.env`).
+
+Antes/depois de uma alteração (ex.: um índice): medir com `--label=antes`, aplicar a alteração, medir com `--label=depois` e comparar os dois `.md`. Só vale a pena investigar se o p95 passar de 200 ms (realista) ou 500 ms (stress) numa página, ou de 1 s no CSV.
+
+Passo opcional, tempo de ponta a ponta com o servidor de desenvolvimento (inclui o arranque do framework e o servidor):
+
+```bash
+php artisan serve --host=localhost
+curl -s -o /dev/null -w "%{time_total}\n" "http://localhost:8000/api/members"
+```
+
 ## Armazenamento de ficheiros (local ou Cloudflare R2)
 
 Os logótipos e o portefólio vão para o disco de media (`MEDIA_DISK`) e os PDFs das faturas demo para o disco das faturas (`INVOICES_DISK`). O código nunca escolhe o disco: mudar de sítio é só o `.env`.

@@ -8,6 +8,7 @@ use App\Http\Resources\MemberDetailResource;
 use App\Http\Resources\MemberSummaryResource;
 use App\Models\MemberProfile;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,11 +20,13 @@ class MemberController extends Controller
      * Filtra por texto (nome, empresa ou descrição), setor, distrito e avaliação mínima;
      * ordena por empresa, nome e id para a paginação ser estável.
      * Cada item traz a média das avaliações Visible (1 casa decimal) e o número de avaliações Visible.
+     * A média e a contagem são calculadas depois de paginar, numa única consulta só para os perfis da página:
+     * no select da consulta paginada, as subconsultas corriam para todos os perfis antes do LIMIT.
+     * Só é válido porque a ordenação não depende da média; o filtro min_rating continua no where, antes de paginar.
      */
     public function index(IndexMemberRequest $request): JsonResponse
     {
         $members = MemberProfile::listedInDirectory()
-            ->withRatingSummary()
             ->with(['sector:id,name', 'location:id,name'])
             ->when($request->filled('search'), function (Builder $query) use ($request) {
                 // O ! é o caráter de escape porque escreve-se igual em MySQL e SQLite (a \ não).
@@ -43,6 +46,8 @@ class MemberController extends Controller
             ->orderBy('id')
             ->paginate($request->validated('per_page') ?? 12);
 
+        $this->loadRatingSummary($members->getCollection());
+
         return $this->successResponse([
             'items' => MemberSummaryResource::collection($members->getCollection())->resolve($request),
             'pagination' => [
@@ -52,6 +57,35 @@ class MemberController extends Controller
                 'last_page' => $members->lastPage(),
             ],
         ], 'Membros obtidos com sucesso.', Response::HTTP_OK);
+    }
+
+    /**
+     * Copia average_rating e reviews_count para os perfis da página, com uma única consulta (nenhuma se a página estiver vazia).
+     * Os atributos ficam como originais, tal como viriam do select, para o modelo não os considerar alterados.
+     *
+     * @param  Collection<int, MemberProfile>  $profiles
+     */
+    private function loadRatingSummary(Collection $profiles): void
+    {
+        if ($profiles->isEmpty()) {
+            return;
+        }
+
+        $summaries = MemberProfile::query()
+            ->select('member_profiles.id')
+            ->whereKey($profiles->modelKeys())
+            ->withRatingSummary()
+            ->get()
+            ->keyBy('id');
+
+        foreach ($profiles as $profile) {
+            $summary = $summaries->get($profile->id);
+
+            $profile->forceFill([
+                'average_rating' => $summary?->average_rating,
+                'reviews_count' => $summary?->reviews_count ?? 0,
+            ])->syncOriginalAttributes(['average_rating', 'reviews_count']);
+        }
     }
 
     /**

@@ -14,6 +14,13 @@ use Symfony\Component\HttpFoundation\Response;
 
 class EventRegistrationController extends Controller
 {
+    /**
+     * Inscreve o membro autenticado no evento ou, com scope=this_and_following, nesta sessão e nas
+     * seguintes da série, tudo ou nada. Nos conflitos de uma série, a mensagem indica a data da sessão que falhou.
+     *
+     * @param  Request  $request  Pedido com o scope opcional.
+     * @param  EventInstance  $eventInstance  Sessão escolhida pelo membro.
+     */
     public function store(Request $request, EventInstance $eventInstance): JsonResponse
     {
         $user = $request->user();
@@ -60,6 +67,7 @@ class EventRegistrationController extends Controller
             $now = now($timezone);
 
             foreach ($events as $session) {
+                $sessionDate = $session->event_date->format('d/m/Y');
                 $deadline = Carbon::parse(
                     $session->getRawOriginal('registration_deadline'),
                     $timezone
@@ -67,21 +75,27 @@ class EventRegistrationController extends Controller
 
                 if ($now->greaterThan($deadline)) {
                     return $this->errorResponse(
-                        'O prazo de inscrição para este evento terminou.',
+                        $registerThisAndFollowing
+                            ? "O prazo de inscrição da sessão de {$sessionDate} terminou."
+                            : 'O prazo de inscrição para este evento terminou.',
                         Response::HTTP_CONFLICT
                     );
                 }
 
                 if ($session->registrations()->where('user_id', $userId)->exists()) {
                     return $this->errorResponse(
-                        'Já está inscrito neste evento.',
+                        $registerThisAndFollowing
+                            ? "Já está inscrito na sessão de {$sessionDate}."
+                            : 'Já está inscrito neste evento.',
                         Response::HTTP_CONFLICT
                     );
                 }
 
                 if ($session->registrations()->count() >= $session->max_attendees) {
                     return $this->errorResponse(
-                        'O evento atingiu a lotação máxima.',
+                        $registerThisAndFollowing
+                            ? "A sessão de {$sessionDate} atingiu a lotação máxima."
+                            : 'O evento atingiu a lotação máxima.',
                         Response::HTTP_CONFLICT
                     );
                 }

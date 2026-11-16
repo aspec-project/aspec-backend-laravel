@@ -9,12 +9,17 @@ class AdminReviewResource extends JsonResource
 {
     /**
      * Avaliação para a moderação, com os reports por resolver. Nunca identifica quem reportou:
-     * o admin decide sobre o conteúdo da avaliação.
+     * o admin decide sobre o conteúdo da avaliação. Perfis anonimizados (apagados) aparecem como
+     * «Empresa anonimizada», como no público e na área de membro.
      *
+     * @param  Request  $request  Pedido atual.
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
+        $reviewer = $this->reviewerProfile;
+        $reviewed = $this->reviewedProfile;
+
         return [
             'id' => $this->id,
             'rating' => (int) $this->rating,
@@ -22,10 +27,10 @@ class AdminReviewResource extends JsonResource
             'status' => $this->status?->name,
             'hidden_reason' => $this->hidden_reason,
             'reviewed' => [
-                'business_name' => $this->reviewedProfile?->business_name,
+                'business_name' => $reviewed?->trashed() ? 'Empresa anonimizada' : $reviewed?->business_name,
             ],
             'reviewer' => [
-                'business_name' => $this->reviewerProfile?->business_name,
+                'business_name' => $reviewer?->trashed() ? 'Empresa anonimizada' : $reviewer?->business_name,
             ],
             'flagging_sources' => $this->reports
                 ->pluck('source')

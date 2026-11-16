@@ -6545,7 +6545,7 @@
                 }
               ]
             },
-            "description": "Inscreve o membro autenticado na sessão indicada e em todas as sessões seguintes da mesma série. Requer conta **Active**.\n\n- Envia `{\"scope\":\"this_and_following\"}` no body.\n- A sessão indicada está incluída; sessões anteriores não são incluídas.\n- A inscrição é atómica: se alguma sessão elegível estiver lotada, tiver o prazo terminado ou já tiver uma inscrição do membro, o pedido falha sem criar inscrições parciais.\n- Este scope só pode ser usado numa sessão pertencente a uma série. Num evento avulso, a API devolve 422."
+            "description": "Inscreve o membro autenticado na sessão indicada e em todas as sessões seguintes da mesma série. Requer conta **Active**.\n\n- Envia `{\"scope\":\"this_and_following\"}` no body.\n- A sessão indicada está incluída; sessões anteriores não são incluídas.\n- A inscrição é atómica: se alguma sessão elegível estiver lotada, tiver o prazo terminado ou já tiver uma inscrição do membro, o pedido falha sem criar inscrições parciais.\n- Este scope só pode ser usado numa sessão pertencente a uma série. Num evento avulso, a API devolve 422.\n- Nos conflitos (409), a mensagem indica a data da sessão que falhou (a mais cedo, pela ordem das sessões), por exemplo «Já está inscrito na sessão de 18/11/2026.»."
           },
           "response": [
             {
@@ -6634,7 +6634,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"O evento atingiu a lotação máxima.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"A sessão de 25/11/2026 atingiu a lotação máxima.\"\n}"
             },
             {
               "name": "409 Já inscrito numa sessão seguinte",
@@ -6678,7 +6678,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"Já está inscrito neste evento.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"Já está inscrito na sessão de 18/11/2026.\"\n}"
             },
             {
               "name": "409 Prazo terminado",
@@ -6722,7 +6722,7 @@
                 }
               ],
               "cookie": [],
-              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo de inscrição para este evento terminou.\"\n}"
+              "body": "{\n  \"success\": false,\n  \"message\": \"O prazo de inscrição da sessão de 11/11/2026 terminou.\"\n}"
             },
             {
               "name": "422 Evento avulso",
@@ -12437,7 +12437,7 @@
                 "dashboard"
               ]
             },
-            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial ou ativos (os mesmos estados dos *chips* 'Em trial' e 'Ativos' da lista, admins incluídos; o admin técnico, isento, não conta; as contas em carência contam só em `overdue_payments`); `new_this_month` = destes, os que fizeram a 1.ª subscrição este mês. `trial` e `active` = a divisão do total pelos dois estados (os mesmos números dos *chips* 'Em trial' e 'Ativos' com 'Ver admins' ligado; `total` = `trial + active`); `admins` = quantos destes são administradores promovidos (o admin técnico nunca conta). `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). `stats.event_registrations.events_with_registrations` = eventos distintos da semana com pelo menos uma inscrição (cada sessão de uma série conta como um evento). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (= página 1 de 'Dashboard — candidaturas pendentes'; mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário)."
+            "description": "Totais e listas do painel do backoffice, num só pedido. Só admins ativos; limite de 60 pedidos/minuto por admin; sem cache (`Cache-Control: private, no-store`). `stats.active_members.total` = utilizadores em trial ou ativos (os mesmos estados dos *chips* 'Em trial' e 'Ativos' da lista, admins incluídos; o admin técnico, isento, não conta; as contas em carência contam só em `overdue_payments`); `new_this_month` = destes, os que fizeram a 1.ª subscrição este mês. `trial` e `active` = a divisão do total pelos dois estados (os mesmos números dos *chips* 'Em trial' e 'Ativos' com 'Ver admins' ligado; `total` = `trial + active`); `admins` = quantos destes são administradores promovidos (o admin técnico nunca conta). `stats.events` = eventos (cada sessão de uma série conta) no mês e na semana (segunda a domingo) correntes. `stats.reviews.flagged` = avaliações sinalizadas; `new_this_week` = avaliações criadas esta semana (segunda a domingo). `stats.overdue_payments` = quotas em atraso: `grace` = contas em carência (a cobrança falhou e o membro mantém o acesso até ao fim da carência), `unpaid` = contas inativas por falta de pagamento (não inclui quem cancelou), `total` = a soma; admins promovidos incluídos, admin técnico nunca. `stats.event_registrations.this_week` = inscrições em eventos com data na semana corrente (segunda a domingo); cada sessão de uma série conta e cada inscrição conta (não são pessoas distintas). `stats.event_registrations.events_with_registrations` = eventos distintos da semana com pelo menos uma inscrição (cada sessão de uma série conta como um evento). Mês e semana na hora de Lisboa. `pending_applications` = as 3 candidaturas mais recentes (= página 1 de 'Dashboard — candidaturas pendentes'; mesma forma da lista de utilizadores); `recent_reviews` = as 3 avaliações alteradas mais recentemente, só com a nota, o estado e os nomes dos negócios (sem comentário).\n\nEm `recent_reviews`, quando o perfil do autor ou do avaliado foi anonimizado, `business_name` é «Empresa anonimizada»."
           },
           "response": [
             {
@@ -20349,7 +20349,7 @@
                 }
               ]
             },
-            "description": "Lista avaliações para moderação. Filtros opcionais: `status` (`all`, `flagged`, `visible` ou `hidden`; por omissão `all`), `page` e `per_page` (por omissão 10, máximo 50). As contagens são globais e não dependem do filtro.\n\n`reports` lista só os reports por resolver, por ordem de criação, com `{id, source, reason, comment, created_at}`; nunca identifica quem reportou."
+            "description": "Lista avaliações para moderação. Filtros opcionais: `status` (`all`, `flagged`, `visible` ou `hidden`; por omissão `all`), `page` e `per_page` (por omissão 10, máximo 50). As contagens são globais e não dependem do filtro.\n\n`reports` lista só os reports por resolver, por ordem de criação, com `{id, source, reason, comment, created_at}`; nunca identifica quem reportou.\n\nQuando o perfil do autor ou do avaliado foi anonimizado, `business_name` é «Empresa anonimizada»."
           },
           "response": [
             {
@@ -20527,7 +20527,7 @@
                 }
               ]
             },
-            "description": "Oculta uma avaliação Visible ou Flagged. A justificação é opcional, texto até 2000 caracteres. A ação responde 409 se a avaliação já estiver Hidden.",
+            "description": "Oculta uma avaliação Visible ou Flagged. A justificação é opcional, texto até 2000 caracteres. A ação responde 409 se a avaliação já estiver Hidden.\n\nQuando o perfil do autor ou do avaliado foi anonimizado, `business_name` é «Empresa anonimizada».",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"justification\": \"A avaliação contém informação inadequada.\"\n}",
@@ -20772,7 +20772,7 @@
                 }
               ]
             },
-            "description": "Torna visível uma avaliação que está Hidden. A justificação da ocultação é removida. A ação responde 409 se a avaliação não estiver Hidden."
+            "description": "Torna visível uma avaliação que está Hidden. A justificação da ocultação é removida. A ação responde 409 se a avaliação não estiver Hidden.\n\nQuando o perfil do autor ou do avaliado foi anonimizado, `business_name` é «Empresa anonimizada»."
           },
           "response": [
             {
@@ -20936,7 +20936,7 @@
                 }
               ]
             },
-            "description": "Remove a sinalização de uma avaliação Flagged e torna-a Visible. A ação responde 409 se a avaliação não estiver Flagged."
+            "description": "Remove a sinalização de uma avaliação Flagged e torna-a Visible. A ação responde 409 se a avaliação não estiver Flagged.\n\nQuando o perfil do autor ou do avaliado foi anonimizado, `business_name` é «Empresa anonimizada»."
           },
           "response": [
             {
