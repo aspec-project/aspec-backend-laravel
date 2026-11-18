@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\PostalCodeMessage;
 use Tests\TestCase;
@@ -1088,6 +1089,53 @@ class AuthControllerTest extends TestCase
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['website_url']);
+    }
+
+    /**
+     * Sites sem domínio verdadeiro: o registo recusa-os como a edição do perfil (ValidDomainUrl),
+     * senão a conta nascia com um site que o membro já não conseguia voltar a guardar.
+     *
+     * @return array<string, array{string}>
+     */
+    public static function websitesWithoutValidDomain(): array
+    {
+        return [
+            'só números' => ['https://12'],
+            'sem domínio de topo' => ['https://empresa'],
+            'endereço IP' => ['http://192.168.1.10'],
+            'domínio de topo numérico' => ['https://empresa.123'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('websitesWithoutValidDomain')]
+    public function registration_rejects_website_without_valid_domain(string $website): void
+    {
+        $sector = Sector::firstOrFail();
+        $location = Location::firstOrFail();
+
+        $this->postJson('/api/auth/register', [
+            'name' => 'Membro de Teste',
+            'email' => 'novo.membro@example.com',
+            'password' => 'Password123!',
+            'phone' => '912345678',
+            'business_name' => 'Empresa de Teste',
+            'sector_id' => $sector->id,
+            'location_id' => $location->id,
+            'congregation' => 'Congregação de Teste',
+            'role_in_congregation' => 'Membro',
+            'website_url' => $website,
+            'address' => 'Rua de Teste, 1',
+            'postal_code' => '1000-100',
+            'city' => 'Lisboa',
+            'terms_accepted' => true,
+            'commercial_email' => 'geral@example.com',
+            'commercial_phone' => '213 456 789',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'novo.membro@example.com']);
     }
 
     #[Test]

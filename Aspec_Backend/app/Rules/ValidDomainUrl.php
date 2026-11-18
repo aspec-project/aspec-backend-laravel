@@ -5,6 +5,13 @@ namespace App\Rules;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
+/**
+ * Exige que o host de um link seja um domínio verdadeiro (ex. empresa.pt).
+ *
+ * Recusa hosts só com números (https://12), sem domínio de topo (https://empresa), endereços IP
+ * e domínios de topo numéricos. Complementa url:http,https, que aceita estes casos.
+ * Domínios com acentos (ex. café.pt) também são recusados, como nos emails da conta (ASPEC-456).
+ */
 class ValidDomainUrl implements ValidationRule
 {
     public function validate(string $attribute, mixed $value, Closure $fail): void

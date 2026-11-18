@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Rules\InternationalPhone;
 use App\Rules\PortuguesePostalCode;
 use App\Rules\UrlWithoutCredentials;
+use App\Rules\ValidDomainUrl;
 use App\Support\UrlNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -78,6 +79,7 @@ class RegisterMemberRequest extends FormRequest
                 'url:http,https',
                 'max:255',
                 new UrlWithoutCredentials,
+                new ValidDomainUrl,
             ],
             'address' => 'required|string|max:255',
             'postal_code' => ['required', 'string', new PortuguesePostalCode],
