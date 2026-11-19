@@ -5,10 +5,13 @@ namespace Tests\Feature\Auth;
 use App\Enums\InactiveReason;
 use App\Models\AccountStatus;
 use App\Models\Location;
+use App\Models\MemberProfile;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\Concerns\PostalCodeMessage;
@@ -81,35 +84,13 @@ class AuthControllerTest extends TestCase
 
         $response
             ->assertCreated()
-            ->assertJsonPath('success', true)
-            ->assertJsonPath(
-                'message',
-                'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.'
-            )
-            ->assertJsonPath('data.email', 'novo.membro@example.com')
-            ->assertJsonPath('data.phone', '+351912345678')
-            ->assertJsonPath('data.role.name', 'Member')
-            ->assertJsonPath('data.account_status.name', 'Pending')
-            ->assertJsonPath('data.member_profile.business_name', 'Empresa de Teste')
-            ->assertJsonPath('data.member_profile.congregation', 'Congregação de Teste')
-            ->assertJsonPath(
-                'data.member_profile.commercial_email',
-                'geral@empresa-teste.pt'
-            )
-            ->assertJsonPath(
-                'data.member_profile.commercial_phone',
-                '+351213456789'
-            )
-            ->assertJsonPath(
-                'data.member_profile.website_url',
-                'https://www.example.com'
-            )
-            ->assertJsonPath('data.member_profile.postal_code', '1000-100')
-            ->assertJsonPath('data.member_profile.city', 'Lisboa')
-            ->assertJsonMissingPath('data.password')
-            ->assertJsonMissingPath('data.remember_token')
-            ->assertJsonMissingPath('data.user')
-            ->assertJsonMissingPath('data.profile');
+            ->assertHeaderContains('Cache-Control', 'private')
+            ->assertHeaderContains('Cache-Control', 'no-store')
+            ->assertExactJson([
+                'success' => true,
+                'data' => null,
+                'message' => 'Pedido recebido. Se este endereço puder ser usado, a candidatura ficará pendente de aprovação.',
+            ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'novo.membro@example.com',
@@ -351,19 +332,43 @@ class AuthControllerTest extends TestCase
      * Quem já tem conta e volta ao formulário de candidatura deve saber o que fazer a seguir.
      */
     #[Test]
-    public function registration_with_an_already_registered_email_is_rejected_with_a_specific_message(): void
+    public function registration_with_an_existing_email_returns_the_same_generic_response_without_mutating_the_account(): void
     {
         $existing = $this->activeUser();
+        $existingAttributes = $existing->fresh()->getAttributes();
         $usersBefore = User::withTrashed()->count();
+        $profilesBefore = MemberProfile::count();
 
-        $this->postJson('/api/auth/register', $this->registrationPayload(['email' => $existing->email]))
-            ->assertUnprocessable()
-            ->assertJsonPath('success', false)
-            ->assertJsonValidationErrors([
-                'email' => 'Este email já está registado. Inicie sessão ou recupere a palavra-passe.',
-            ]);
+        Mail::fake();
+        Notification::fake();
 
-        $this->assertSame($usersBefore, User::withTrashed()->count());
+        $newEmailResponse = $this->postJson(
+            '/api/auth/register',
+            $this->registrationPayload(['email' => 'novo.membro@example.com'])
+        );
+
+        $existingEmailResponse = $this->postJson(
+            '/api/auth/register',
+            $this->registrationPayload(['email' => $existing->email])
+        );
+
+        $expectedResponse = [
+            'success' => true,
+            'data' => null,
+            'message' => 'Pedido recebido. Se este endereço puder ser usado, a candidatura ficará pendente de aprovação.',
+        ];
+
+        $newEmailResponse->assertCreated()->assertExactJson($expectedResponse);
+        $existingEmailResponse->assertCreated()->assertExactJson($expectedResponse);
+
+        $this->assertSame($newEmailResponse->status(), $existingEmailResponse->status());
+        $this->assertSame($newEmailResponse->json(), $existingEmailResponse->json());
+        $this->assertSame($usersBefore + 1, User::withTrashed()->count());
+        $this->assertSame($profilesBefore + 1, MemberProfile::count());
+        $this->assertSame($existingAttributes, $existing->fresh()->getAttributes());
+
+        Mail::assertNothingOutgoing();
+        Notification::assertNothingSent();
     }
 
     #[Test]
@@ -395,6 +400,8 @@ class AuthControllerTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertHeaderContains('Cache-Control', 'private')
+            ->assertHeaderContains('Cache-Control', 'no-store')
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonMissingPath('data.token');
@@ -539,6 +546,8 @@ class AuthControllerTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertHeaderContains('Cache-Control', 'private')
+            ->assertHeaderContains('Cache-Control', 'no-store')
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('data.email', $user->email)
@@ -683,6 +692,8 @@ class AuthControllerTest extends TestCase
 
         $response
             ->assertOk()
+            ->assertHeaderContains('Cache-Control', 'private')
+            ->assertHeaderContains('Cache-Control', 'no-store')
             ->assertJsonPath('success', true)
             ->assertJsonPath('data.id', $user->id)
             ->assertJsonPath('data.email', $user->email);
@@ -1240,7 +1251,7 @@ class AuthControllerTest extends TestCase
         $sector = Sector::firstOrFail();
         $location = Location::firstOrFail();
 
-        $this->postJson('/api/auth/register', [
+        $response = $this->postJson('/api/auth/register', [
             'name' => 'Membro de Teste',
             'email' => 'telefone.formatado@example.com',
             'password' => 'Password123!',
@@ -1256,9 +1267,15 @@ class AuthControllerTest extends TestCase
             'commercial_email' => 'geral@empresa-teste.pt',
             'commercial_phone' => '213 456 789',
             'terms_accepted' => true,
-        ])
+        ]);
+
+        $response
             ->assertCreated()
-            ->assertJsonPath('data.phone', '+351213456789');
+            ->assertExactJson([
+                'success' => true,
+                'data' => null,
+                'message' => 'Pedido recebido. Se este endereço puder ser usado, a candidatura ficará pendente de aprovação.',
+            ]);
 
         $this->assertDatabaseHas('users', [
             'email' => 'telefone.formatado@example.com',
