@@ -93,18 +93,23 @@ class AuthController extends Controller
         $memberRole = Role::where('name', 'Member')->firstOrFail();
         $pendingStatus = AccountStatus::where('name', 'Pending')->firstOrFail();
 
-        $result = DB::transaction(function () use ($request, $memberRole, $pendingStatus) {
+        DB::transaction(function () use ($request, $memberRole, $pendingStatus) {
+            $user = User::withTrashed()->firstOrCreate(
+                ['email' => $request->email],
+                [
+                    'password' => Hash::make($request->password),
+                    'phone' => $request->phone,
+                    'role_id' => $memberRole->id,
+                    'account_status_id' => $pendingStatus->id,
+                    'terms_accepted_at' => now(),
+                ]
+            );
 
-            $user = User::create([
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'phone' => $request->phone,
-                'role_id' => $memberRole->id,
-                'account_status_id' => $pendingStatus->id,
-                'terms_accepted_at' => now(),
-            ]);
+            if (! $user->wasRecentlyCreated) {
+                return;
+            }
 
-            $profile = MemberProfile::create([
+            MemberProfile::create([
                 'user_id' => $user->id,
                 'sector_id' => $request->sector_id,
                 'location_id' => $request->location_id,
@@ -120,20 +125,13 @@ class AuthController extends Controller
                 'commercial_email' => $request->commercial_email,
                 'commercial_phone' => $request->commercial_phone,
             ]);
-
-            return compact('user', 'profile');
         });
-        $user = $result['user'];
-
-        $user = $this->loadUserRelations(
-            $user->fresh()
-        );
 
         return $this->successResponse(
-            new UserResource($user),
-            'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.',
+            null,
+            'Pedido recebido. Se este endereço puder ser usado, a candidatura ficará pendente de aprovação.',
             Response::HTTP_CREATED
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -187,7 +185,7 @@ class AuthController extends Controller
             new UserResource($user),
             'Autenticação efetuada com sucesso.',
             Response::HTTP_OK
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -285,7 +283,7 @@ class AuthController extends Controller
             new UserResource($user),
             'Utilizador autenticado obtido com sucesso.',
             Response::HTTP_OK
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**

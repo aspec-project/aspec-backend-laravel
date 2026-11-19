@@ -171,6 +171,12 @@ class AppServiceProvider extends ServiceProvider
             Limit::perDay(self::SUBSCRIPTION_CHANGES_PER_DAY)->by('day:'.$this->requesterKey($request)),
         ]);
 
+        RateLimiter::for('auth-login', function (Request $request) {
+            $email = strtolower(trim((string) $request->input('email')));
+
+            return Limit::perMinute(5)->by($email.'|'.$request->ip());
+        });
+
         $authActions = [
             'auth-login',
             'auth-token',
@@ -182,7 +188,8 @@ class AppServiceProvider extends ServiceProvider
                 $email = strtolower(trim((string) $request->input('email')));
                 $limits = [Limit::perMinute(5)->by($email.'|'.$request->ip())];
 
-                // Atrás do proxy o IP pode ser forjado (X-Forwarded-For), por isso cada conta tem também um limite que não depende do IP.
+                // Atrás de um proxy de confiança, o IP pode ser forjado num pedido direto à API.
+                // O limite por email também protege contra tentativas distribuídas por vários IPs.
                 if ($email !== '') {
                     $limits[] = Limit::perMinutes(15, 20)->by('email:'.$email);
                 }

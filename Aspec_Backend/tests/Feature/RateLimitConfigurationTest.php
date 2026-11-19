@@ -252,9 +252,12 @@ class RateLimitConfigurationTest extends TestCase
     {
         $limits = $this->limitsFor('auth-login', $this->requestFrom(null, ['email' => ' Membro@Exemplo.pt ']));
 
+        $this->assertCount(2, $limits);
+
         $perMinute = $this->limitWithDecay($limits, 60);
         $this->assertNotNull($perMinute);
         $this->assertSame(5, $perMinute->maxAttempts);
+        $this->assertSame(60, $perMinute->decaySeconds);
         $this->assertSame('membro@exemplo.pt|'.self::IP, $perMinute->key);
     }
 
