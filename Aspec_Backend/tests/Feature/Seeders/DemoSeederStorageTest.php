@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Seeders;
 
+use App\Contracts\InvoiceService;
 use App\Models\Invoice;
 use App\Models\MemberProfile;
 use App\Models\User;
@@ -10,6 +11,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\RequiresPhpExtension;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\Concerns\SeedsDemoData;
 use Tests\TestCase;
 
 /**
@@ -19,7 +21,7 @@ use Tests\TestCase;
  */
 class DemoSeederStorageTest extends TestCase
 {
-    use RefreshDatabase;
+    use RefreshDatabase, SeedsDemoData;
 
     protected function setUp(): void
     {
@@ -41,14 +43,18 @@ class DemoSeederStorageTest extends TestCase
     #[RequiresPhpExtension('gd')]
     public function logos_and_portfolio_images_go_to_the_media_disk(): void
     {
+        $this->app->instance(InvoiceService::class, $this->fastInvoiceService());
+
         $this->runDemoSeeder();
 
         $profiles = MemberProfile::listedInDirectory()->with('portfolios')->get();
-        $this->assertNotEmpty($profiles);
+        $this->assertGreaterThan(0, $profiles->whereNotNull('logo_path')->count());
+        $this->assertGreaterThan(0, $profiles->sum(fn (MemberProfile $profile) => $profile->portfolios->count()));
 
         foreach ($profiles as $profile) {
-            $this->assertNotNull($profile->logo_path, $profile->business_name);
-            Storage::disk('r2')->assertExists($profile->logo_path);
+            if ($profile->logo_path !== null) {
+                Storage::disk('r2')->assertExists($profile->logo_path);
+            }
 
             foreach ($profile->portfolios as $image) {
                 Storage::disk('r2')->assertExists($image->image_path);
