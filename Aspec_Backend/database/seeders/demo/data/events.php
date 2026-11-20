@@ -1,0 +1,432 @@
+<?php
+
+/**
+ * Dados de demonstração (ASPEC-466): eventos únicos, séries e locais. Textos fictícios em português de Portugal.
+ *
+ * - places: cada local tem sempre a mesma morada e o mesmo place_id da Google (obtido uma vez com o
+ *   GoogleGeocoder; os termos da Google permitem guardá-lo). Sem marcas: só salas genéricas e espaços públicos.
+ * - events: days = dias a partir de hoje (Lisboa); 'now' em vez de start/end põe o evento à volta da hora
+ *   atual (formação de hoje com cartões de oração). registrations = número de inscritos, escolhidos pelo
+ *   seeder de forma determinística entre as contas Active que já existiam na data da inscrição; include e
+ *   exclude forçam ou impedem contas pela chave do email (membro → demo.membro@aspec.test).
+ *   Sem inscrições = evento ainda não anunciado (announced_at null).
+ * - retired: eventos únicos da versão anterior (nome, distrito) que já não existem nesta; o seeder apaga-os
+ *   (inscrições e cartões primeiro). Os outros pares da versão anterior são atualizados.
+ */
+$breakfast = 'Pequeno-almoço de Negócios ASPEC';
+$breakfastDescription = "Um pequeno-almoço para conhecer outros empresários da região, apresentar o seu negócio em dois minutos e sair com contactos úteis. Cada participante traz cartões de visita e uma necessidade concreta da sua empresa.\n\nTermina com um momento breve de oração pelos negócios presentes.";
+$dinner = 'Jantar de Networking ASPEC';
+$dinnerDescription = "Jantar informal entre membros e convidados, com um testemunho de um empresário da região sobre um momento difícil no seu percurso e o que aprendeu com ele.\n\nDepois do jantar há tempo livre para conversar e combinar reuniões.";
+$lunch = 'Almoço de Negócios ASPEC';
+$lunchDescription = "Almoço curto, pensado para quem não pode sair do escritório à noite: cada participante apresenta-se em um minuto e o resto do tempo é para conversar à mesa.\n\nAs mesas são preparadas para juntar setores diferentes.";
+
+return [
+    'places' => [
+        'lisboa-oriente' => ['address' => 'Sala de conferências, Avenida D. João II 27, 1990-083 Lisboa', 'place_id' => 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k'],
+        'lisboa-castilho' => ['address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa', 'place_id' => 'ChIJr7Xg63EzGQ0Rm8LgeMFJfpQ'],
+        'porto-aliados' => ['address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto', 'place_id' => 'Ei1Bdi4gZG9zIEFsaWFkb3MgMTIwLCA0MDAwLTA2NyBQb3J0bywgUG9ydHVnYWwiMBIuChQKEgkLQ3Be42QkDREzxCX1feNMXxB4KhQKEgmP_UBZ42QkDREQ0m1U5syNcw'],
+        'porto-julio-dinis' => ['address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto', 'place_id' => 'EjFSdWEgZGUgSsO6bGlvIERpbmlzIDc1MCwgNDA1MC0wMTIgUG9ydG8sIFBvcnR1Z2FsIjESLwoUChIJJ9OqgQhlJA0Rd8tz-E9VUKEQ7gUqFAoSCT-ZVf4FZSQNEQM0UeGusGGV'],
+        'braga-central' => ['address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga', 'place_id' => 'ChIJz2iE28H-JA0R2oEkaaewzME'],
+        'braga-raio' => ['address' => 'Sala de formação, Rua do Raio 200, 4710-251 Braga', 'place_id' => 'EihSLiBkbyBSYWlvIDIwMCwgNDcxMC0yNTEgQnJhZ2EsIFBvcnR1Z2FsIjESLwoUChIJaR6IQsD-JA0RNS_n8XpnuzgQyAEqFAoSCftCU1vA_iQNEbkCq-96dXcl'],
+        'coimbra-sofia' => ['address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra', 'place_id' => 'EixSdWEgZGEgU29maWEgMTIwLCAzMDAwLTM5MCBDb2ltYnJhLCBQb3J0dWdhbCIwEi4KFAoSCQffjZ8F-SINEbdWcj5j3bFVEHgqFAoSCQtDsAoF-SINEY0Z8kdZQA8q'],
+        'coimbra-ferreira-borges' => ['address' => 'Sala de formação, Rua Ferreira Borges 50, 3000-179 Coimbra', 'place_id' => 'ChIJxSXHnAj5Ig0RgvOZKKloda0'],
+        'faro-se' => ['address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro', 'place_id' => 'ChIJ9y1z1sZSBQ0RS0zUXIu14FA'],
+        'viseu-formosa' => ['address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu', 'place_id' => 'ChIJ-VK4d1I2Iw0RBstTicF8-28'],
+        'aveiro-congressos' => ['address' => 'Cais da Fonte Nova, 3810-200 Aveiro', 'place_id' => 'Ei1DYWlzIGRhIEZvbnRlIE5vdmEsIDM4MTAtMjAwIEF2ZWlybywgUG9ydHVnYWwiLiosChQKEgm_8TFeCZgjDREuH0xpIAU3QxIUChIJxdSxZAmYIw0R6bcGCHI5Zj8'],
+        'aveiro-mendonca' => ['address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro', 'place_id' => 'ChIJNbMUggOYIw0RZ_7oCGcXLLo'],
+        'leiria-viamonte' => ['address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria', 'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ'],
+        'leiria-candido' => ['address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria', 'place_id' => 'ChIJ0aliKvRzIg0R30hY7E0CvTE'],
+        'setubal-todi' => ['address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal', 'place_id' => 'ChIJv0-wxQdDGQ0RypZhgbJrUks'],
+        'santarem-serpa-pinto' => ['address' => 'Salão de eventos, Rua Serpa Pinto 20, 2000-101 Santarém', 'place_id' => 'ChIJrRAMTQ3uGA0RXQxZuMMG65Y'],
+        'evora-giraldo' => ['address' => 'Restaurante (sala privada), Praça do Giraldo 50, 7000-508 Évora', 'place_id' => 'ChIJ79erOdzkGQ0RQvW8L2FYzII'],
+        'funchal-arriaga' => ['address' => 'Salão de eventos, Avenida Arriaga 50, 9000-064 Funchal', 'place_id' => 'ChIJ2-CRruJfYAwRkz5c0nDKsq4'],
+        'ponta-delgada-infante' => ['address' => 'Sala de reuniões, Avenida Infante Dom Henrique 50, 9500-150 Ponta Delgada', 'place_id' => 'Ej1Bdi4gSW5mYW50ZSBEb20gSGVucmlxdWUgNTAsIDk1MDAtMTUwIFBvbnRhIERlbGdhZGEsIFBvcnR1Z2FsIjASLgoUChIJhXHrC7UqQwsRlclq-OvezYYQMioUChIJo2grf7YqQwsRP9sekKp9Rb0'],
+        'viana-republica' => ['address' => 'Restaurante (sala privada), Praça da República 20, 4900-530 Viana do Castelo', 'place_id' => 'EjxQcmHDp2EgZGEgUmVww7pibGljYSAyMCwgNDkwMC01MzAgVmlhbmEgZG8gQ2FzdGVsbywgUG9ydHVnYWwiMBIuChQKEgmlqaiILrYlDREzaSU2WU0nIBAUKhQKEglVirOOLrYlDRHLh2tVcdHnCQ'],
+        'vila-real-carvalho-araujo' => ['address' => 'Sala de formação, Avenida Carvalho Araújo 30, 5000-651 Vila Real', 'place_id' => 'ChIJ05pRsQZLOw0RKfguS9ZhCmU'],
+        'castelo-branco-nuno-alvares' => ['address' => 'Restaurante (sala privada), Avenida Nuno Álvares 20, 6000-083 Castelo Branco', 'place_id' => 'ChIJueSIAShcPQ0ROPrgeVjDw80'],
+        'guarda-camoes' => ['address' => 'Salão de eventos, Praça Luís de Camões 10, 6300-675 Guarda', 'place_id' => 'ChIJm9sLaTLlPA0RachabkrEWR0'],
+        'beja-republica' => ['address' => 'Restaurante (sala privada), Praça da República 15, 7800-427 Beja', 'place_id' => 'ChIJ05lW7YZ0Gg0RnkGKy_Bi57k'],
+    ],
+
+    'events' => [
+        // Futuros (22, dos quais 5 online). Ocupação: 1 esgotado, 2 críticos, ≥ 4 acima de metade, 2 por anunciar.
+        [
+            'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'district' => 'Aveiro',
+            'days' => 0, 'start' => 'now', 'end' => 'now', 'max_attendees' => 30,
+            'description' => "Tesouraria, margens e preços: como ler os números do seu negócio e tomar decisões com mais segurança. Formação prática, com exercícios feitos sobre casos de pequenas empresas da região.\n\nPrograma:\n- Ler o balancete sem ser contabilista\n- Calcular a margem real de cada produto ou serviço\n- Prever a tesouraria dos próximos três meses",
+            'venue' => 'Centro de Congressos', 'place' => 'aveiro-congressos',
+            'registrations' => 14, 'include' => ['membro', 'membro01', 'membro03'],
+            'prayer_verse' => 'Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)',
+            'prayer_cards' => ['authors' => 2, 'include' => ['membro01', 'membro03'], 'exclude' => ['membro'], 'distributed' => false],
+        ],
+        [
+            'name' => 'Workshop Online: Vender Mais nas Redes Sociais', 'category' => 'Workshop', 'district' => 'Lisboa',
+            'days' => 3, 'deadline_days' => -1, 'start' => '18:30', 'end' => '20:00', 'max_attendees' => 50,
+            'description' => 'Workshop online com exemplos de publicações que trouxeram clientes a pequenos negócios portugueses e um calendário simples para o próximo mês. Cada participante sai com cinco ideias de publicações para a sua empresa.',
+            'online_url' => 'https://meet.example.test/aspec-redes-sociais',
+            'notes' => 'O link da sessão aparece na página do evento depois do fecho das inscrições.',
+            'registrations' => 18, 'include' => ['membro'],
+        ],
+        [
+            'name' => 'Formação Online: RGPD para Pequenas Empresas', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => 5, 'deadline_days' => -1, 'start' => '14:00', 'end' => '17:00', 'max_attendees' => 60,
+            'description' => "O que uma pequena empresa tem mesmo de fazer para cumprir o RGPD: consentimentos, registo das atividades de tratamento e resposta aos pedidos dos clientes.\n\nInclui modelos de documentos que pode adaptar no próprio dia.",
+            'online_url' => 'https://meet.example.test/aspec-rgpd',
+            'registrations' => 15, 'exclude' => ['membro'],
+        ],
+        [
+            'name' => $breakfast, 'category' => 'Pequeno-almoço', 'district' => 'Lisboa',
+            'days' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+            'description' => $breakfastDescription, 'place' => 'lisboa-oriente',
+            'registrations' => 26, 'include' => ['membro', 'admin'],
+        ],
+        [
+            'name' => $lunch, 'category' => 'Almoço', 'district' => 'Viseu',
+            'days' => 8, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 25,
+            'description' => $lunchDescription, 'place' => 'viseu-formosa',
+            'notes' => 'Custo de participação: 18 € (pago no local).',
+            'registrations' => 14,
+        ],
+        [
+            'name' => 'Webinar: Faturação Eletrónica sem Complicações', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => 10, 'start' => '18:00', 'end' => '19:30', 'max_attendees' => 100,
+            'description' => 'Sessão online sobre as regras da faturação eletrónica, o código QR e o ATCUD nas faturas, com tempo para perguntas no fim. Pensada para quem fatura pouco e não tem contabilista a tempo inteiro.',
+            'online_url' => 'https://meet.example.test/aspec-faturacao-eletronica',
+            'registrations' => 24, 'exclude' => ['membro'],
+        ],
+        [
+            'name' => $breakfast, 'category' => 'Pequeno-almoço', 'district' => 'Porto',
+            'days' => 12, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+            'description' => $breakfastDescription, 'place' => 'porto-aliados',
+            'registrations' => 17, 'include' => ['membro'],
+        ],
+        [
+            'name' => $dinner, 'category' => 'Jantar', 'district' => 'Lisboa',
+            'days' => 15, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
+            'description' => $dinnerDescription, 'place' => 'lisboa-castilho',
+            'notes' => 'Custo de participação: 30 € (pago no local). Os cartões de oração são preenchidos na própria noite.',
+            'registrations' => 27, 'include' => ['membro', 'admin'],
+            'prayer_verse' => 'Melhor é serem dois do que um, porque têm melhor paga do seu trabalho. (Eclesiastes 4:9)',
+        ],
+        [
+            'name' => 'Workshop: Apresente o seu Negócio em Dois Minutos', 'category' => 'Workshop', 'district' => 'Porto',
+            'days' => 17, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 12,
+            'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno, para todos treinarem pelo menos duas vezes.',
+            'place' => 'porto-julio-dinis',
+            'registrations' => 12, 'exclude' => ['membro'],
+        ],
+        [
+            'name' => $breakfast, 'category' => 'Pequeno-almoço', 'district' => 'Braga',
+            'days' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 15,
+            'description' => $breakfastDescription, 'place' => 'braga-central',
+            'registrations' => 11,
+        ],
+        [
+            'name' => $dinner, 'category' => 'Jantar', 'district' => 'Coimbra',
+            'days' => 22, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
+            'description' => $dinnerDescription, 'place' => 'coimbra-sofia',
+            'notes' => 'Custo de participação: 25 € (pago no local).',
+            'registrations' => 14,
+        ],
+        [
+            'name' => 'Formação Online: Gestão de Tesouraria em Meses Difíceis', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => 24, 'start' => '18:00', 'end' => '20:00', 'max_attendees' => 80,
+            'description' => 'Como antecipar meses com pouca entrada de dinheiro, negociar prazos com fornecedores e falar com o banco antes de haver um problema. Com uma folha de cálculo de previsão que fica para os participantes.',
+            'online_url' => 'https://meet.example.test/aspec-tesouraria',
+            'registrations' => 12,
+        ],
+        [
+            'name' => $lunch, 'category' => 'Almoço', 'district' => 'Aveiro',
+            'days' => 26, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 30,
+            'description' => $lunchDescription, 'place' => 'aveiro-mendonca',
+            'registrations' => 9,
+        ],
+        [
+            'name' => $breakfast, 'category' => 'Pequeno-almoço', 'district' => 'Santarém',
+            'days' => 29, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
+            'description' => $breakfastDescription, 'place' => 'santarem-serpa-pinto',
+            'registrations' => 7,
+        ],
+        [
+            'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'district' => 'Leiria',
+            'days' => 31, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
+            'description' => "Como ser encontrado por clientes da sua zona: perfil da empresa nos mapas, avaliações, redes sociais e um site simples. Sai com um plano de quatro semanas para aplicar.\n\nPrograma:\n- Onde procuram os clientes locais\n- Pedir e responder a avaliações\n- Medir o que resulta sem ferramentas pagas",
+            'place' => 'leiria-viamonte',
+            'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
+            'registrations' => 14,
+        ],
+        [
+            'name' => $dinner, 'category' => 'Jantar', 'district' => 'Évora',
+            'days' => 33, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
+            'description' => $dinnerDescription, 'place' => 'evora-giraldo',
+            'notes' => 'Custo de participação: 25 € (pago no local).',
+            'registrations' => 10,
+        ],
+        [
+            'name' => $lunch, 'category' => 'Almoço', 'district' => 'Viana do Castelo',
+            'days' => 36, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 25,
+            'description' => $lunchDescription, 'place' => 'viana-republica',
+            'registrations' => 6,
+        ],
+        [
+            'name' => $breakfast, 'category' => 'Pequeno-almoço', 'district' => 'Faro',
+            'days' => 40, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
+            'description' => $breakfastDescription, 'place' => 'faro-se',
+            'registrations' => 8,
+        ],
+        [
+            'name' => 'Workshop Online: Contratar Bem a Primeira Pessoa', 'category' => 'Workshop', 'district' => 'Lisboa',
+            'days' => 43, 'start' => '18:30', 'end' => '20:00', 'max_attendees' => 60,
+            'description' => 'Para quem trabalha sozinho e está a pensar contratar: que tipo de contrato escolher, quanto custa de facto um colaborador e como fazer uma entrevista que mostre mais do que o currículo.',
+            'online_url' => 'https://meet.example.test/aspec-primeira-contratacao',
+            'registrations' => 0,
+        ],
+        [
+            'name' => $dinner, 'category' => 'Jantar', 'district' => 'Madeira',
+            'days' => 47, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
+            'description' => $dinnerDescription, 'place' => 'funchal-arriaga',
+            'notes' => 'Custo de participação: 25 € (pago no local).',
+            'registrations' => 0,
+        ],
+        [
+            'name' => 'Formação: Liderança com Valores', 'category' => 'Formação', 'district' => 'Setúbal',
+            'days' => 50, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
+            'description' => 'Liderar equipas com ética, confiança e propósito, também quando é preciso tomar decisões difíceis. Casos práticos de empresários portugueses e partilha entre participantes.',
+            'venue' => 'Fórum Municipal', 'place' => 'setubal-todi',
+            'registrations' => 13,
+        ],
+        [
+            'name' => 'Workshop: Orçamentos que o Cliente Aceita', 'category' => 'Workshop', 'district' => 'Vila Real',
+            'days' => 54, 'start' => '18:00', 'end' => '20:00', 'max_attendees' => 20,
+            'description' => 'Como apresentar um orçamento claro, justificar o preço sem baixar a margem e fazer o seguimento sem parecer insistente. Trabalho em pares sobre orçamentos reais dos participantes.',
+            'place' => 'vila-real-carvalho-araujo',
+            'notes' => 'Traga um orçamento recente (sem dados do cliente) para trabalhar na sessão.',
+            'registrations' => 4,
+        ],
+
+        // Passados (24, dos quais 3 online), entre 7 e 175 dias. Ocupação 60–100 %, 1 esgotado; 4 com cartões distribuídos.
+        [
+            'name' => 'Pequeno-almoço de Negócios: Recomeçar a Semana com Propósito', 'category' => 'Pequeno-almoço', 'district' => 'Leiria',
+            'days' => -7, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 20,
+            'description' => 'Pequeno-almoço com o testemunho de uma empresária que reconstruiu o negócio depois de um ano muito difícil. Seguiu-se uma ronda de apresentações e de pedidos concretos entre os participantes.',
+            'place' => 'leiria-candido',
+            'registrations' => 15, 'include' => ['membro'],
+            'prayer_verse' => 'Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)',
+            'prayer_cards' => ['authors' => 6, 'include' => ['membro'], 'distributed' => true],
+        ],
+        [
+            'name' => 'Formação Online: Proteger a Empresa de Burlas Digitais', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => -7, 'start' => '18:00', 'end' => '19:30', 'max_attendees' => 50,
+            'description' => 'Burlas por email, faturas falsas e pedidos urgentes de transferência: como reconhecê-los e que regras simples pôr em prática na equipa. Com exemplos de casos reais contados pelos participantes.',
+            'online_url' => 'https://meet.example.test/aspec-burlas-digitais',
+            'registrations' => 32, 'include' => ['membro'],
+        ],
+        [
+            'name' => 'Almoço de Negócios: Exportar a partir do Interior', 'category' => 'Almoço', 'district' => 'Castelo Branco',
+            'days' => -10, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 16,
+            'description' => 'Almoço com dois empresários da região que vendem para fora do país a partir de uma pequena cidade. Falaram dos primeiros clientes, dos erros que custaram dinheiro e dos apoios que realmente ajudaram.',
+            'place' => 'castelo-branco-nuno-alvares',
+            'notes' => 'Custo de participação: 16 € (pago no local).',
+            'registrations' => 11,
+        ],
+        [
+            'name' => 'Jantar de Networking: Testemunhos de Empresários', 'category' => 'Jantar', 'district' => 'Porto',
+            'days' => -14, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 35,
+            'description' => 'Três empresários de setores diferentes contaram como conciliam a fé com as decisões do dia a dia da empresa. Depois do jantar houve tempo para conversar por mesas temáticas.',
+            'place' => 'porto-aliados',
+            'registrations' => 26, 'include' => ['membro'],
+        ],
+        [
+            'name' => 'Workshop: Negociar sem Perder a Relação', 'category' => 'Workshop', 'district' => 'Braga',
+            'days' => -21, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 16,
+            'description' => 'Exercícios de negociação em pares, com situações comuns entre fornecedores e clientes: prazos, descontos e reclamações. O objetivo foi chegar a acordo sem estragar a relação de longo prazo.',
+            'place' => 'braga-raio',
+            'registrations' => 16,
+        ],
+        [
+            'name' => 'Pequeno-almoço de Negócios: Crescer sem Perder a Alma', 'category' => 'Pequeno-almoço', 'district' => 'Aveiro',
+            'days' => -28, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 25,
+            'description' => 'Conversa sobre crescimento: quando contratar, quando dizer não a um cliente e como manter a cultura da empresa quando a equipa passa de cinco para vinte pessoas.',
+            'venue' => 'Centro de Congressos', 'place' => 'aveiro-congressos',
+            'registrations' => 18,
+        ],
+        [
+            'name' => 'Formação: Contabilidade de Gestão para Não Contabilistas', 'category' => 'Formação', 'district' => 'Coimbra',
+            'days' => -35, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 20,
+            'description' => "Formação prática para empresários que querem perceber os números sem depender só do contabilista.\n\nPrograma:\n- Custos fixos e variáveis\n- Ponto de equilíbrio\n- Indicadores para acompanhar todos os meses",
+            'place' => 'coimbra-ferreira-borges',
+            'notes' => 'Custo de participação: 20 € (pago no local). Traga calculadora.',
+            'registrations' => 14,
+        ],
+        [
+            'name' => 'Jantar de Networking: Famílias Empresárias', 'category' => 'Jantar', 'district' => 'Lisboa',
+            'days' => -40, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 45,
+            'description' => 'Jantar dedicado às empresas familiares: passagem de testemunho entre gerações, separar a mesa de jantar da mesa de reuniões e lidar com conflitos entre sócios que são família.',
+            'place' => 'lisboa-castilho',
+            'notes' => 'Custo de participação: 30 € (pago no local).',
+            'registrations' => 30, 'include' => ['membro', 'admin'],
+            'prayer_verse' => 'Tudo quanto te vier à mão para fazer, faze-o conforme as tuas forças. (Eclesiastes 9:10)',
+            'prayer_cards' => ['authors' => 8, 'include' => ['membro'], 'distributed' => true],
+        ],
+        [
+            'name' => 'Formação Online: Candidaturas a Fundos Europeus', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => -45, 'start' => '18:00', 'end' => '20:00', 'max_attendees' => 40,
+            'description' => 'Visão geral dos apoios abertos a micro e pequenas empresas, o que costuma correr mal numa candidatura e como preparar a documentação com tempo.',
+            'online_url' => 'https://meet.example.test/aspec-fundos-europeus',
+            'registrations' => 25,
+        ],
+        [
+            'name' => 'Pequeno-almoço de Negócios: Liderar em Família', 'category' => 'Pequeno-almoço', 'district' => 'Guarda',
+            'days' => -52, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 15,
+            'description' => 'Primeiro pequeno-almoço da ASPEC na Guarda, com empresários de vários concelhos do distrito. Um casal que gere uma empresa há vinte anos partilhou como dividem responsabilidades.',
+            'place' => 'guarda-camoes',
+            'registrations' => 10,
+        ],
+        [
+            'name' => 'Almoço de Negócios: Comércio Local que Resiste', 'category' => 'Almoço', 'district' => 'Santarém',
+            'days' => -58, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 20,
+            'description' => 'Lojistas da região partilharam o que mudaram para manter clientes fiéis: horários, entregas ao domicílio, vendas por mensagem e parcerias entre lojas da mesma rua.',
+            'place' => 'santarem-serpa-pinto',
+            'registrations' => 13,
+        ],
+        [
+            'name' => 'Workshop: Fotografar os Seus Produtos com o Telemóvel', 'category' => 'Workshop', 'district' => 'Lisboa',
+            'days' => -63, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 18,
+            'description' => 'Luz, fundo e enquadramento para fotografias de produtos e espaços que vendem, só com o telemóvel. Cada participante trouxe um produto e saiu com fotografias prontas a publicar.',
+            'place' => 'lisboa-oriente',
+            'notes' => 'Traga um ou dois produtos do seu negócio e o telemóvel carregado.',
+            'registrations' => 13,
+        ],
+        [
+            'name' => 'Jantar de Networking: Empreender no Algarve', 'category' => 'Jantar', 'district' => 'Faro',
+            'days' => -70, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 28,
+            'description' => 'Jantar sobre os desafios de ter um negócio numa região com época alta e época baixa: equipas sazonais, tesouraria ao longo do ano e clientes fora do turismo.',
+            'place' => 'faro-se',
+            'notes' => 'Custo de participação: 25 € (pago no local).',
+            'registrations' => 18,
+        ],
+        [
+            'name' => 'Workshop: Gerir o Tempo de Quem Dirige', 'category' => 'Workshop', 'district' => 'Braga',
+            'days' => -75, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 20,
+            'description' => 'Como proteger tempo para pensar no negócio quando o dia é engolido por urgências: blocos de trabalho, delegação e uma revisão semanal de quinze minutos.',
+            'place' => 'braga-central',
+            'registrations' => 15, 'include' => ['membro'],
+            'prayer_verse' => 'Não andeis ansiosos por coisa alguma; antes, em tudo, sejam os vossos pedidos conhecidos diante de Deus. (Filipenses 4:6)',
+            'prayer_cards' => ['authors' => 5, 'include' => ['membro'], 'distributed' => true],
+        ],
+        [
+            'name' => 'Pequeno-almoço de Negócios: Contratar e Manter Talento', 'category' => 'Pequeno-almoço', 'district' => 'Viseu',
+            'days' => -82, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 20,
+            'description' => 'Porque é que as pessoas saem de uma pequena empresa e o que se pode fazer, mesmo sem salários de grande empresa: horários, formação, reconhecimento e conversas regulares.',
+            'place' => 'viseu-formosa',
+            'registrations' => 13,
+        ],
+        [
+            'name' => 'Formação: Fiscalidade para Empresários em Nome Individual', 'category' => 'Formação', 'district' => 'Setúbal',
+            'days' => -90, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
+            'description' => 'Regime simplificado ou contabilidade organizada, IVA, segurança social e despesas dedutíveis, explicados com exemplos de trabalhadores independentes e pequenos comerciantes.',
+            'venue' => 'Fórum Municipal', 'place' => 'setubal-todi',
+            'registrations' => 18,
+        ],
+        [
+            'name' => 'Almoço de Negócios: Turismo e Hospitalidade', 'category' => 'Almoço', 'district' => 'Madeira',
+            'days' => -98, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 20,
+            'description' => 'Encontro com empresários do turismo, da restauração e do alojamento local na Madeira, sobre a falta de pessoal e a dependência das plataformas de reservas.',
+            'place' => 'funchal-arriaga',
+            'notes' => 'Custo de participação: 20 € (pago no local).',
+            'registrations' => 13,
+        ],
+        [
+            'name' => 'Formação Online: Folha de Cálculo para Gestão', 'category' => 'Formação', 'district' => 'Lisboa',
+            'days' => -105, 'start' => '18:00', 'end' => '20:00', 'max_attendees' => 35,
+            'description' => 'Montar numa folha de cálculo um mapa simples de vendas, custos e tesouraria, com fórmulas que qualquer pessoa da equipa consegue manter.',
+            'online_url' => 'https://meet.example.test/aspec-folha-calculo',
+            'registrations' => 22,
+        ],
+        [
+            'name' => 'Jantar de Networking: Construir Pontes entre Setores', 'category' => 'Jantar', 'district' => 'Leiria',
+            'days' => -115, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 25,
+            'description' => 'Jantar com lugares sentados por sorteio, para juntar à mesma mesa construção, saúde, tecnologia e comércio. Várias parcerias entre membros começaram nesta noite.',
+            'place' => 'leiria-candido',
+            'notes' => 'Custo de participação: 25 € (pago no local).',
+            'registrations' => 16,
+        ],
+        [
+            'name' => 'Workshop: Atendimento que Fideliza', 'category' => 'Workshop', 'district' => 'Évora',
+            'days' => -122, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 18,
+            'description' => 'O que os clientes lembram de um atendimento e como tratar uma reclamação de forma a ganhar a confiança do cliente em vez de a perder. Com simulações em pequenos grupos.',
+            'place' => 'evora-giraldo',
+            'registrations' => 12,
+        ],
+        [
+            'name' => 'Formação: Planeamento Estratégico numa Página', 'category' => 'Formação', 'district' => 'Porto',
+            'days' => -130, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 22,
+            'description' => "Uma tarde para olhar para o negócio de fora e escrever o plano do próximo ano numa só página: onde estamos, para onde queremos ir e as três prioridades para lá chegar.\n\nCada participante saiu com o seu plano preenchido.",
+            'place' => 'porto-julio-dinis',
+            'registrations' => 15, 'exclude' => ['membro'],
+            'prayer_verse' => 'Os pensamentos do diligente tendem só à abundância. (Provérbios 21:5)',
+            'prayer_cards' => ['authors' => 7, 'exclude' => ['membro'], 'distributed' => true],
+        ],
+        [
+            'name' => 'Pequeno-almoço de Negócios: Ética nos Negócios', 'category' => 'Pequeno-almoço', 'district' => 'Açores',
+            'days' => -145, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 15,
+            'description' => 'Primeiro encontro da ASPEC nos Açores, com uma conversa franca sobre decisões éticas difíceis: pagamentos por fora, promessas a clientes e a forma de tratar a concorrência.',
+            'place' => 'ponta-delgada-infante',
+            'registrations' => 10,
+        ],
+        [
+            'name' => 'Almoço de Negócios: Agricultura e Inovação', 'category' => 'Almoço', 'district' => 'Beja',
+            'days' => -160, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 20,
+            'description' => 'Produtores e empresas de serviços agrícolas do Alentejo falaram de rega eficiente, venda direta ao consumidor e cooperação entre explorações pequenas.',
+            'place' => 'beja-republica',
+            'notes' => 'Custo de participação: 15 € (pago no local).',
+            'registrations' => 12,
+        ],
+        [
+            'name' => 'Jantar de Networking: Arranque do Núcleo do Alto Minho', 'category' => 'Jantar', 'district' => 'Viana do Castelo',
+            'days' => -175, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 25,
+            'description' => 'Jantar de apresentação do núcleo regional do Alto Minho, com membros de Viana do Castelo, Ponte de Lima e Caminha e a apresentação dos encontros previstos para o ano.',
+            'place' => 'viana-republica',
+            'registrations' => 16,
+        ],
+    ],
+
+    'series' => [
+        [
+            'name' => 'Ciclo de Formação: Liderar Pequenas Equipas', 'category' => 'Formação', 'district' => 'Leiria',
+            'days' => 2, 'sessions' => 6, 'deadline_days_before' => 1,
+            'start' => '18:30', 'end' => '20:30', 'max_attendees' => 20,
+            'description' => 'Ciclo de seis sessões semanais para quem lidera equipas pequenas: delegar, dar feedback, conduzir reuniões curtas e resolver conflitos. Cada sessão é independente e tem inscrição própria.',
+            'place' => 'leiria-viamonte',
+            'notes' => 'Pode inscrever-se só numa sessão ou nesta e nas seguintes.',
+            // Chave do email => números das sessões (a partir de 1). O demo.membro fica fora da 1.ª para se inscrever ao vivo.
+            'registrants' => [
+                'membro' => [2, 3, 4, 5, 6],
+                'membro01' => [1, 2, 3, 4, 5, 6],
+                'membro04' => [1, 2, 3, 4, 5, 6],
+                'membro09' => [3],
+                'membro10' => [1, 2],
+                'membro15' => [1, 2, 3, 4, 5, 6],
+                'membro22' => [1, 2, 3],
+                'membro31' => [4, 5, 6],
+                'membro40' => [1, 3, 5],
+            ],
+        ],
+        [
+            'name' => 'Oração pelos Negócios (online)', 'category' => 'Pequeno-almoço', 'district' => 'Lisboa',
+            'days' => -14, 'sessions' => 8, 'deadline_days_before' => 1,
+            'start' => '07:45', 'end' => '08:30', 'max_attendees' => 30,
+            'description' => 'Encontro semanal de oração antes do dia de trabalho, cada um com o seu café em casa ou no escritório. Partilham-se pedidos pelas empresas, pelas equipas e pelos clientes dos participantes.',
+            'online_url' => 'https://meet.example.test/aspec-oracao-semanal',
+            'notes' => 'Pode inscrever-se só numa sessão ou nesta e nas seguintes. O link aparece depois do fecho das inscrições.',
+            // Número de inscritos por sessão, escolhidos como nos eventos únicos.
+            'registrations' => [7, 8, 6, 9, 7, 5, 4, 3],
+        ],
+    ],
+
+    'retired' => [
+        ['Pequeno-almoço de Negócios ASPEC', 'Leiria'],
+        ['Jantar de Networking ASPEC', 'Faro'],
+        ['Jantar de Networking ASPEC', 'Aveiro'],
+    ],
+];

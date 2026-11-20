@@ -135,25 +135,43 @@ Na pasta `Aspec_Backend/`:
 2. `php artisan db:seed --class=DemoSeeder`
 3. `php artisan storage:link` (uma vez por máquina; sem ele os logótipos e o portefólio não abrem).
 
-Cria 19 contas, 13 perfis no diretório (com logótipo, horário e redes sociais; 5 com portefólio) e 22 eventos nas cinco categorias, com datas relativas ao dia em que corre (hora de Lisboa):
+Os textos (perfis, eventos, avaliações e pedidos dos cartões de oração) estão em `database/seeders/demo/data/` (ficheiros PHP que só devolvem arrays; pessoas, empresas e locais fictícios, sites e emails comerciais em `.test`). O `DemoSeeder` tem só a mecânica e valida os dados no arranque (nomes repetidos, lotação, contas desconhecidas, marcas reais): uma gralha falha logo, antes de escrever na base de dados. Telefones, NIFs, datas, inscritos e portefólio são gerados de forma determinística a partir da chave de cada conta, com datas relativas ao dia em que corre (hora de Lisboa).
 
-- 11 presenciais futuros (um deles hoje), alguns com nome do local; o workshop do Porto está **esgotado** e o pequeno-almoço de Braga tem **uma vaga**;
-- 1 **série semanal** "Ciclo de Formação: Liderar Pequenas Equipas" em Leiria: 6 sessões a partir de depois de amanhã, cada uma com inscrição própria e prazo na véspera às 23:59 (como o backoffice cria uma série);
-- 3 **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
-- 2 **passados**, com inscrições (só aparecem no backoffice e em "As minhas inscrições", não na agenda pública).
+Volumes:
 
-Os eventos presenciais só têm o `place_id` da Google (sem coordenadas), como os que o backoffice grava.
+| Área | Quantidade |
+|---|---|
+| Perfis no diretório (Active) | 60, nos 17 setores e nos 20 distritos (Lisboa e Porto com mais) |
+| Outras contas | 7 pendentes, 2 aprovadas, 2 inativas por falta de pagamento, 1 cancelada pelo membro, 1 bloqueada |
+| Logótipos | 50 dos 60 perfis (PNG 400×400 gerados com o GD e a fonte livre Poppins) |
+| Portefólio | 35 perfis, 3 a 5 fotografias do setor (83 fotografias Unsplash em `database/seeders/demo/portfolio/`, créditos em `THIRD_PARTY_NOTICES.md`) |
+| Eventos únicos | 22 futuros (5 online) nas próximas 8 semanas e 24 passados (3 online) nos últimos 6 meses |
+| Séries | "Ciclo de Formação: Liderar Pequenas Equipas" (Leiria, 6 sessões a partir de depois de amanhã) e "Oração pelos Negócios (online)" (8 sessões semanais, a primeira há 2 semanas) |
+| Inscrições | cerca de 760, só de contas Active que já existiam na data da inscrição |
+| Avaliações | 154 (5 sinalizadas, 4 ocultas, 2 com denúncias resolvidas) |
+| Cartões de oração | 6 eventos (a formação de hoje com o prazo aberto, 4 passados já distribuídos, 1 futuro sem cartões) |
+| Faturas | cerca de 55, uma por ano pago |
 
-Só os membros Active `demo.membro*` estão inscritos; o `demo.membro` tem inscrições em 3 eventos presenciais futuros, nas sessões 2 a 6 da série (o que "nesta e nas seguintes" dá a partir da sessão 2; a sessão 1 fica livre para mostrar a inscrição ao vivo), num online e nos 2 passados. Na série, `demo.membro01` e `demo.membro04` estão em todas as sessões, `demo.membro09` só na 3.ª e `demo.membro10` nas duas primeiras. A série não tem cartões de oração nem é anunciada por email (o anúncio só sai para eventos únicos criados no backoffice).
+Casos que a demonstração mostra:
 
-Avaliações: 17 entre perfis de demonstração, quase todas visíveis (para a média e o filtro por estrelas). A página de moderação começa com dois exemplos, que não contam para a média: uma avaliação **sinalizada**, com a sinalização automática do filtro de linguagem e a da empresa avaliada (motivo e comentário), e uma **oculta**, com a justificação do admin e a sinalização automática já resolvida.
+- o workshop do Porto está **esgotado**, o pequeno-almoço de Lisboa e o de Braga têm **poucas vagas** e dois eventos ainda não têm inscrições (por anunciar);
+- **online**: o webinar com inscrições abertas (ninguém vê o link), o workshop com o prazo terminado e o `demo.membro` inscrito (vê o link) e a formação RGPD com o prazo terminado sem ele (não vê o link);
+- **passados**: ocupação entre 60 % e 100 %, só no backoffice e em "As minhas inscrições", não na agenda pública;
+- o `demo.membro` está inscrito em eventos futuros, passados, num online e nas sessões 2 a 6 da série de Leiria (a sessão 1 fica livre para mostrar a inscrição ao vivo);
+- a **formação de Aveiro é hoje** e já começou: o prazo do cartão de oração está aberto e o `demo.membro` ainda não preencheu; recebeu 3 cartões noutros eventos (separadores "Atual" e "Anteriores" de "Os meus cartões de oração");
+- moderação: avaliações sinalizadas pelo filtro de linguagem e por denúncia de um membro, ocultas com justificação e denúncias resolvidas; o `demo.membro` recebeu uma sinalizada e uma oculta.
 
-Cartões de oração em dois eventos:
+Os eventos presenciais só têm o `place_id` da Google (sem coordenadas), como os que o backoffice grava. As séries não têm cartões de oração nem são anunciadas por email (o anúncio só sai para eventos únicos criados no backoffice).
 
-- a **formação de Aveiro é hoje** e já começou (por isso não aparece na agenda pública): o prazo do cartão está aberto, o `demo.membro` está inscrito e ainda não preencheu, e dois outros membros já enviaram o cartão (aparecem no estado do backoffice). A hora de início acompanha a hora a que o seeder corre;
-- o **pequeno-almoço de Leiria** (passado) já foi distribuído: o `demo.membro` escreveu um cartão e recebeu o do `demo.membro02` (em "Os meus cartões de oração", separador "Anteriores").
+Pode correr outra vez: repõe as contas, os perfis, os eventos e as séries (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta), as inscrições, as avaliações e os cartões desses eventos, sem duplicar nada. Nunca apaga contas nem eventos que não são da demonstração (ex.: criados pelo professor no deploy); só apaga os eventos da versão anterior listados em `retired` no `events.php`, e só se ainda tiverem a descrição dessa versão e nenhuma inscrição ou cartão de outras contas (senão ficam e o seeder avisa). Ao correr outra vez, o logótipo antigo (`demo-logo.png`) e as imagens de demonstração que já não fazem parte do portefólio saem; as que o membro enviou ficam. Se os dados dão logótipo a um perfil que tinha um logótipo carregado à mão, esse ficheiro é apagado e substituído pelo de demonstração.
 
- Pode correr outra vez: repõe as contas, os perfis, os eventos e a série (as datas avançam; os ids das sessões mantêm-se e uma sessão apagada à mão volta) e as inscrições desses eventos, sem duplicar nada nem mexer em eventos que não são da demonstração. Os logótipos são gerados com a extensão GD do PHP (sem ela, os perfis ficam sem logótipo). O portefólio usa 17 fotografias reais do Pexels guardadas em `database/seeders/demo/portfolio/` (origem e licença em `THIRD_PARTY_NOTICES.md`); ao correr outra vez, as imagens de demonstração antigas do portefólio são substituídas e as que o membro enviou ficam.
+Nos eventos demo, o seeder só repõe as inscrições e os cartões das contas demo: as inscrições e os cartões de outras contas (ex.: as contas preparadas para a defesa) nunca são apagados e ocupam lugares (se um evento ficar sem lugares, fica com menos inscritos demo). Pode correr depois de preparar as contas da defesa.
+
+As contas demo têm os **emails de eventos desligados** (anúncio de novos eventos e agenda semanal): os emails são `.test` e um evento criado no deploy mandaria dezenas de emails que voltam para trás e gastam a quota diária da Brevo. Para mostrar estes emails, usar uma conta real ou ligar as preferências à mão em `/perfil/conta`.
+
+Tempo: poucos segundos em local. No TiDB, a partir de um PC em Portugal (40 a 60 ms por consulta), o objetivo é ficar abaixo de 3 minutos: inscrições, avaliações, denúncias, horários e redes sociais são inseridos em lote; o mais lento são os cerca de 55 PDFs das faturas e, na primeira execução, o envio de cerca de 10 MB de imagens para o R2.
+
+**`APP_KEY`:** os cartões de oração ficam encriptados com a `APP_KEY` de quem corre o seeder. No TiDB, correr com `--env=tidb` e a `APP_KEY` do Render no `.env.tidb`; com outra chave os cartões ficam ilegíveis no deploy.
 
 Password de todas as contas: `Demo#2026` (em local; noutros ambientes, a definida em `DEMO_PASSWORD`, ver [Deploy](#deploy-render--vercel--tidb))
 
@@ -162,32 +180,36 @@ O seeder não cria o administrador técnico: para mostrar o estado "Isento" no b
 | Email | Papel | Estado | Subscrição |
 |---|---|---|---|
 | `demo.admin@aspec.test` | Admin | Active (também aparece no diretório; não é isento) | Ativo |
-| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) | Ativo |
-| `demo.membro07@aspec.test` | Member | Active | Em carência |
-| restantes `demo.membro01@aspec.test` … `demo.membro11@aspec.test` | Member | Active | Em trial |
-| `demo.pendente01@aspec.test` … `demo.pendente03@aspec.test` | Member | Pending (para aprovar no backoffice) | Pendente |
-| `demo.aprovado@aspec.test` | Member | Approved (à espera da ativação) | Por ativar |
-| `demo.inativo.pagamento@aspec.test` | Member | Inactive (`unpaid`) | Subscrição caída |
+| `demo.membro@aspec.test` | Member | Active (perfil completo com portefólio) | Ativo (2 faturas) |
+| `demo.membro07@aspec.test`, `demo.membro19@aspec.test` | Member | Active | Em carência |
+| `demo.membro02@aspec.test` | Member | Active | Em trial, com cancelamento agendado |
+| `demo.membro15@aspec.test` | Member | Active | Ativo, com cancelamento agendado |
+| outros `demo.membro01@aspec.test` … `demo.membro58@aspec.test` | Member | Active | Ativo ou Em trial (os criados há menos de 30 dias) |
+| `demo.pendente01@aspec.test` … `demo.pendente07@aspec.test` | Member | Pending (para aprovar no backoffice) | Pendente |
+| `demo.aprovado@aspec.test`, `demo.aprovado02@aspec.test` | Member | Approved (à espera da ativação) | Por ativar |
+| `demo.inativo.pagamento@aspec.test`, `demo.inativo02@aspec.test` | Member | Inactive (`unpaid`) | Subscrição caída |
+| `demo.cancelado@aspec.test` | Member | Inactive (`cancelled`) | Subscrição caída |
 | `demo.bloqueado@aspec.test` | Member | Inactive (`blocked`) | Bloqueado |
 
 ### Subscrições e faturas de demonstração
 
 O seeder cria subscrições e faturas **sem chamar o Stripe nem o InvoiceExpress**: os ids são falsos e têm `_demo_` (`sub_demo_…`, `si_demo_…`, `in_demo_…_1`), as contas demo não têm cliente Stripe (`users.stripe_id` vazio) e as datas são relativas ao momento em que corre, com o trial, a carência e a periodicidade da configuração (`SUBSCRIPTION_*`). As contas que já ativaram têm dados de faturação (empresa, morada do perfil e um NIF de demonstração válido). Os NIFs são fictícios mas têm dígito de controlo válido, por isso podem coincidir com empresas reais: não usar as contas demo para testar o driver `invoiceexpress` (usar contas criadas à mão).
 
-| Conta | Estado da subscrição | Situação | Faturas |
-|---|---|---|---|
-| `demo.membro` | Ativo | período atual começou há 5 dias; já pagou dois períodos | 2 |
-| `demo.admin` | Ativo | período atual começou há 20 dias (paga como os outros admins) | 1 |
-| `demo.membro07` | Em carência | renovação falhada há 2 dias; a carência (`SUBSCRIPTION_GRACE_DAYS`, 7 por omissão) termina daqui a 5 dias | 1 |
-| `demo.membro02` | Em trial | cancelamento agendado para o fim do trial (daqui a 10 dias) | 0 |
-| outros 9 `demo.membroNN` | Em trial | o trial termina entre 7 e 28 dias depois | 0 |
-| `demo.inativo.pagamento` | Subscrição caída | o trial terminou há 17 dias e a cobrança falhou | 0 |
-| `demo.bloqueado` | Bloqueado | bloqueado ainda em trial | 0 |
-| `demo.aprovado`, `demo.pendenteNN` | Por ativar / Pendente | sem subscrição nem faturação | — |
+As contas foram criadas ao longo dos últimos 18 meses; a ativação (início do trial) é 1 a 5 dias depois do registo.
 
-As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `invoices/{user_id}/` no disco das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket privado `aspec-invoices` no R2), com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 2 quotas em atraso (1 em carência, 1 por pagar).
+| Estado da subscrição | Situação | Faturas |
+|---|---|---|
+| Ativo | trial terminado; um período pago por ano desde então, o último a cobrir hoje | 1 por ano pago (2 nos membros com mais de um ano de quota) |
+| Em trial | contas criadas há menos de 30 dias; o trial termina entre 8 e 27 dias depois | 0 |
+| Em carência | a renovação falhou há 1 a 3 dias; a carência (`SUBSCRIPTION_GRACE_DAYS`, 7 por omissão) ainda não acabou | 1 |
+| Subscrição caída (`unpaid`) | a cobrança falhou e a carência terminou (`demo.inativo.pagamento` pagou um ano; `demo.inativo02` nunca pagou) | 0 ou 1 |
+| Subscrição caída (`cancelled`) | o membro cancelou e a subscrição terminou no fim do período pago | 1 |
+| Bloqueado | bloqueado ainda em trial | 0 |
+| Por ativar / Pendente | sem subscrição nem faturação | — |
 
-Cada execução apaga e cria de novo as subscrições, as faturas e os PDFs com `_demo_` das contas demo; nunca toca noutras linhas nem noutras contas. Se uma conta demo tiver uma subscrição **real** em curso (ex.: o `demo.inativo.pagamento` reativado pelo Checkout num ensaio), fica sem dados de demonstração e o seeder avisa: cancelar essa subscrição no dashboard de teste do Stripe e voltar a correr o seeder.
+As faturas passam pelo mesmo `IssueInvoiceJob` do webhook, sempre com o driver `demo` (mesmo com `INVOICING_DRIVER=log` ou `invoiceexpress`): PDF em `invoices/{user_id}/` no disco das faturas (`INVOICES_DISK`: `storage/app/private/` por omissão, ou o bucket privado `aspec-invoices` no R2), com a data do pagamento, e **sem email** (o seeder usa o mailer `array` durante a emissão). O painel do backoffice mostra 4 quotas em atraso (2 em carência, 2 por pagar) e 7 candidaturas pendentes.
+
+Cada execução apaga e cria de novo as subscrições, as faturas e os PDFs com `_demo_` das contas demo; nunca toca noutras linhas nem noutras contas. Se uma conta demo tiver uma subscrição **real** em curso (ex.: o `demo.inativo.pagamento` reativado pelo Checkout num ensaio), fica sem dados de demonstração e o seeder avisa: cancelar essa subscrição no dashboard de teste do Stripe e voltar a correr o seeder. Os pagamentos de cada conta são gravados numa transação: se a emissão de uma fatura falhar a meio, corrigir a causa e voltar a correr o seeder.
 
 O que funciona com as subscrições de demonstração (o Stripe não as conhece):
 

@@ -7,72 +7,169 @@ use App\Enums\InvoiceStatus;
 use App\Enums\SubscriptionInterval;
 use App\Jobs\IssueInvoiceJob;
 use App\Models\AccountStatus;
+use App\Models\BusinessHour;
 use App\Models\EventCategory;
 use App\Models\EventInstance;
+use App\Models\EventRegistration;
 use App\Models\EventSeries;
 use App\Models\Invoice;
 use App\Models\Location;
 use App\Models\MemberProfile;
+use App\Models\Portfolio;
 use App\Models\PrayerCard;
 use App\Models\Review;
 use App\Models\ReviewReport;
 use App\Models\ReviewStatus;
 use App\Models\Role;
 use App\Models\Sector;
+use App\Models\SocialLink;
 use App\Models\SocialPlatform;
 use App\Models\User;
 use App\Models\WeekDay;
 use App\Services\Events\EventSeriesSchedule;
 use App\Support\MediaStorage;
 use Closure;
-use GdImage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Laravel\Cashier\Subscription;
+use League\Flysystem\FilesystemException;
+use Random\Engine\Mt19937;
+use Random\Randomizer;
 use RuntimeException;
 
 /**
- * Dados de demonstração: contas em todos os estados, perfis completos com logótipo e portefólio,
- * avaliações entre perfis, eventos (presenciais, online e passados), uma série semanal, inscrições e
- * cartões de oração. Só para desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
+ * Dados de demonstração para a validação e a defesa: 60 perfis no diretório, 13 contas noutros
+ * estados, avaliações e moderação, eventos únicos (futuros, online e passados), duas séries,
+ * inscrições, cartões de oração, subscrições e faturas ao longo de 18 meses. Só para
+ * desenvolvimento e apresentações; corre à parte do DatabaseSeeder:
  * php artisan db:seed --class=DemoSeeder
  *
+ * Os textos estão em database/seeders/demo/data (ficheiros PHP que só devolvem arrays); este
+ * ficheiro tem a mecânica. Telefones, NIFs, datas, inscritos e portefólio são gerados de forma
+ * determinística a partir da chave de cada conta, por isso correr de novo dá o mesmo resultado.
+ *
  * Pode correr várias vezes: procura as contas pelo email, os perfis pelo utilizador, os eventos
- * pelo nome e distrito e a série pelas suas sessões, e repõe os dados originais, incluindo as avaliações entre perfis de demonstração
- * e as inscrições e os cartões de oração desses eventos (útil para repetir a demonstração).
+ * pelo nome e distrito e as séries pelas suas sessões, e repõe os dados originais (avaliações entre
+ * perfis de demonstração, inscrições e cartões de oração desses eventos). Nunca apaga contas nem
+ * eventos que não sejam da demonstração; só apaga os eventos antigos listados em "retired".
  * Os cartões de oração ficam encriptados com a APP_KEY de quem corre o seeder.
- * Cria subscrições (trial, ativas, em carência, terminadas) e faturas de demonstração sem chamar o
- * Stripe nem o InvoiceExpress: ids falsos com "_demo_" e PDFs do driver demo, apagados e criados de
- * novo em cada execução.
+ * Cria subscrições e faturas de demonstração sem chamar o Stripe nem o InvoiceExpress: ids falsos
+ * com "_demo_" e PDFs do driver demo, apagados e criados de novo em cada execução.
  */
 class DemoSeeder extends Seeder
 {
     /** Password de todas as contas de demonstração (cumpre as regras de password da aplicação). */
     public const PASSWORD = 'Demo#2026';
 
-    /** Cores de fundo dos logótipos (RGB). */
-    private const PALETTE = [
-        [13, 31, 53],
-        [49, 90, 121],
-        [138, 112, 67],
-        [46, 107, 79],
-        [122, 62, 72],
-        [75, 78, 140],
-        [160, 82, 45],
-        [197, 164, 107],
+    /** Linhas por insert em lote (inscrições, avaliações, horários, redes sociais). */
+    private const BATCH = 200;
+
+    /** Perfis do diretório com portefólio. */
+    private const PORTFOLIO_PROFILES = 35;
+
+    /** Posições do diretório tratadas como "primeira página" (12 por página, com margem para a ordenação do MySQL). */
+    private const FIRST_PAGE_MARGIN = 14;
+
+    /** Conjunto de fotografias (database/seeders/demo/portfolio/{conjunto}-N.jpg) de cada setor. */
+    private const PORTFOLIO_SETS = [
+        'Agricultura e Pescas' => 'agricultura',
+        'Arquitetura e Design' => 'arquitetura',
+        'Comércio Retalhista' => 'comercio',
+        'Construção Civil e Obras Públicas' => 'construcao',
+        'Consultoria de Gestão e Negócios' => 'consultoria',
+        'Contabilidade e Finanças' => 'contabilidade',
+        'Educação e Formação' => 'educacao',
+        'Engenharia e Indústria' => 'engenharia',
+        'Estética e Bem-Estar' => 'estetica',
+        'Imobiliário' => 'imobiliario',
+        'Marketing, Comunicação e Publicidade' => 'marketing',
+        'Restauração e Hotelaria' => 'restauracao',
+        'Saúde e Medicina' => 'saude',
+        'Serviços Jurídicos e Advocacia' => 'juridico',
+        'Tecnologias de Informação (TI)' => 'ti',
+        'Transportes e Logística' => 'transportes',
+        'Turismo e Lazer' => 'turismo',
     ];
 
-    /** Linhas da tabela de contas mostrada no fim. */
-    private array $accountRows = [];
+    /** Indicativo da rede fixa de cada distrito, para os telefones comerciais. */
+    private const AREA_CODES = [
+        'Aveiro' => '234', 'Beja' => '284', 'Braga' => '253', 'Bragança' => '273', 'Castelo Branco' => '272',
+        'Coimbra' => '239', 'Évora' => '266', 'Faro' => '289', 'Guarda' => '271', 'Leiria' => '244',
+        'Lisboa' => '21', 'Portalegre' => '245', 'Porto' => '22', 'Santarém' => '243', 'Setúbal' => '265',
+        'Viana do Castelo' => '258', 'Vila Real' => '259', 'Viseu' => '232', 'Açores' => '296', 'Madeira' => '291',
+    ];
+
+    /**
+     * Contas com telefone pessoal estrangeiro (os números internacionais também têm de funcionar), de
+     * gamas reservadas para ficção: Austrália (ACMA, 0491 570 156) e EUA (NANPA, 555-0100 a 555-0199).
+     * A gama de ficção do Reino Unido (07700 900xxx) não serve: a validação de telefones recusa-a.
+     */
+    private const FOREIGN_PHONES = [
+        'membro04' => '+61491570156',
+        'membro07' => '+12025550104',
+    ];
+
+    /** NIFs da versão anterior da demonstração, mantidos nas mesmas contas. */
+    private const FIXED_NIFS = [
+        'membro' => '509000010', 'admin' => '509000029', 'membro07' => '509000037', 'membro02' => '509000045',
+        'membro01' => '509000053', 'membro03' => '509000061', 'membro04' => '509000070', 'membro05' => '509000088',
+        'membro06' => '509000096', 'membro08' => '509000100', 'membro09' => '509000118', 'membro10' => '509000126',
+        'membro11' => '509000134', 'inativo' => '509000142', 'bloqueado' => '509000150',
+    ];
+
+    /**
+     * Descrição dos eventos da versão anterior da demonstração, por nome. Um evento da lista "retired"
+     * só é apagado se ainda tiver esta descrição: com outra, foi criado ou editado à mão e fica.
+     */
+    private const PREVIOUS_DESCRIPTIONS = [
+        'Pequeno-almoço de Negócios ASPEC' => 'Um pequeno-almoço para conhecer outros empresários da região, apresentar o seu negócio em dois minutos e criar parcerias.',
+        'Jantar de Networking ASPEC' => 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.',
+    ];
+
+    /** Emails que não seguem a regra demo.{chave}@aspec.test (login da versão anterior). */
+    private const LEGACY_EMAILS = [
+        'inativo' => 'demo.inativo.pagamento@aspec.test',
+    ];
+
+    /** Marcas reais que não podem aparecer nos textos (empresas e locais são fictícios). */
+    private const FORBIDDEN_BRANDS = [
+        'Tivoli', 'Pestana', 'Vila Galé', 'Sheraton', 'Marriott', 'Hilton', 'Novotel', 'Meliá', 'Ibis', 'Holiday Inn', 'Accor',
+        'Pingo Doce', 'Lidl', 'Auchan', 'Worten', 'Sonae', 'Mercadona', 'IKEA', 'Leroy Merlin', 'Fnac', 'Zara', 'Primark',
+        'Galp', 'EDP', 'MEO', 'Vodafone', 'Altice', 'Millennium', 'BCP', 'Caixa Geral', 'Santander', 'Novo Banco', 'Montepio',
+        'Starbucks', "McDonald's", 'Coca-Cola', 'Nespresso', 'Sagres', 'Super Bock', 'Delta Cafés', 'Vista Alegre',
+        'Deloitte', 'PwC', 'KPMG', 'Accenture', 'Uber', 'Glovo', 'Airbnb', 'Booking.com',
+    ];
 
     /** Ids dos lookups já procurados, por modelo e nome. */
     private array $lookupIds = [];
 
-    /** Password usada nesta execução (ver demoPassword()). */
-    private string $password = self::PASSWORD;
+    /** Hash da password das contas (calculado uma vez: o bcrypt é lento e seriam 73 contas). */
+    private string $passwordHash = '';
+
+    /** Instante de referência da execução (ao segundo), para todas as datas relativas baterem certo. */
+    private Carbon $now;
+
+    /** Plano de cada conta (email, papel, estado, datas, subscrição), por chave. */
+    private array $plans = [];
+
+    /** Id do perfil de cada conta, por chave. */
+    private array $profileIds = [];
+
+    /** Contas Active que podem inscrever-se em eventos, ordenadas pela chave: [key, user_id, created_at]. */
+    private array $activePool = [];
+
+    /** Ids de todas as contas de demonstração (qualquer estado). Inscrições e cartões de outras contas nunca são apagados. */
+    private array $demoUserIds = [];
+
+    /** Pedidos dos cartões de oração [Pessoal, Emprego, Salvação]. */
+    private array $prayerRequests = [];
+
+    public function __construct(private readonly DemoLogoGenerator $logos) {}
 
     /**
      * Password das contas de demonstração: a de DEMO_PASSWORD ou, em local/testing, a pública
@@ -93,6 +190,8 @@ class DemoSeeder extends Seeder
     /**
      * Cria ou repõe os dados de demonstração. Recusa correr em produção e, se os lookups
      * ainda não existirem, corre primeiro o DatabaseSeeder.
+     *
+     * @throws RuntimeException Se os ficheiros de dados violarem alguma regra (ver validateData()).
      */
     public function run(): void
     {
@@ -110,42 +209,34 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        $this->password = $password;
+        $this->passwordHash = Hash::make($password);
+        $this->now = now()->startOfSecond();
 
         if ($this->lookupsMissing()) {
             $this->call(DatabaseSeeder::class);
         }
 
-        $canDrawImages = extension_loaded('gd');
+        $members = $this->data('members');
+        $applicants = $this->data('applicants');
+        $events = $this->data('events');
+        $reviews = $this->data('reviews');
+        $this->prayerRequests = $this->data('prayer_requests');
 
-        if (! $canDrawImages) {
-            $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo.');
+        $this->validateData($members, $applicants, $events, $reviews);
+
+        foreach ([...$members, ...$applicants] as $key => $account) {
+            $this->plans[$key] = $this->accountPlan($key, $account);
+            $this->profileIds[$key] = $this->seedAccount($this->plans[$key], $account)->id;
         }
 
-        $profileIds = [];
+        DB::transaction(fn () => $this->syncHoursAndSocialLinks([...$members, ...$applicants]));
 
-        foreach ($this->activeMembers() as $index => $member) {
-            $profile = $this->seedAccount($member);
-            $profileIds[$member['email']] = $profile->id;
-
-            $this->syncBusinessHours($profile, $member['hours']);
-            $this->syncSocialLinks($profile, $member['social']);
-
-            if ($canDrawImages) {
-                $this->seedLogo($profile, self::PALETTE[$index % count(self::PALETTE)]);
-            }
-
-            $this->seedPortfolio($profile, $member['portfolio']);
-        }
-
-        foreach ($this->applicants() as $applicant) {
-            $this->seedAccount($applicant);
-        }
-
+        $this->seedMedia($members, $applicants);
         $this->seedPayments();
-        $this->seedReviews($profileIds);
-        $this->seedEvents();
-        $this->seedSeries();
+        $this->loadActivePool();
+
+        DB::transaction(fn () => $this->seedReviews($reviews));
+        DB::transaction(fn () => $this->seedEvents($events));
 
         $this->printSummary();
     }
@@ -161,22 +252,390 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Cria ou repõe a conta (papel, estado, motivo, telefone e password) e o respetivo perfil.
-     * Limpa a marca da agenda semanal, para a demonstração a poder enviar outra vez na mesma semana,
-     * e as datas de trial e carência e a sessão de Checkout (o seedPayments() repõe as do cenário).
-     * Nunca toca no stripe_id (um cliente real de um ensaio fica) nem na isenção de subscrição.
-     * Numa conta com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio) também
-     * não toca no estado, no motivo, no trial, na carência nem na sessão de Checkout: são do Stripe.
-     *
-     * @param  array<string, mixed>  $data  Uma entrada de activeMembers() ou applicants().
+     * Lê um ficheiro de dados (database/seeders/demo/data/{nome}.php). Usa require e não
+     * require_once: o seeder pode correr várias vezes no mesmo processo (testes).
      */
-    private function seedAccount(array $data): MemberProfile
+    private function data(string $name): array
     {
-        $user = User::firstOrNew(['email' => $data['email']]);
+        return require database_path("seeders/demo/data/{$name}.php");
+    }
+
+    /**
+     * Valida os ficheiros de dados antes de escrever na base de dados, para uma gralha nos textos
+     * falhar logo com uma mensagem clara em vez de deixar a demonstração a meio.
+     *
+     * @throws RuntimeException Com a lista de problemas encontrados.
+     */
+    private function validateData(array $members, array $applicants, array $events, array $reviews): void
+    {
+        $errors = [];
+        $accounts = [...$members, ...$applicants];
+        $texts = [];
+
+        foreach (array_count_values(array_column($accounts, 'business_name')) as $name => $count) {
+            if ($count > 1) {
+                $errors[] = "empresa repetida: {$name}";
+            }
+        }
+
+        foreach ($accounts as $key => $account) {
+            if (! preg_match('/^(admin|membro(\d{2})?|pendente\d{2}|aprovado(\d{2})?|inativo(\d{2})?|cancelado|bloqueado)$/', $key)) {
+                $errors[] = "chave de conta inválida: {$key}";
+            }
+
+            if (! str_ends_with($this->emailFor($key), '@aspec.test')) {
+                $errors[] = "email fora de @aspec.test: {$key}";
+            }
+
+            if (! isset(self::PORTFOLIO_SETS[$account['sector']])) {
+                $errors[] = "setor sem fotografias: {$account['sector']}";
+            }
+
+            if (! isset(self::AREA_CODES[$account['district']])) {
+                $errors[] = "distrito sem indicativo: {$account['district']}";
+            }
+
+            array_push($texts, $account['name'], $account['business_name'], $account['description'], $account['address']);
+        }
+
+        $nifs = array_map(fn (string $key) => $this->nifFor($key), array_keys($accounts));
+
+        if (count($nifs) !== count(array_unique($nifs))) {
+            $errors[] = 'NIFs repetidos';
+        }
+
+        $eventKeys = [];
+
+        foreach ($events['events'] as $event) {
+            $label = "{$event['name']} ({$event['district']})";
+            $eventKeys[] = "{$event['name']}|{$event['district']}";
+            $include = $event['include'] ?? [];
+
+            if (isset($event['place']) === isset($event['online_url'])) {
+                $errors[] = "evento sem local nem link (ou com os dois): {$label}";
+            }
+
+            if (isset($event['place']) && ! isset($events['places'][$event['place']])) {
+                $errors[] = "local desconhecido em {$label}";
+            }
+
+            if ($event['registrations'] > $event['max_attendees'] || count($include) > $event['registrations']) {
+                $errors[] = "inscrições acima da lotação em {$label}";
+            }
+
+            if (array_diff([...$include, ...($event['exclude'] ?? [])], array_keys($members)) !== []) {
+                $errors[] = "conta desconhecida nas inscrições de {$label}";
+            }
+
+            if (isset($event['prayer_cards']) && ($event['prayer_cards']['authors'] > $event['registrations'] || ! isset($event['prayer_verse'])
+                || array_diff($event['prayer_cards']['include'] ?? [], $include) !== [])) {
+                $errors[] = "cartões de oração inválidos em {$label}";
+            }
+
+            array_push($texts, $event['name'], $event['description'], $event['venue'] ?? null, $event['notes'] ?? null);
+        }
+
+        if (count($eventKeys) !== count(array_unique($eventKeys))) {
+            $errors[] = 'eventos repetidos (nome e distrito)';
+        }
+
+        foreach ($events['series'] as $series) {
+            if (isset($series['place']) && ! isset($events['places'][$series['place']])) {
+                $errors[] = "local desconhecido na série {$series['name']}";
+            }
+
+            if (isset($series['registrants']) && array_diff(array_keys($series['registrants']), array_keys($members)) !== []) {
+                $errors[] = "conta desconhecida na série {$series['name']}";
+            }
+
+            array_push($texts, $series['name'], $series['description'], $series['notes'] ?? null);
+        }
+
+        $pairs = [];
+
+        foreach ([...$reviews['visible'], ...$reviews['moderated']] as $review) {
+            [$by, $to, $comment] = isset($review['by']) ? [$review['by'], $review['to'], $review['comment']] : [$review[0], $review[1], $review[4]];
+            $pairs[] = "{$by}|{$to}";
+            $texts[] = $comment;
+
+            if ($by === $to || ! isset($members[$by], $members[$to])) {
+                $errors[] = "avaliação inválida: {$by} → {$to}";
+            }
+        }
+
+        if (count($pairs) !== count(array_unique($pairs))) {
+            $errors[] = 'avaliações repetidas entre o mesmo par de perfis';
+        }
+
+        array_push($texts, ...array_merge(...$this->prayerRequests), ...array_column($events['places'], 'address'));
+
+        foreach (array_filter($texts) as $text) {
+            foreach (self::FORBIDDEN_BRANDS as $brand) {
+                if (preg_match('/(?<![\p{L}\p{N}])'.preg_quote($brand, '/').'(?![\p{L}\p{N}])/iu', $text)) {
+                    $errors[] = "marca \"{$brand}\" em: ".Str::limit($text, 60);
+                }
+            }
+        }
+
+        if ($errors !== []) {
+            throw new RuntimeException("Dados de demonstração inválidos:\n- ".implode("\n- ", array_unique($errors)));
+        }
+    }
+
+    /**
+     * Email da conta a partir da chave dos dados: admin → demo.admin@aspec.test, membro12 →
+     * demo.membro12@aspec.test (e os logins antigos que não seguem a regra).
+     */
+    private function emailFor(string $key): string
+    {
+        return self::LEGACY_EMAILS[$key] ?? "demo.{$key}@aspec.test";
+    }
+
+    /**
+     * Número único da conta, de onde saem o telefone e o NIF gerados: admin 1, membroNN 100+NN,
+     * pendenteNN 200+NN, aprovado 301, inativo 401, cancelado 501, bloqueado 601.
+     */
+    private function accountNumber(string $key): int
+    {
+        preg_match('/^([a-z]+?)(\d*)$/', $key, $match);
+
+        $base = ['admin' => 0, 'membro' => 100, 'pendente' => 200, 'aprovado' => 300, 'inativo' => 400, 'cancelado' => 500, 'bloqueado' => 600][$match[1]];
+
+        return $base + ((int) $match[2] ?: ($key === 'membro' ? 99 : 1));
+    }
+
+    /**
+     * Telemóvel pessoal fictício em E.164 (+3519X000NNNN), ou o número estrangeiro das contas que o têm.
+     */
+    private function phoneFor(string $key): string
+    {
+        $number = $this->accountNumber($key);
+
+        return self::FOREIGN_PHONES[$key] ?? '+351'.['91', '92', '93', '96'][$number % 4].'000'.sprintf('%04d', $number);
+    }
+
+    /**
+     * Telefone comercial fictício da rede fixa do distrito ({indicativo}000NNN), em E.164.
+     */
+    private function commercialPhoneFor(string $key, string $district): string
+    {
+        $areaCode = self::AREA_CODES[$district];
+        $number = $this->accountNumber($key);
+        $suffix = strlen($areaCode) === 2 ? sprintf('%04d', $number) : sprintf('%03d', $number % 1000);
+
+        return "+351{$areaCode}000{$suffix}";
+    }
+
+    /**
+     * NIF de demonstração: o da versão anterior ou 5091NNNN com o dígito de controlo calculado
+     * (pesos 9 a 2, módulo 11, como a regra PortugueseNif).
+     */
+    private function nifFor(string $key): string
+    {
+        if (isset(self::FIXED_NIFS[$key])) {
+            return self::FIXED_NIFS[$key];
+        }
+
+        $digits = '5091'.sprintf('%04d', $this->accountNumber($key));
+        $sum = 0;
+
+        for ($i = 0; $i < 8; $i++) {
+            $sum += (int) $digits[$i] * (9 - $i);
+        }
+
+        $remainder = $sum % 11;
+
+        return $digits.($remainder < 2 ? 0 : 11 - $remainder);
+    }
+
+    /**
+     * Plano da conta: email, papel, estado, data de registo e, em quem já ativou, a subscrição.
+     *
+     * @param  array<string, mixed>  $account  Uma entrada de members.php ou applicants.php.
+     * @return array<string, mixed>
+     *
+     * @throws RuntimeException Se o estado não existir.
+     */
+    private function accountPlan(string $key, array $account): array
+    {
+        [$status, $reason] = match ($account['state']) {
+            'active', 'active_cancel', 'trial', 'trial_cancel', 'grace' => ['Active', null],
+            'pending' => ['Pending', null],
+            'approved' => ['Approved', null],
+            'unpaid' => ['Inactive', InactiveReason::Unpaid],
+            'cancelled' => ['Inactive', InactiveReason::Cancelled],
+            'blocked' => ['Inactive', InactiveReason::Blocked],
+            default => throw new RuntimeException("Estado de demonstração desconhecido: {$account['state']} ({$key})."),
+        };
+
+        $dates = $this->accountDates($key, $account['state'], (int) $account['joined_months_ago']);
+
+        return [
+            'key' => $key,
+            'email' => $this->emailFor($key),
+            'role' => $key === 'admin' ? 'Admin' : 'Member',
+            'status' => $status,
+            'reason' => $reason,
+            'created_at' => $dates['created_at'],
+            'subscription' => $dates['subscription'],
+            'nif' => $dates['subscription'] === null ? null : $this->nifFor($key),
+        ];
+    }
+
+    /**
+     * Data de registo e subscrição de cada estado, relativas a agora e à configuração (trial,
+     * carência e periodicidade da quota). A ativação é 1 a 5 dias depois do registo e o trial
+     * começa na ativação; o primeiro período pago começa quando o trial acaba.
+     * - trial: termina entre 8 e 27 dias depois de agora (sem webhooks, um trial no passado ficava
+     *   "trialing"; voltar a correr o seeder antes de cada demonstração);
+     * - grace: a renovação falhou há 1 a 3 dias, depois de um período pago;
+     * - unpaid: nunca pagou ou pagou um período e a renovação falhou (terminou depois da carência);
+     * - cancelled: o membro cancelou e a subscrição terminou no fim do período pago;
+     * - blocked: bloqueado ainda em trial, 10 dias depois da ativação.
+     *
+     * @return array{created_at: Carbon, subscription: ?array<string, mixed>}
+     */
+    private function accountDates(string $key, string $state, int $monthsAgo): array
+    {
+        $trialDays = (int) config('subscription.trial_days');
+        $graceDays = (int) config('subscription.grace_days');
+        $interval = SubscriptionInterval::configured();
+        $hash = crc32($key);
+        $activationDelay = 1 + $hash % 5;
+
+        if ($state === 'pending') {
+            return ['created_at' => $this->now->copy()->subDays($hash % 9)->subHours(1 + $hash % 10), 'subscription' => null];
+        }
+
+        if ($state === 'approved') {
+            return ['created_at' => $this->now->copy()->subDays(3 + $hash % 8), 'subscription' => null];
+        }
+
+        if ($state === 'trial' || $state === 'trial_cancel') {
+            $trialEndsAt = $this->now->copy()->addDays(8 + $hash % 20);
+            $activatedAt = $trialEndsAt->copy()->subDays($trialDays);
+
+            return [
+                'created_at' => $activatedAt->copy()->subDays($activationDelay),
+                'subscription' => $this->subscriptionDates('trialing', $activatedAt, $trialEndsAt, $state === 'trial_cancel' ? $trialEndsAt->copy() : null),
+            ];
+        }
+
+        if ($state === 'grace') {
+            $trialEndsAt = $this->previousPeriodStart($this->now->copy()->subDays(1 + $hash % 3));
+            $renewalAt = Carbon::instance($interval->addTo($trialEndsAt));
+            $activatedAt = $trialEndsAt->copy()->subDays($trialDays);
+
+            return [
+                'created_at' => $activatedAt->copy()->subDays($activationDelay),
+                'subscription' => $this->subscriptionDates('past_due', $activatedAt, $trialEndsAt, null, [[$trialEndsAt, $renewalAt]], $renewalAt->copy()->addDays($graceDays)),
+            ];
+        }
+
+        $createdAt = $this->registeredMonthsAgo($monthsAgo, $hash);
+        $latest = $this->now->copy()->subDays($trialDays + 14);
+
+        if ($createdAt->greaterThan($latest)) {
+            $createdAt = $latest;
+        }
+
+        $activatedAt = $createdAt->copy()->addDays($activationDelay);
+        $trialEndsAt = $activatedAt->copy()->addDays($trialDays);
+        $firstPeriod = [$trialEndsAt->copy(), Carbon::instance($interval->addTo($trialEndsAt))];
+
+        $subscription = match ($state) {
+            'active', 'active_cancel' => $this->activeSubscription($activatedAt, $trialEndsAt, $state === 'active_cancel'),
+            'cancelled' => $this->subscriptionDates('canceled', $activatedAt, $trialEndsAt, $firstPeriod[1]->copy(), [$firstPeriod]),
+            'unpaid' => $firstPeriod[1]->copy()->addDays($graceDays)->lessThanOrEqualTo($this->now->copy()->subDay())
+                ? $this->subscriptionDates('canceled', $activatedAt, $trialEndsAt, $firstPeriod[1]->copy()->addDays($graceDays), [$firstPeriod])
+                : $this->subscriptionDates('canceled', $activatedAt, $trialEndsAt, $trialEndsAt->copy()->addDays($graceDays)),
+            'blocked' => $this->subscriptionDates('canceled', $activatedAt, $trialEndsAt, $activatedAt->copy()->addDays(10)),
+        };
+
+        return ['created_at' => $createdAt, 'subscription' => $subscription];
+    }
+
+    /**
+     * Subscrição ativa com todos os períodos pagos desde o fim do trial, seguidos e o último a
+     * cobrir hoje (um por fatura); com cancelamento agendado termina no fim do período atual.
+     *
+     * @return array<string, mixed>
+     */
+    private function activeSubscription(Carbon $activatedAt, Carbon $trialEndsAt, bool $cancelScheduled): array
+    {
+        $interval = SubscriptionInterval::configured();
+        $periods = [];
+        $start = $trialEndsAt->copy();
+
+        while ($start->lessThanOrEqualTo($this->now)) {
+            $end = Carbon::instance($interval->addTo($start));
+            $periods[] = [$start, $end];
+            $start = $end->copy();
+        }
+
+        return $this->subscriptionDates('active', $activatedAt, $trialEndsAt, $cancelScheduled ? end($periods)[1]->copy() : null, $periods);
+    }
+
+    /**
+     * @param  list<array{Carbon, Carbon}>  $periods  Períodos pagos (início, fim), um por fatura.
+     * @return array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}
+     */
+    private function subscriptionDates(string $status, Carbon $createdAt, Carbon $trialEndsAt, ?Carbon $endsAt, array $periods = [], ?Carbon $graceEndsAt = null): array
+    {
+        return [
+            'status' => $status,
+            'created_at' => $createdAt,
+            'trial_ends_at' => $trialEndsAt,
+            'ends_at' => $endsAt,
+            'grace_ends_at' => $graceEndsAt,
+            'periods' => $periods,
+        ];
+    }
+
+    /**
+     * Data de registo "há N meses", espalhada uns dias e horas pela chave e nunca antes de há 18 meses.
+     */
+    private function registeredMonthsAgo(int $months, int $hash): Carbon
+    {
+        $date = $this->now->copy()->subMonthsNoOverflow($months)->addDays($hash % 10)->subHours(($hash >> 4) % 9);
+        $oldest = $this->now->copy()->subMonthsNoOverflow(18)->addHour();
+
+        return $date->lessThan($oldest) ? $oldest : $date;
+    }
+
+    /**
+     * Recua um período da quota configurada, sem transbordar (31/03 − 1 mês = 28/02).
+     */
+    private function previousPeriodStart(Carbon $date): Carbon
+    {
+        return match (SubscriptionInterval::configured()) {
+            SubscriptionInterval::Month => $date->copy()->subMonthNoOverflow(),
+            SubscriptionInterval::Year => $date->copy()->subYearNoOverflow(),
+        };
+    }
+
+    /**
+     * Cria ou repõe a conta (papel, estado, motivo, telefone, password e data de registo) e o
+     * respetivo perfil. Limpa a marca da agenda semanal, para a demonstração a poder enviar outra
+     * vez na mesma semana, e as datas de trial e carência e a sessão de Checkout (o seedPayments()
+     * repõe as do cenário). Nunca toca no stripe_id (um cliente real de um ensaio fica) nem na
+     * isenção de subscrição. Numa conta com uma subscrição real em curso (ex.: reativada pelo
+     * Checkout num ensaio) também não toca no estado, no motivo, no trial, na carência nem na
+     * sessão de Checkout: são do Stripe.
+     * Desliga os emails de eventos (anúncios e agenda semanal), como o LoadSeeder: os emails demo são
+     * .test e um evento criado no deploy mandaria dezenas de emails que voltam para trás, gastando a
+     * quota diária do serviço de email.
+     *
+     * @param  array<string, mixed>  $plan  Resultado de accountPlan().
+     * @param  array<string, mixed>  $account  Uma entrada de members.php ou applicants.php.
+     */
+    private function seedAccount(array $plan, array $account): MemberProfile
+    {
+        $user = User::firstOrNew(['email' => $plan['email']]);
 
         $paymentState = [
-            'account_status_id' => $this->lookupId(AccountStatus::class, $data['status'] ?? 'Active'),
-            'inactive_reason' => $data['reason'] ?? null,
+            'account_status_id' => $this->lookupId(AccountStatus::class, $plan['status']),
+            'inactive_reason' => $plan['reason'],
             'trial_ends_at' => null,
             'grace_ends_at' => null,
             'stripe_checkout_session_id' => null,
@@ -185,125 +644,269 @@ class DemoSeeder extends Seeder
         // Papel, estado e motivo não são fillable (só o admin e os pagamentos os mudam), daí o forceFill.
         $user->forceFill([
             ...($this->hasRealRunningSubscription($user) ? [] : $paymentState),
-            'password' => $this->password,
-            'phone' => $data['phone'],
-            'role_id' => $this->lookupId(Role::class, $data['role'] ?? 'Member'),
-            'email_verified_at' => $user->email_verified_at ?? now(),
+            'password' => $this->passwordHash,
+            'phone' => $this->phoneFor($plan['key']),
+            'role_id' => $this->lookupId(Role::class, $plan['role']),
+            'email_verified_at' => $plan['created_at'],
             'weekly_agenda_sent_at' => null,
+            'notify_new_events' => false,
+            'notify_weekly_agenda' => false,
+            'created_at' => $plan['created_at'],
         ])->save();
 
-        $profile = $data['profile'];
-
-        $this->accountRows[] = [
-            $user->email,
-            $data['role'] ?? 'Member',
-            ($data['status'] ?? 'Active').(isset($data['reason']) ? " ({$data['reason']->value})" : ''),
-            $profile['business_name'],
-        ];
-
         return MemberProfile::updateOrCreate(['user_id' => $user->id], [
-            'sector_id' => $this->lookupId(Sector::class, $profile['sector']),
-            'location_id' => $this->lookupId(Location::class, $profile['location']),
-            'name' => $profile['name'],
-            'business_name' => $profile['business_name'],
-            'congregation' => $profile['congregation'],
-            'role_in_congregation' => $profile['role_in_congregation'],
-            'description' => $profile['description'],
-            'website_url' => $profile['website_url'] ?? null,
-            'commercial_email' => $profile['commercial_email'] ?? null,
-            'commercial_phone' => $profile['commercial_phone'] ?? null,
-            'address' => $profile['address'],
-            'postal_code' => $profile['postal_code'],
-            'city' => $profile['city'],
+            'sector_id' => $this->lookupId(Sector::class, $account['sector']),
+            'location_id' => $this->lookupId(Location::class, $account['district']),
+            'name' => $account['name'],
+            'business_name' => $account['business_name'],
+            'congregation' => $account['congregation'],
+            'role_in_congregation' => $account['role_in_congregation'],
+            'description' => $account['description'],
+            'website_url' => $account['website'] ?? null,
+            'commercial_email' => $account['commercial_email'],
+            'commercial_phone' => $this->commercialPhoneFor($plan['key'], $account['district']),
+            'address' => $account['address'],
+            'postal_code' => $account['postal_code'],
+            'city' => $account['city'],
         ]);
     }
 
     /**
-     * Horário de funcionamento: dias úteis 09:00–18:00, com ou sem sábado de manhã, ou nenhum.
+     * Horários e redes sociais de todos os perfis de demonstração: apaga os atuais e insere os dos
+     * dados em lote (duas consultas por tabela em vez de duas por perfil, o que conta no TiDB).
      *
-     * @param  string|null  $schedule  'weekdays', 'weekdays_saturday' ou null (sem horário).
+     * @param  array<string, array<string, mixed>>  $accounts  Contas por chave.
      */
-    private function syncBusinessHours(MemberProfile $profile, ?string $schedule): void
+    private function syncHoursAndSocialLinks(array $accounts): void
     {
+        $profileIds = array_values($this->profileIds);
+        $timestamp = $this->now->format('Y-m-d H:i:s');
         $hours = [];
+        $links = [];
 
-        if ($schedule !== null) {
-            foreach (range(1, 5) as $weekDayId) {
-                $hours[$weekDayId] = ['open_time' => '09:00', 'close_time' => '18:00'];
+        foreach ($accounts as $key => $account) {
+            foreach ($account['hours'] ?? [] as $weekDayId => [$open, $close]) {
+                $hours[] = [
+                    'id' => (new BusinessHour)->newUniqueId(),
+                    'profile_id' => $this->profileIds[$key],
+                    'week_day_id' => $weekDayId,
+                    'open_time' => $open,
+                    'close_time' => $close,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
+            }
+
+            foreach ($account['social'] ?? [] as $platform => $url) {
+                $links[] = [
+                    'id' => (new SocialLink)->newUniqueId(),
+                    'profile_id' => $this->profileIds[$key],
+                    'platform_id' => $this->lookupId(SocialPlatform::class, $platform),
+                    'url' => $url,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ];
             }
         }
 
-        if ($schedule === 'weekdays_saturday') {
-            $hours[6] = ['open_time' => '09:00', 'close_time' => '13:00'];
+        DB::table('business_hours')->whereIn('profile_id', $profileIds)->delete();
+        DB::table('social_links')->whereIn('profile_id', $profileIds)->delete();
+
+        foreach (array_chunk($hours, self::BATCH) as $chunk) {
+            DB::table('business_hours')->insert($chunk);
         }
 
-        $profile->weekDays()->sync($hours);
+        foreach (array_chunk($links, self::BATCH) as $chunk) {
+            DB::table('social_links')->insert($chunk);
+        }
     }
 
     /**
-     * Redes sociais do perfil.
+     * Logótipos e portefólio de todos os perfis no disco de media. Sem GD os perfis ficam sem
+     * logótipo; sem FreeType os logótipos ficam só com as iniciais.
      *
-     * @param  array<string, string>  $links  Nome da plataforma => URL.
+     * @param  array<string, array<string, mixed>>  $members
+     * @param  array<string, array<string, mixed>>  $applicants
      */
-    private function syncSocialLinks(MemberProfile $profile, array $links): void
+    private function seedMedia(array $members, array $applicants): void
     {
-        $pivot = [];
+        $canDrawImages = extension_loaded('gd');
 
-        foreach ($links as $platform => $url) {
-            $pivot[$this->lookupId(SocialPlatform::class, $platform)] = ['url' => $url];
+        if (! $canDrawImages) {
+            $this->command?->warn('A extensão GD do PHP não está ativa: os perfis ficam sem logótipo.');
+        } elseif (! $this->logos->supportsTrueType()) {
+            $this->command?->warn('O GD do PHP não tem FreeType (ou falta a fonte em database/seeders/demo/fonts): os logótipos ficam só com as iniciais.');
         }
 
-        $profile->socialPlatforms()->sync($pivot);
+        $portfolios = $this->planPortfolios($members);
+        $profiles = MemberProfile::whereIn('id', $this->profileIds)->get()->keyBy('id');
+
+        foreach ([...$members, ...$applicants] as $key => $account) {
+            $profile = $profiles[$this->profileIds[$key]];
+
+            $this->seedLogo($profile, $key, $canDrawImages && ($account['logo'] ?? false));
+            $this->seedPortfolio($profile, $portfolios[$key] ?? []);
+        }
     }
 
     /**
-     * Logótipo 400×400 com as iniciais da empresa, em logos/{profile_id} no disco de media
-     * (a mesma pasta do upload do membro). Nome fixo para não criar ficheiros repetidos.
-     * Apaga o logótipo de demonstração da pasta antiga (logos/{user_id}) de uma execução anterior.
-     *
-     * @param  array{int, int, int}  $background  Cor de fundo (RGB).
+     * Logótipo 400×400 em logos/{profile_id}/demo-logo-v2.png no disco de media (a pasta do upload
+     * do membro). O nome versionado evita que o R2 sirva em cache o logótipo da versão anterior, que
+     * é apagado (demo-logo.png, também na pasta antiga logos/{user_id}). Um perfil sem logótipo nos
+     * dados perde o de demonstração, mas nunca um logótipo carregado pelo próprio membro. Um perfil
+     * com logótipo nos dados cujo logótipo atual é um upload (logos/{profile_id}/…) perde esse
+     * ficheiro, como na troca de logótipo pelo membro, para não ficar órfão no disco.
      */
-    private function seedLogo(MemberProfile $profile, array $background): void
+    private function seedLogo(MemberProfile $profile, string $key, bool $withLogo): void
     {
-        $path = "logos/{$profile->id}/demo-logo.png";
+        $disk = MediaStorage::disk();
+        $path = "logos/{$profile->id}/demo-logo-v2.png";
+        $demoPaths = [$path, "logos/{$profile->id}/demo-logo.png", "logos/{$profile->user_id}/demo-logo.png"];
 
-        if (! MediaStorage::disk()->exists($path)) {
-            $image = imagecreatetruecolor(400, 400);
-            imagefill($image, 0, 0, imagecolorallocate($image, ...$background));
-            $this->drawText($image, $this->initials($profile->business_name), 12, 200, 200, [255, 255, 255]);
+        $disk->delete(array_slice($demoPaths, 1));
 
-            MediaStorage::disk()->put($path, $this->toPng($image));
+        if ($withLogo) {
+            if ($profile->logo_path !== null && ! in_array($profile->logo_path, $demoPaths, true) && str_starts_with($profile->logo_path, "logos/{$profile->id}/") && ! str_contains($profile->logo_path, '..')) {
+                $disk->delete($profile->logo_path);
+            }
+
+            if (! $disk->exists($path)) {
+                $disk->put($path, $this->logos->generate($profile->business_name, crc32("{$key}|logótipo") % 8));
+            }
+        } else {
+            $disk->delete($path);
         }
 
-        $profile->update(['logo_path' => $path]);
-        MediaStorage::disk()->delete("logos/{$profile->user_id}/demo-logo.png");
+        $logoPath = $withLogo ? $path : (in_array($profile->logo_path, $demoPaths, true) ? null : $profile->logo_path);
+
+        if ($profile->logo_path !== $logoPath) {
+            $profile->update(['logo_path' => $logoPath]);
+        }
     }
 
     /**
-     * Fotografias do portefólio, copiadas de database/seeders/demo/portfolio ({conjunto}-N.jpg) para
-     * portfolios/{profile_id} no disco de media, como no upload do membro. As imagens de demonstração
-     * antigas (demo-*) que já não fazem parte do conjunto são apagadas, com o ficheiro, também na pasta
-     * antiga portfolios/{user_id} (base de dados semeada antes das pastas por perfil).
-     * Origem e licença das fotografias em THIRD_PARTY_NOTICES.md.
+     * Escolhe as fotografias do portefólio: cerca de 35 perfis (o demo.membro primeiro, os outros
+     * por uma ordem fixa derivada da chave), 3 a 5 fotografias do conjunto do setor, sem repetir
+     * fotografias no mesmo distrito nem entre perfis que possam aparecer na 1.ª página do diretório.
+     * Um perfil sem 3 fotografias livres fica sem portefólio.
      *
-     * @param  string|null  $set  Prefixo das fotografias (ex.: "arquitetura"); null = perfil sem portefólio.
+     * @param  array<string, array<string, mixed>>  $members
+     * @return array<string, list<string>> Ficheiros de origem por chave da conta.
      */
-    private function seedPortfolio(MemberProfile $profile, ?string $set): void
+    private function planPortfolios(array $members): array
     {
-        $sources = $set === null ? [] : glob(database_path("seeders/demo/portfolio/{$set}-*.jpg"));
-        sort($sources, SORT_NATURAL);
+        $sets = [];
 
+        foreach (glob(database_path('seeders/demo/portfolio/*.jpg')) as $file) {
+            $sets[preg_replace('/-\d+\.jpg$/', '', basename($file))][] = basename($file);
+        }
+
+        $firstPage = $this->firstDirectoryPageCandidates($members);
+        $order = array_keys($members);
+        usort($order, fn (string $a, string $b) => crc32("{$a}|portefólio") <=> crc32("{$b}|portefólio"));
+        $order = ['membro', ...array_values(array_diff($order, ['membro']))];
+
+        $usedInDistrict = [];
+        $usedOnFirstPage = [];
+        $usage = [];
+        $plan = [];
+
+        foreach ($order as $key) {
+            if (count($plan) === self::PORTFOLIO_PROFILES) {
+                break;
+            }
+
+            $district = $members[$key]['district'];
+            $available = array_values(array_filter(
+                $sets[self::PORTFOLIO_SETS[$members[$key]['sector']]] ?? [],
+                fn (string $file) => ! isset($usedInDistrict[$district][$file]) && ! (isset($firstPage[$key]) && isset($usedOnFirstPage[$file]))
+            ));
+
+            if (count($available) < 3) {
+                continue;
+            }
+
+            usort($available, fn (string $a, string $b) => [$usage[$a] ?? 0, crc32($key.$a)] <=> [$usage[$b] ?? 0, crc32($key.$b)]);
+            $photos = array_slice($available, 0, 3 + crc32($key) % 3);
+            sort($photos, SORT_NATURAL);
+
+            foreach ($photos as $file) {
+                $usedInDistrict[$district][$file] = true;
+                $usage[$file] = ($usage[$file] ?? 0) + 1;
+
+                if (isset($firstPage[$key])) {
+                    $usedOnFirstPage[$file] = true;
+                }
+            }
+
+            $plan[$key] = $photos;
+        }
+
+        return $plan;
+    }
+
+    /**
+     * Chaves dos perfis que podem calhar na 1.ª página do diretório (ordenado por empresa e nome):
+     * as primeiras posições com a comparação byte a byte do SQLite e com uma aproximação da
+     * ordenação do MySQL (sem distinguir maiúsculas nem acentos).
+     *
+     * @param  array<string, array<string, mixed>>  $members
+     * @return array<string, true>
+     */
+    private function firstDirectoryPageCandidates(array $members): array
+    {
+        $binary = fn (array $a, array $b) => [$a['business_name'], $a['name']] <=> [$b['business_name'], $b['name']];
+        $folded = fn (array $a, array $b) => [Str::lower(Str::ascii($a['business_name'])), Str::lower(Str::ascii($a['name']))]
+            <=> [Str::lower(Str::ascii($b['business_name'])), Str::lower(Str::ascii($b['name']))];
+
+        $candidates = [];
+
+        foreach ([$binary, $folded] as $compare) {
+            $sorted = $members;
+            uasort($sorted, $compare);
+
+            foreach (array_slice(array_keys($sorted), 0, self::FIRST_PAGE_MARGIN) as $key) {
+                $candidates[$key] = true;
+            }
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * Fotografias do portefólio, copiadas de database/seeders/demo/portfolio para
+     * portfolios/{profile_id}/demo-{origem} no disco de media, como no upload do membro. Copia só
+     * o que falta ou mudou (tamanho diferente: a versão anterior tinha fotografias com os mesmos
+     * nomes). As imagens de demonstração (demo-*) que já não fazem parte do conjunto são apagadas,
+     * com o ficheiro, também na pasta antiga portfolios/{user_id}. Origem e licença das
+     * fotografias em THIRD_PARTY_NOTICES.md.
+     *
+     * @param  list<string>  $sources  Ficheiros de origem (vazio = perfil sem portefólio).
+     */
+    private function seedPortfolio(MemberProfile $profile, array $sources): void
+    {
+        $disk = MediaStorage::disk();
+        $existing = $profile->portfolios()->pluck('image_path')->all();
         $paths = [];
+        $rows = [];
 
-        foreach ($sources as $source) {
-            $path = "portfolios/{$profile->id}/demo-".basename($source);
+        foreach ($sources as $position => $source) {
+            $path = "portfolios/{$profile->id}/demo-{$source}";
+            $file = database_path("seeders/demo/portfolio/{$source}");
             $paths[] = $path;
 
-            if (! MediaStorage::disk()->exists($path)) {
-                MediaStorage::disk()->put($path, file_get_contents($source));
+            if ($this->storedSize($path) !== filesize($file)) {
+                $disk->put($path, file_get_contents($file));
             }
 
-            $profile->portfolios()->firstOrCreate(['image_path' => $path]);
+            if (! in_array($path, $existing, true)) {
+                $timestamp = $this->now->copy()->addSeconds($position)->format('Y-m-d H:i:s');
+                $rows[] = ['id' => (new Portfolio)->newUniqueId(), 'profile_id' => $profile->id, 'image_path' => $path, 'created_at' => $timestamp, 'updated_at' => $timestamp];
+            }
+        }
+
+        if ($rows !== []) {
+            Portfolio::insert($rows);
         }
 
         $stale = $profile->portfolios()
@@ -314,74 +917,196 @@ class DemoSeeder extends Seeder
             ->get();
 
         foreach ($stale as $image) {
-            MediaStorage::disk()->delete($image->image_path);
+            $disk->delete($image->image_path);
             $image->delete();
         }
     }
 
     /**
-     * Eventos (futuros, online e passados) com datas relativas ao dia de hoje em Lisboa, e as
-     * respetivas inscrições. Procura pelo nome e distrito (e não pela data): correr noutro dia
-     * atualiza as datas em vez de duplicar os eventos. O prazo de inscrição fica às 23:59 (hora de
-     * Lisboa) do dia indicado, por omissão a véspera, como o backoffice o guarda. As coordenadas
-     * ficam sempre a null, para limpar as de uma base de dados semeada antes do mapa só com place_id.
+     * Tamanho do ficheiro no disco de media, ou null se não existir (uma só chamada ao R2).
      */
-    private function seedEvents(): void
+    private function storedSize(string $path): ?int
     {
-        $today = now(config('app.event_timezone', 'Europe/Lisbon'))->startOfDay();
-
-        foreach ($this->events() as $event) {
-            $deadlineDays = $event['deadline_days_from_now'] ?? $event['days_from_now'] - 1;
-
-            $instance = EventInstance::updateOrCreate(
-                [
-                    'name' => $event['name'],
-                    'location_id' => $this->lookupId(Location::class, $event['location']),
-                ],
-                [
-                    'category_id' => $this->lookupId(EventCategory::class, $event['category']),
-                    'event_date' => $today->copy()->addDays($event['days_from_now'])->format('Y-m-d'),
-                    'event_start_time' => $event['start'].':00',
-                    'event_end_time' => $event['end'].':00',
-                    'description' => $event['description'],
-                    'is_online' => isset($event['online_url']),
-                    'online_url' => $event['online_url'] ?? null,
-                    'address' => $event['address'] ?? null,
-                    'venue_name' => $event['venue'] ?? null,
-                    'place_id' => $event['place_id'] ?? null,
-                    'latitude' => null,
-                    'longitude' => null,
-                    'max_attendees' => $event['max_attendees'],
-                    'registration_deadline' => $today->copy()->addDays($deadlineDays)->setTime(23, 59)->format('Y-m-d H:i:s'),
-                    'organizer_notes' => $event['notes'] ?? null,
-                    'prayer_cards_enabled' => isset($event['prayer_verse']),
-                    'prayer_verse' => $event['prayer_verse'] ?? null,
-                ]
-            );
-
-            $this->syncRegistrations($instance, $event['registrants'] ?? []);
-            $this->syncPrayerCards($instance, $event['prayer_cards'] ?? null);
+        try {
+            return MediaStorage::disk()->size($path);
+        } catch (FilesystemException) {
+            return null;
         }
     }
 
     /**
-     * Série semanal de demonstração, com as datas geradas pelo mesmo serviço do backoffice
-     * (EventSeriesSchedule) e os mesmos campos que o backoffice grava em cada sessão: prazo de
-     * inscrição N dias antes da sessão às 23:59 (Lisboa), sem cartões de oração e sem anúncio
-     * (o anúncio só sai na criação de eventos únicos no backoffice).
+     * Contas Active (na base de dados, depois de semeadas) que podem inscrever-se em eventos e
+     * escrever cartões, ordenadas pela chave para a escolha dos inscritos ser sempre igual, e os ids
+     * de todas as contas demo.
+     */
+    private function loadActivePool(): void
+    {
+        $keys = array_flip(array_map(fn (array $plan) => $plan['email'], $this->plans));
+
+        $this->demoUserIds = User::whereIn('email', array_keys($keys))->pluck('id')->all();
+
+        $this->activePool = User::whereIn('email', array_keys($keys))
+            ->whereHas('accountStatus', fn ($query) => $query->where('name', 'Active'))
+            ->get(['id', 'email', 'created_at'])
+            ->map(fn (User $user) => ['key' => $keys[$user->email], 'user_id' => $user->id, 'created_at' => $user->created_at])
+            ->sortBy('key')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Eventos únicos, séries, inscrições e cartões de oração. Apaga primeiro os eventos da versão
+     * anterior que já não existem (lista fixa em events.php), mas só se ainda tiverem a descrição
+     * dessa versão: nunca apaga eventos fora dessa lista nem com outra descrição, como os criados
+     * ou editados pelo professor no deploy.
+     */
+    private function seedEvents(array $data): void
+    {
+        foreach ($data['retired'] as [$name, $district]) {
+            $retired = EventInstance::whereNull('series_id')
+                ->where('name', $name)
+                ->where('location_id', $this->lookupId(Location::class, $district))
+                ->get();
+
+            foreach ($retired as $event) {
+                if ($event->description !== (self::PREVIOUS_DESCRIPTIONS[$name] ?? null)) {
+                    $this->command?->warn("O evento \"{$name}\" ({$district}) não foi apagado: a descrição não é a da versão anterior da demonstração.");
+
+                    continue;
+                }
+
+                $this->deleteDemoEvent($event);
+            }
+        }
+
+        foreach ($data['events'] as $event) {
+            $this->seedEvent($event, $data['places']);
+        }
+
+        foreach ($data['series'] as $series) {
+            $this->seedSeries($series, $data['places']);
+        }
+    }
+
+    /**
+     * Apaga um evento de demonstração (inscrições e cartões primeiro), a não ser que tenha
+     * inscrições ou cartões de contas que não são demo: nesse caso fica e o seeder avisa.
+     */
+    private function deleteDemoEvent(EventInstance $event): void
+    {
+        if ($this->hasOtherPeoplesData($event)) {
+            $this->command?->warn("O evento \"{$event->name}\" ({$event->event_date->toDateString()}) não foi apagado: tem inscrições ou cartões de contas que não são de demonstração.");
+
+            return;
+        }
+
+        $event->registrations()->delete();
+        PrayerCard::withTrashed()->where('event_instance_id', $event->id)->forceDelete();
+        $event->delete();
+    }
+
+    /**
+     * Indica se o evento tem inscrições ou cartões de oração (escritos ou recebidos) de contas que
+     * não são de demonstração.
+     */
+    private function hasOtherPeoplesData(EventInstance $event): bool
+    {
+        return $event->registrations()->whereNotIn('user_id', $this->demoUserIds)->exists()
+            || PrayerCard::withTrashed()
+                ->where('event_instance_id', $event->id)
+                ->where(fn ($query) => $query
+                    ->whereNotIn('author_user_id', $this->demoUserIds)
+                    ->orWhere(fn ($received) => $received->whereNotNull('recipient_user_id')->whereNotIn('recipient_user_id', $this->demoUserIds)))
+                ->exists();
+    }
+
+    /**
+     * Evento único com datas relativas ao dia de hoje em Lisboa. Procura pelo nome e distrito (e não
+     * pela data): correr noutro dia atualiza as datas em vez de duplicar o evento. O prazo de
+     * inscrição fica às 23:59 (hora de Lisboa) do dia indicado, por omissão a véspera, como o
+     * backoffice o guarda. As coordenadas ficam sempre a null (o mapa usa só o place_id).
+     * Um evento sem inscrições fica por anunciar (announced_at null).
+     *
+     * @param  array<string, mixed>  $event  Uma entrada de events.php['events'].
+     * @param  array<string, array{address: string, place_id: string}>  $places
+     */
+    private function seedEvent(array $event, array $places): void
+    {
+        $today = now($this->eventTimezone())->startOfDay();
+        [$start, $end] = $event['start'] === 'now' ? $this->todayEventTimes() : [$event['start'], $event['end']];
+        $date = $today->copy()->addDays($event['days']);
+        $deadline = $today->copy()->addDays($event['deadline_days'] ?? $event['days'] - 1)->setTime(23, 59);
+        $place = isset($event['place']) ? $places[$event['place']] : null;
+        $announcedAt = $event['registrations'] > 0 ? $this->announcementDate($date) : null;
+
+        $instance = EventInstance::whereNull('series_id')->firstOrNew([
+            'name' => $event['name'],
+            'location_id' => $this->lookupId(Location::class, $event['district']),
+        ]);
+
+        $instance->fill([
+            'category_id' => $this->lookupId(EventCategory::class, $event['category']),
+            'event_date' => $date->format('Y-m-d'),
+            'event_start_time' => $start.':00',
+            'event_end_time' => $end.':00',
+            'description' => $event['description'],
+            'is_online' => isset($event['online_url']),
+            'online_url' => $event['online_url'] ?? null,
+            'address' => $place['address'] ?? null,
+            'venue_name' => $event['venue'] ?? null,
+            'place_id' => $place['place_id'] ?? null,
+            'latitude' => null,
+            'longitude' => null,
+            'max_attendees' => $event['max_attendees'],
+            'registration_deadline' => $deadline->format('Y-m-d H:i:s'),
+            'organizer_notes' => $event['notes'] ?? null,
+            'prayer_cards_enabled' => isset($event['prayer_verse']),
+            'prayer_verse' => $event['prayer_verse'] ?? null,
+        ]);
+        $instance->forceFill(['announced_at' => $announcedAt])->save();
+
+        $seed = "{$event['name']}|{$event['district']}";
+        $registrants = $this->pickRegistrants($instance, $seed, $event['registrations'], $event['include'] ?? [], $event['exclude'] ?? [], $announcedAt ?? $this->announcementDate($date), $deadline);
+        $this->replaceRegistrations($instance, $registrants);
+
+        $cards = $event['prayer_cards'] ?? null;
+        $authors = $cards === null ? [] : $this->pickCardAuthors($seed, $registrants, $cards);
+        $this->syncPrayerCards($instance, $authors, $cards['distributed'] ?? false, crc32($seed));
+    }
+
+    /**
+     * Data de publicação de um evento: 35 dias antes, nunca depois de ontem (um evento já
+     * inscrito foi publicado antes de hoje). Devolve o instante no fuso da aplicação.
+     */
+    private function announcementDate(Carbon $eventDate): Carbon
+    {
+        $announced = $eventDate->copy()->subDays(35)->setTimezone(config('app.timezone'));
+        $latest = $this->now->copy()->subDay();
+
+        return $announced->lessThan($latest) ? $announced : $latest;
+    }
+
+    /**
+     * Série semanal, com as datas geradas pelo mesmo serviço do backoffice (EventSeriesSchedule) e
+     * os mesmos campos que o backoffice grava em cada sessão: prazo de inscrição N dias antes da
+     * sessão às 23:59 (Lisboa), sem cartões de oração e sem anúncio (o anúncio só sai na criação de
+     * eventos únicos no backoffice).
      *
      * Não pode procurar pelo nome e distrito como os eventos únicos (as sessões partilham os dois):
      * encontra a série pela sessão com esse nome e distrito e atualiza as sessões por ordem de data,
      * para os ids (e os links do frontend) se manterem entre execuções. Volta a criar as sessões que
      * faltem (ex.: apagada à mão "só nesta sessão") e apaga as que sobrem.
+     *
+     * @param  array<string, mixed>  $data  Uma entrada de events.php['series'].
+     * @param  array<string, array{address: string, place_id: string}>  $places
      */
-    private function seedSeries(): void
+    private function seedSeries(array $data, array $places): void
     {
-        $data = $this->series();
-        $timezone = config('app.event_timezone', 'Europe/Lisbon');
-        $locationId = $this->lookupId(Location::class, $data['location']);
+        $timezone = $this->eventTimezone();
+        $locationId = $this->lookupId(Location::class, $data['district']);
+        $place = isset($data['place']) ? $places[$data['place']] : null;
 
-        $firstDate = now($timezone)->startOfDay()->addDays($data['days_from_now']);
+        $firstDate = now($timezone)->startOfDay()->addDays($data['days']);
         $endsOn = $firstDate->copy()->addWeeks($data['sessions'] - 1);
         $dates = app(EventSeriesSchedule::class)->generate($firstDate->toDateString(), $endsOn->toDateString(), 'weekly');
 
@@ -400,13 +1125,13 @@ class DemoSeeder extends Seeder
         $sessions = $series->eventInstances()->orderBy('event_date')->get();
 
         foreach ($sessions->slice(count($dates)) as $extra) {
-            $extra->registrations()->delete();
-            $this->syncPrayerCards($extra, null);
-            $extra->delete();
+            $this->deleteDemoEvent($extra);
         }
 
         foreach ($dates as $index => $date) {
             $session = $sessions->get($index) ?? new EventInstance;
+            $sessionDate = Carbon::createFromFormat('!Y-m-d', $date, $timezone);
+            $deadline = $sessionDate->copy()->subDays($data['deadline_days_before'])->setTime(23, 59);
 
             $session->fill([
                 'series_id' => $series->id,
@@ -417,104 +1142,160 @@ class DemoSeeder extends Seeder
                 'event_start_time' => $data['start'].':00',
                 'event_end_time' => $data['end'].':00',
                 'description' => $data['description'],
-                'is_online' => false,
-                'online_url' => null,
-                'address' => $data['address'],
+                'is_online' => isset($data['online_url']),
+                'online_url' => $data['online_url'] ?? null,
+                'address' => $place['address'] ?? null,
                 'venue_name' => null,
-                'place_id' => $data['place_id'],
+                'place_id' => $place['place_id'] ?? null,
                 'latitude' => null,
                 'longitude' => null,
                 'max_attendees' => $data['max_attendees'],
-                'registration_deadline' => Carbon::createFromFormat('!Y-m-d', $date, $timezone)
-                    ->subDays($data['deadline_days_before'])
-                    ->setTime(23, 59)
-                    ->format('Y-m-d H:i:s'),
-                'organizer_notes' => $data['notes'],
+                'registration_deadline' => $deadline->format('Y-m-d H:i:s'),
+                'organizer_notes' => $data['notes'] ?? null,
                 'prayer_cards_enabled' => false,
                 'prayer_verse' => null,
-            ])->save();
+            ]);
+            $session->forceFill(['announced_at' => null])->save();
 
-            $this->syncRegistrations($session, $this->seriesRegistrants($data['registrants'], $index + 1));
-            $this->syncPrayerCards($session, null);
+            $seed = "{$data['name']}|{$data['district']}|{$index}";
+            $include = isset($data['registrants'])
+                ? array_keys(array_filter($data['registrants'], fn (array $numbers) => in_array($index + 1, $numbers, true)))
+                : [];
+            $count = isset($data['registrants']) ? count($include) : $data['registrations'][$index];
+
+            $this->replaceRegistrations($session, $this->pickRegistrants($session, $seed, $count, $include, [], $this->announcementDate($sessionDate), $deadline));
+            $this->syncPrayerCards($session, [], false, 0);
         }
     }
 
     /**
-     * Emails inscritos numa sessão da série.
+     * Escolhe os inscritos de forma determinística (semente a partir do evento) entre as contas
+     * Active que já existiam antes do fim das inscrições, com as contas forçadas (include) e sem as
+     * proibidas (exclude). A data de cada inscrição fica entre a publicação (ou o registo da conta,
+     * se for depois) e o fim das inscrições ou agora. As inscrições de contas que não são demo (ex.:
+     * as contas preparadas para a defesa) ocupam lugares: se não couberem todos, ficam menos inscritos
+     * demo e o seeder avisa, sem nunca passar da lotação.
      *
-     * @param  array<string, list<int>>  $registrants  Email => números das sessões (a partir de 1).
-     * @return list<string>
+     * @param  list<string>  $include  Chaves de contas que têm de estar inscritas.
+     * @param  list<string>  $exclude  Chaves de contas que não podem estar inscritas.
+     * @param  Carbon  $deadline  Fim das inscrições (hora de Lisboa).
+     * @return list<array{key: string, user_id: string, created_at: Carbon}>
+     *
+     * @throws RuntimeException Se uma conta forçada não puder inscrever-se ou não houver contas suficientes.
      */
-    private function seriesRegistrants(array $registrants, int $session): array
+    private function pickRegistrants(EventInstance $event, string $seed, int $count, array $include, array $exclude, Carbon $openedAt, Carbon $deadline): array
     {
-        return array_keys(array_filter($registrants, fn (array $sessions) => in_array($session, $sessions, true)));
+        $closesAt = $deadline->copy()->setTimezone(config('app.timezone'));
+
+        if ($closesAt->greaterThan($this->now)) {
+            $closesAt = $this->now->copy();
+        }
+
+        $eligible = collect($this->activePool)
+            ->filter(fn (array $account) => $account['created_at']->lessThan($closesAt->copy()->subHour()))
+            ->keyBy('key');
+
+        $randomizer = new Randomizer(new Mt19937(crc32($seed)));
+        $others = $eligible->keys()->diff([...$include, ...$exclude])->values()->all();
+        $chosen = [...$include, ...array_slice($randomizer->shuffleArray($others), 0, max(0, $count - count($include)))];
+
+        if (array_diff($include, $eligible->keys()->all()) !== [] || count($chosen) !== $count || $count > $event->max_attendees) {
+            throw new RuntimeException("Inscrições de demonstração inválidas no evento \"{$event->name}\" ({$event->event_date->toDateString()}).");
+        }
+
+        $freeSeats = $event->max_attendees - $event->registrations()->whereNotIn('user_id', $this->demoUserIds)->count();
+
+        if (count($chosen) > $freeSeats) {
+            $chosen = array_slice($chosen, 0, max(0, $freeSeats));
+            $this->command?->warn("O evento \"{$event->name}\" ({$event->event_date->toDateString()}) tem inscrições de contas que não são demo: ficou com ".count($chosen)." inscritos demo em vez de {$count}.");
+        }
+
+        return array_map(function (string $key) use ($eligible, $openedAt, $closesAt, $randomizer) {
+            $account = $eligible[$key];
+            $from = $account['created_at']->greaterThan($openedAt) ? $account['created_at']->copy()->addMinutes(30) : $openedAt->copy();
+            $seconds = max(0, (int) $from->diffInSeconds($closesAt));
+
+            return [...$account, 'created_at' => $from->addSeconds($randomizer->getInt(0, $seconds))];
+        }, $chosen);
     }
 
     /**
-     * Repõe as inscrições do evento de demonstração: apaga as que existirem e volta a criar as
-     * da lista, para a lotação ficar sempre igual depois de uma demonstração (inscrições ou
-     * cancelamentos feitos à mão). Só aceita contas Active, como a inscrição pela API.
+     * Repõe as inscrições demo do evento: apaga as das contas demo (incluindo inscrições e
+     * cancelamentos feitos à mão numa demonstração) e insere as escolhidas em lote, com a data de
+     * cada uma. As inscrições de outras contas nunca são apagadas.
      *
-     * @param  list<string>  $emails
-     *
-     * @throws RuntimeException Se algum email não for de uma conta Active ou exceder a lotação.
+     * @param  list<array{key: string, user_id: string, created_at: Carbon}>  $registrants
      */
-    private function syncRegistrations(EventInstance $event, array $emails): void
+    private function replaceRegistrations(EventInstance $event, array $registrants): void
     {
-        $userIds = User::whereIn('email', $emails)
-            ->whereHas('accountStatus', fn ($query) => $query->where('name', 'Active'))
-            ->pluck('id');
+        $event->registrations()->whereIn('user_id', $this->demoUserIds)->delete();
 
-        if ($userIds->count() !== count($emails) || count($emails) > $event->max_attendees) {
-            throw new RuntimeException("Inscrições de demonstração inválidas no evento \"{$event->name}\".");
-        }
+        $rows = array_map(fn (array $registrant) => [
+            'id' => (new EventRegistration)->newUniqueId(),
+            'event_instance_id' => $event->id,
+            'user_id' => $registrant['user_id'],
+            'created_at' => $registrant['created_at']->format('Y-m-d H:i:s'),
+        ], $registrants);
 
-        $event->registrations()->delete();
-
-        foreach ($userIds as $userId) {
-            $event->registrations()->create(['user_id' => $userId]);
+        foreach (array_chunk($rows, self::BATCH) as $chunk) {
+            EventRegistration::insert($chunk);
         }
     }
 
     /**
-     * Repõe os cartões de oração do evento de demonstração: apaga os que existirem (incluindo os
-     * enviados à mão numa demonstração) e volta a criar os da lista, cada um com pedidos de exemplo.
-     * Num evento distribuído, a cadeia segue a ordem da lista: o autor na posição i recebe o cartão
-     * do autor na posição i+1 e o último recebe o do primeiro; a distribuição fica às 00:05 do dia
-     * seguinte ao evento, como a do comando de hora a hora. Não envia emails.
+     * Autores dos cartões de oração, escolhidos entre os inscritos: as contas forçadas primeiro e as
+     * restantes de forma determinística, sem as proibidas. A ordem é a da cadeia. Os dados garantem
+     * (validateData) que os autores forçados estão nas inscrições forçadas; só ficam menos autores se
+     * o evento tiver menos inscritos demo por causa de inscrições de outras contas.
      *
-     * @param  array{authors: list<string>, distributed?: bool}|null  $cards
-     *
-     * @throws RuntimeException Se algum autor não estiver inscrito no evento.
+     * @param  list<array{key: string, user_id: string, created_at: Carbon}>  $registrants
+     * @param  array{authors: int, include?: list<string>, exclude?: list<string>, distributed?: bool}  $cards
+     * @return list<string> Ids das contas.
      */
-    private function syncPrayerCards(EventInstance $event, ?array $cards): void
+    private function pickCardAuthors(string $seed, array $registrants, array $cards): array
     {
-        PrayerCard::withTrashed()->where('event_instance_id', $event->id)->forceDelete();
-        $event->forceFill(['prayer_cards_distributed_at' => null])->save();
+        $userIds = array_column($registrants, 'user_id', 'key');
+        $include = array_values(array_intersect($cards['include'] ?? [], array_keys($userIds)));
+        $others = array_values(array_diff(array_keys($userIds), $include, $cards['exclude'] ?? []));
+        $randomizer = new Randomizer(new Mt19937(crc32("{$seed}|cartões")));
+        $authors = [...$include, ...array_slice($randomizer->shuffleArray($others), 0, max(0, $cards['authors'] - count($include)))];
 
-        if ($cards === null) {
+        return array_map(fn (string $key) => $userIds[$key], $authors);
+    }
+
+    /**
+     * Repõe os cartões de oração demo do evento: apaga os escritos por contas demo (incluindo os
+     * enviados à mão numa demonstração) e cria um por autor, com pedidos de prayer_requests.php a partir de uma posição
+     * diferente em cada evento. Num evento distribuído, a cadeia segue a ordem dos autores: o autor
+     * na posição i recebe o cartão do autor na posição i+1 e o último recebe o do primeiro; a
+     * distribuição fica às 00:05 do dia seguinte ao evento, como a do comando de hora a hora.
+     * Não envia emails. Grava pelo modelo (e não em lote) porque os pedidos são encriptados.
+     * Os cartões escritos por contas que não são demo nunca são apagados; enquanto existirem, a data
+     * de distribuição do evento também não é limpa.
+     *
+     * @param  list<string>  $authorIds  Ids das contas autoras (todas inscritas no evento).
+     */
+    private function syncPrayerCards(EventInstance $event, array $authorIds, bool $distributed, int $requestStart): void
+    {
+        PrayerCard::withTrashed()->where('event_instance_id', $event->id)->whereIn('author_user_id', $this->demoUserIds)->forceDelete();
+
+        if (PrayerCard::withTrashed()->where('event_instance_id', $event->id)->doesntExist()) {
+            $event->forceFill(['prayer_cards_distributed_at' => null])->save();
+        }
+
+        if ($authorIds === []) {
             return;
         }
 
-        $authorIds = User::whereIn('email', $cards['authors'])
-            ->whereHas('eventRegistrations', fn ($query) => $query->where('event_instance_id', $event->id))
-            ->pluck('id', 'email');
-
-        if ($authorIds->count() !== count($cards['authors'])) {
-            throw new RuntimeException("Cartões de oração de demonstração inválidos no evento \"{$event->name}\".");
-        }
-
-        $distributed = $cards['distributed'] ?? false;
-        $requests = $this->prayerRequests();
         $created = [];
 
-        foreach ($cards['authors'] as $position => $email) {
-            [$personal, $work, $salvation] = $requests[$position % count($requests)];
-            $submittedAt = $distributed ? $event->startsAt()->addMinutes(15 * ($position + 1))->utc() : now();
+        foreach ($authorIds as $position => $authorId) {
+            [$personal, $work, $salvation] = $this->prayerRequests[($requestStart + $position) % count($this->prayerRequests)];
+            $submittedAt = $distributed ? $event->startsAt()->addMinutes(15 * ($position + 1))->utc() : $this->now->copy();
 
             $card = new PrayerCard([
                 'event_instance_id' => $event->id,
-                'author_user_id' => $authorIds[$email],
+                'author_user_id' => $authorId,
                 'personal_request' => $personal,
                 'work_request' => $work,
                 'salvation_request' => $salvation,
@@ -540,104 +1321,145 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Pedidos de exemplo dos cartões de oração [Pessoal, Emprego, Salvação]; null = parte não preenchida.
-     *
-     * @return list<array{?string, ?string, ?string}>
-     */
-    private function prayerRequests(): array
-    {
-        return [
-            ['Pela saúde da minha mãe, que vai ser operada no próximo mês.', 'Sabedoria para decidir a contratação de dois novos colaboradores.', null],
-            ['Pela recuperação do meu pai, internado desde a semana passada.', 'Que a obra em Guimarães termine dentro do prazo e sem acidentes.', 'Pelo meu sócio, para que encontre a paz.'],
-            [null, 'Discernimento para a abertura do novo escritório em Aveiro.', 'Pelo meu irmão, que se afastou da fé.'],
-            ['Pela minha família, para termos mais tempo juntos.', null, 'Pelos meus vizinhos, para que conheçam Jesus.'],
-        ];
-    }
-
-    /**
      * Repõe as avaliações entre perfis de demonstração: apaga as que existirem entre eles (incluindo
-     * as feitas ou moderadas à mão numa demonstração) e volta a criar as de reviews().
-     * Não toca em avaliações em que o autor ou o avaliado não seja um perfil de demonstração.
+     * as feitas ou moderadas à mão numa demonstração; as denúncias saem em cascata) e insere em lote
+     * as de reviews.php, com as denúncias como a API as grava. Não toca em avaliações em que o autor
+     * ou o avaliado não seja um perfil de demonstração.
      *
-     * @param  array<string, string>  $profileIds  Id do perfil por email da conta.
+     * @param  array{visible: list<array>, moderated: list<array<string, mixed>>}  $data
      */
-    private function seedReviews(array $profileIds): void
+    private function seedReviews(array $data): void
     {
+        $profileIds = array_values($this->profileIds);
+
         Review::whereIn('reviewer_profile_id', $profileIds)
             ->whereIn('reviewed_profile_id', $profileIds)
             ->delete();
 
-        foreach ($this->reviews() as [$reviewer, $reviewed, $rating, $status, $comment]) {
-            $review = Review::create([
-                'reviewer_profile_id' => $profileIds[$reviewer],
-                'reviewed_profile_id' => $profileIds[$reviewed],
-                'rating' => $rating,
-                'comment' => $comment,
-                'status_id' => $this->lookupId(ReviewStatus::class, $status),
-            ]);
+        $reviews = [];
+        $reports = [];
 
-            $this->seedReviewModeration($review, $status, $profileIds[$reviewed]);
+        foreach ($data['visible'] as [$by, $to, $rating, $daysAgo, $comment]) {
+            $reviews[] = $this->reviewRow($by, $to, $rating, $daysAgo, 'Visible', $comment, null);
+        }
+
+        foreach ($data['moderated'] as $moderated) {
+            $review = $this->reviewRow($moderated['by'], $moderated['to'], $moderated['rating'], $moderated['days_ago'], $moderated['status'], $moderated['comment'], $moderated['hidden_reason'] ?? null);
+            $reviews[] = $review;
+
+            foreach ($moderated['reports'] as $report) {
+                $reports[] = $this->reviewReportRow($review, $moderated['to'], $report);
+            }
+        }
+
+        foreach (array_chunk($reviews, self::BATCH) as $chunk) {
+            Review::insert($chunk);
+        }
+
+        foreach (array_chunk($reports, self::BATCH) as $chunk) {
+            ReviewReport::insert($chunk);
         }
     }
 
     /**
-     * Dados de moderação das avaliações fora da média, como a API os grava: a sinalizada tem a sinalização
-     * automática do filtro de linguagem e outra da empresa avaliada; a oculta tem a justificação do admin e
-     * a sinalização automática já resolvida. As linhas antigas saem com as avaliações (cascadeOnDelete).
+     * Linha de uma avaliação. A data é "há N dias", mas nunca antes do dia seguinte ao registo da
+     * conta mais recente do par nem no futuro.
+     *
+     * @return array<string, mixed>
      */
-    private function seedReviewModeration(Review $review, string $status, string $reviewedProfileId): void
+    private function reviewRow(string $by, string $to, int $rating, int $daysAgo, string $status, string $comment, ?string $hiddenReason): array
     {
-        if ($status === 'Flagged') {
-            $review->reports()->create([
-                'reason' => 'language_filter',
-                'source' => ReviewReport::SOURCE_AUTOMATIC,
-            ]);
-            $review->reports()->create([
-                'reporter_profile_id' => $reviewedProfileId,
-                'reason' => ReviewReport::REASON_OFFENSIVE_OR_DISRESPECTFUL_CONTENT,
-                'comment' => 'Nunca trabalhámos com esta empresa e a avaliação é ofensiva para a nossa equipa.',
-                'source' => ReviewReport::SOURCE_MEMBER,
-            ]);
+        $date = $this->now->copy()->subDays($daysAgo)->subHours(crc32("{$by}|{$to}") % 8);
+        [$byCreatedAt, $toCreatedAt] = [$this->plans[$by]['created_at'], $this->plans[$to]['created_at']];
+        $earliest = ($byCreatedAt->greaterThan($toCreatedAt) ? $byCreatedAt : $toCreatedAt)->copy()->addDay();
+
+        if ($date->lessThan($earliest)) {
+            $date = $earliest;
         }
 
-        if ($status === 'Hidden') {
-            $review->forceFill(['hidden_reason' => 'Linguagem desrespeitosa e sem relação comercial demonstrada.'])->save();
-            $review->reports()->create([
-                'reason' => 'language_filter',
-                'source' => ReviewReport::SOURCE_AUTOMATIC,
-                'resolved_at' => now(),
-            ]);
+        if ($date->greaterThan($this->now)) {
+            $date = $this->now->copy();
         }
+
+        return [
+            'id' => (new Review)->newUniqueId(),
+            'reviewer_profile_id' => $this->profileIds[$by],
+            'reviewed_profile_id' => $this->profileIds[$to],
+            'rating' => $rating,
+            'comment' => $comment,
+            'status_id' => $this->lookupId(ReviewStatus::class, $status),
+            'hidden_reason' => $hiddenReason,
+            'created_at' => $date->format('Y-m-d H:i:s'),
+            'updated_at' => $date->format('Y-m-d H:i:s'),
+        ];
+    }
+
+    /**
+     * Linha de uma denúncia: a automática vem do filtro de linguagem (sem autor); a de um membro tem
+     * o motivo, o comentário e o autor (por omissão a empresa avaliada). Uma denúncia resolvida tem
+     * a data em que o admin a tratou (um dia depois, nunca no futuro).
+     *
+     * @param  array<string, mixed>  $review  Linha de reviewRow().
+     * @param  array<string, mixed>  $report  Uma entrada de reports em reviews.php.
+     * @return array<string, mixed>
+     */
+    private function reviewReportRow(array $review, string $reviewedKey, array $report): array
+    {
+        $reviewedAt = Carbon::parse($review['created_at']);
+        $resolvedAt = $reviewedAt->copy()->addDay();
+        $automatic = $report['source'] === ReviewReport::SOURCE_AUTOMATIC;
+
+        return [
+            'id' => (new ReviewReport)->newUniqueId(),
+            'review_id' => $review['id'],
+            'reporter_profile_id' => $automatic ? null : $this->profileIds[$report['by'] ?? $reviewedKey],
+            'reason' => $automatic ? 'language_filter' : $report['reason'],
+            'comment' => $automatic ? null : ($report['comment'] ?? null),
+            'source' => $report['source'],
+            'resolved_at' => ($report['resolved'] ?? false) ? ($resolvedAt->greaterThan($this->now) ? $this->now : $resolvedAt)->format('Y-m-d H:i:s') : null,
+            'created_at' => $review['created_at'],
+            'updated_at' => $review['created_at'],
+        ];
     }
 
     /**
      * Dados de pagamento de demonstração, sem chamar o Stripe: por conta, apaga os da execução
-     * anterior, preenche a faturação e cria a subscrição e as faturas do cenário de payments().
+     * anterior, preenche a faturação e cria a subscrição e as faturas do plano da conta.
      * As contas Pending e Approved ficam sem faturação nem subscrição (ainda não ativaram).
      * Uma conta demo com uma subscrição real em curso (ex.: reativada pelo Checkout num ensaio)
      * fica como está: duas subscrições em curso fariam o webhook seguinte tratar a real como duplicada.
      */
     private function seedPayments(): void
     {
-        $payments = $this->payments();
+        $plans = array_column($this->plans, null, 'email');
 
-        foreach (User::with('memberProfile')->whereIn('email', array_column($this->accountRows, 0))->get() as $user) {
-            $this->resetDemoPayments($user);
+        foreach (User::with('memberProfile')->whereIn('email', array_keys($plans))->get() as $user) {
+            DB::transaction(fn () => $this->seedAccountPayments($user, $plans[$user->email]));
+        }
+    }
 
-            if ($this->hasRealRunningSubscription($user)) {
-                $this->command?->warn("A conta {$user->email} tem uma subscrição real do Stripe em curso: ficou sem dados de pagamento de demonstração.");
-                $this->command?->warn('Para os ter, cancele-a no dashboard de teste do Stripe e volte a correr o seeder.');
+    /**
+     * Pagamentos de uma conta numa transação: se a emissão de uma fatura falhar, a conta não fica
+     * sem subscrição nem com metade das faturas (os PDFs já apagados não voltam; correr outra vez
+     * cria-os de novo).
+     *
+     * @param  array<string, mixed>  $plan  Resultado de accountPlan().
+     */
+    private function seedAccountPayments(User $user, array $plan): void
+    {
+        $this->resetDemoPayments($user);
 
-                continue;
-            }
+        if ($this->hasRealRunningSubscription($user)) {
+            $this->command?->warn("A conta {$user->email} tem uma subscrição real do Stripe em curso: ficou sem dados de pagamento de demonstração.");
+            $this->command?->warn('Para os ter, cancele-a no dashboard de teste do Stripe e volte a correr o seeder.');
 
-            $payment = $payments[$user->email] ?? null;
+            return;
+        }
 
-            $this->seedBilling($user, $payment['nif'] ?? null);
+        $this->seedBilling($user, $plan['nif']);
 
-            if ($payment !== null) {
-                $this->seedSubscription($user, $this->subscriptionDates($payment));
-            }
+        if ($plan['subscription'] !== null) {
+            $this->seedSubscription($user, $plan['subscription']);
         }
     }
 
@@ -697,103 +1519,6 @@ class DemoSeeder extends Seeder
             'pm_type' => null,
             'pm_last_four' => null,
         ])->save();
-    }
-
-    /**
-     * Datas e estado da subscrição de um cenário, relativos a agora e à configuração (trial, carência
-     * e periodicidade da quota). O trial começa quando a subscrição é criada; o primeiro período
-     * pago começa quando o trial acaba, e os seguintes seguem-se sem intervalos.
-     *
-     * @param  array{type: string, days: int, invoices?: int}  $payment  Uma entrada de payments().
-     * @return array{status: string, created_at: Carbon, trial_ends_at: Carbon, ends_at: ?Carbon, grace_ends_at: ?Carbon, periods: list<array{Carbon, Carbon}>}
-     */
-    private function subscriptionDates(array $payment): array
-    {
-        $trialDays = (int) config('subscription.trial_days');
-        $graceDays = (int) config('subscription.grace_days');
-        $keyDate = now()->addDays($payment['days']);
-
-        $dates = match ($payment['type']) {
-            'paid' => $this->paidDates($keyDate, $payment['invoices']),
-            'grace' => $this->graceDates($keyDate, $graceDays),
-            'trial', 'cancel_scheduled' => [
-                'status' => 'trialing',
-                'trial_ends_at' => $keyDate,
-                'ends_at' => $payment['type'] === 'cancel_scheduled' ? $keyDate->copy() : null,
-            ],
-            'unpaid' => [
-                'status' => 'canceled',
-                'trial_ends_at' => $keyDate,
-                'ends_at' => $keyDate->copy()->addDays($graceDays),
-            ],
-            'blocked' => [
-                'status' => 'canceled',
-                'created_at' => $keyDate,
-                'trial_ends_at' => $keyDate->copy()->addDays($trialDays),
-                'ends_at' => $keyDate->copy()->addDays(10),
-            ],
-        };
-
-        return [
-            'created_at' => $dates['trial_ends_at']->copy()->subDays($trialDays),
-            'ends_at' => null,
-            'grace_ends_at' => null,
-            'periods' => [],
-            ...$dates,
-        ];
-    }
-
-    /**
-     * Subscrição em carência: um período pago que terminou em $failedRenewalAt, a renovação falhou
-     * (past_due) e a carência termina grace_days depois.
-     *
-     * @return array{status: string, trial_ends_at: Carbon, grace_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
-     */
-    private function graceDates(Carbon $failedRenewalAt, int $graceDays): array
-    {
-        $dates = $this->paidDates($this->previousPeriodStart($failedRenewalAt), 1);
-        $periodEnd = $dates['periods'][0][1];
-
-        return [...$dates, 'status' => 'past_due', 'grace_ends_at' => $periodEnd->copy()->addDays($graceDays)];
-    }
-
-    /**
-     * Subscrição ativa com N períodos pagos seguidos, o último a começar em $currentPeriodStart.
-     * Os períodos são construídos para a frente a partir do primeiro (fim = início + 1 período),
-     * como o Stripe os renova.
-     *
-     * @return array{status: string, trial_ends_at: Carbon, periods: list<array{Carbon, Carbon}>}
-     */
-    private function paidDates(Carbon $currentPeriodStart, int $paidPeriods): array
-    {
-        $interval = SubscriptionInterval::configured();
-        $start = $currentPeriodStart->copy();
-
-        for ($period = 1; $period < $paidPeriods; $period++) {
-            $start = $this->previousPeriodStart($start);
-        }
-
-        $trialEndsAt = $start->copy();
-        $periods = [];
-
-        for ($period = 0; $period < $paidPeriods; $period++) {
-            $end = Carbon::instance($interval->addTo($start));
-            $periods[] = [$start, $end];
-            $start = $end->copy();
-        }
-
-        return ['status' => 'active', 'trial_ends_at' => $trialEndsAt, 'periods' => $periods];
-    }
-
-    /**
-     * Recua um período da quota configurada, sem transbordar (31/03 − 1 mês = 28/02).
-     */
-    private function previousPeriodStart(Carbon $date): Carbon
-    {
-        return match (SubscriptionInterval::configured()) {
-            SubscriptionInterval::Month => $date->copy()->subMonthNoOverflow(),
-            SubscriptionInterval::Year => $date->copy()->subYearNoOverflow(),
-        };
     }
 
     /**
@@ -889,21 +1614,29 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Mostra as contas criadas com o estado da subscrição (como no backoffice), a password comum,
-     * o lembrete do storage:link (só com o disco public) e o que não funciona com as subscrições de demonstração.
+     * Resumo no fim: contas por estado da subscrição (como no backoffice), volumes criados, as
+     * contas principais, a password, o lembrete do storage:link (só com o disco public) e o que não
+     * funciona com as subscrições de demonstração.
      */
     private function printSummary(): void
     {
-        $states = User::with('accountStatus')
-            ->whereIn('email', array_column($this->accountRows, 0))
-            ->get()
-            ->mapWithKeys(fn (User $user) => [$user->email => $user->subscriptionState()->label()]);
+        $users = User::with('accountStatus')->whereIn('email', array_column($this->plans, 'email'))->get();
+        $states = $users->countBy(fn (User $user) => $user->subscriptionState()->label())->sortKeys();
+        $profileIds = array_values($this->profileIds);
 
-        $rows = array_map(fn (array $row) => [...$row, $states[$row[0]] ?? ''], $this->accountRows);
+        $this->command?->table(['Estado', 'Contas'], $states->map(fn (int $count, string $state) => [$state, $count])->values()->all());
+        $this->command?->table(['Dados', 'Quantidade'], [
+            ['Perfis no diretório', MemberProfile::listedInDirectory()->whereIn('id', $profileIds)->count()],
+            ['Eventos (com sessões das séries)', EventInstance::count()],
+            ['Inscrições', EventRegistration::count()],
+            ['Avaliações entre perfis demo', Review::whereIn('reviewed_profile_id', $profileIds)->count()],
+            ['Cartões de oração', PrayerCard::count()],
+            ['Faturas demo', Invoice::where('stripe_invoice_id', 'like', 'in_demo_%')->count()],
+        ]);
 
-        $this->command?->table(['Email', 'Papel', 'Estado', 'Empresa', 'Subscrição'], $rows);
+        $this->command?->info('Contas principais: demo.admin@aspec.test (administrador) e demo.membro@aspec.test (membro com mais dados). As restantes: demo.{chave}@aspec.test (ver database/seeders/demo/data).');
         $this->command?->info(app()->environment('local', 'testing')
-            ? 'Password de todas as contas: '.$this->password
+            ? 'Password de todas as contas: '.$this->demoPassword()
             : 'Password de todas as contas: a definida em DEMO_PASSWORD');
 
         if (config('filesystems.media_disk') === 'public') {
@@ -924,781 +1657,11 @@ class DemoSeeder extends Seeder
     }
 
     /**
-     * Iniciais das duas primeiras palavras com mais de duas letras (ex.: "Carvalho & Filhos" → "CF").
+     * Fuso horário dos eventos (o da agenda pública e do backoffice).
      */
-    private function initials(string $businessName): string
+    private function eventTimezone(): string
     {
-        return Str::of(Str::ascii($businessName))
-            ->explode(' ')
-            ->filter(fn (string $word) => strlen($word) > 2)
-            ->take(2)
-            ->map(fn (string $word) => strtoupper($word[0]))
-            ->implode('');
-    }
-
-    /**
-     * Escreve texto centrado em ($centerX, $centerY), ampliado $scale vezes. A fonte embutida do GD
-     * é muito pequena (9×15 px), por isso o texto é desenhado numa imagem pequena e depois ampliado.
-     *
-     * @param  array{int, int, int}  $rgb
-     */
-    private function drawText(GdImage $canvas, string $text, int $scale, int $centerX, int $centerY, array $rgb): void
-    {
-        $font = 5;
-        $width = imagefontwidth($font) * strlen($text);
-        $height = imagefontheight($font);
-
-        $small = imagecreatetruecolor($width, $height);
-        imagesavealpha($small, true);
-        imagefill($small, 0, 0, imagecolorallocatealpha($small, 0, 0, 0, 127));
-        imagestring($small, $font, 0, 0, $text, imagecolorallocate($small, ...$rgb));
-
-        imagecopyresized(
-            $canvas, $small,
-            $centerX - intdiv($width * $scale, 2), $centerY - intdiv($height * $scale, 2),
-            0, 0,
-            $width * $scale, $height * $scale,
-            $width, $height
-        );
-    }
-
-    /**
-     * Imagem com um gradiente vertical entre duas cores.
-     *
-     * @param  array{int, int, int}  $top
-     * @param  array{int, int, int}  $bottom
-     */
-    private function gradient(int $width, int $height, array $top, array $bottom): GdImage
-    {
-        $image = imagecreatetruecolor($width, $height);
-
-        for ($y = 0; $y < $height; $y++) {
-            $ratio = $y / ($height - 1);
-            $rgb = array_map(fn (int $from, int $to) => (int) round($from + ($to - $from) * $ratio), $top, $bottom);
-
-            imageline($image, 0, $y, $width - 1, $y, imagecolorallocate($image, ...$rgb));
-        }
-
-        return $image;
-    }
-
-    /**
-     * Conteúdo PNG de uma imagem GD.
-     */
-    private function toPng(GdImage $image): string
-    {
-        ob_start();
-        imagepng($image);
-
-        return ob_get_clean();
-    }
-
-    /**
-     * Os 13 perfis Active do diretório (o admin incluído), com setores e distritos variados.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function activeMembers(): array
-    {
-        return [
-            [
-                'email' => 'demo.admin@aspec.test',
-                'role' => 'Admin',
-                'phone' => '+351912000001',
-                'hours' => 'weekdays',
-                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/mendes-consultoria-gestao'],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Ricardo Mendes',
-                    'business_name' => 'Mendes Consultoria de Gestão',
-                    'sector' => 'Consultoria de Gestão e Negócios',
-                    'location' => 'Lisboa',
-                    'description' => 'Apoiamos pequenas e médias empresas a organizar processos, definir objetivos e crescer de forma sustentável. Fazemos diagnósticos de gestão, planos de negócio e acompanhamento mensal.',
-                    'website_url' => 'https://www.mendesconsultoria.pt',
-                    'commercial_email' => 'geral@mendesconsultoria.pt',
-                    'commercial_phone' => '+351213000101',
-                    'address' => 'Avenida da República 50, 3.º Esq.',
-                    'postal_code' => '1050-196',
-                    'city' => 'Lisboa',
-                    'congregation' => 'Comunidade Cristã do Areeiro',
-                    'role_in_congregation' => 'Presbítero',
-                ],
-            ],
-            [
-                'email' => 'demo.membro@aspec.test',
-                'phone' => '+351912000002',
-                'hours' => 'weekdays_saturday',
-                'social' => [
-                    'LinkedIn' => 'https://www.linkedin.com/company/ferreira-arquitetura-interiores',
-                    'Instagram' => 'https://www.instagram.com/ferreira.arquitetura',
-                    'Facebook' => 'https://www.facebook.com/ferreira.arquitetura',
-                ],
-                'portfolio' => 'arquitetura',
-                'profile' => [
-                    'name' => 'Ana Ferreira',
-                    'business_name' => 'Ferreira Arquitetura e Interiores',
-                    'sector' => 'Arquitetura e Design',
-                    'location' => 'Porto',
-                    'description' => 'Projetos de arquitetura residencial e comercial, da ideia ao licenciamento. Remodelações de interiores com acompanhamento de obra e escolha de materiais.',
-                    'website_url' => 'https://www.ferreiraarquitetura.pt',
-                    'commercial_email' => 'projetos@ferreiraarquitetura.pt',
-                    'commercial_phone' => '+351220000202',
-                    'address' => 'Rua de Cedofeita 300',
-                    'postal_code' => '4050-174',
-                    'city' => 'Porto',
-                    'congregation' => 'Igreja Evangélica da Boavista',
-                    'role_in_congregation' => 'Líder do ministério de jovens',
-                ],
-            ],
-            [
-                'email' => 'demo.membro01@aspec.test',
-                'phone' => '+351913000003',
-                'hours' => 'weekdays_saturday',
-                'social' => [
-                    'Facebook' => 'https://www.facebook.com/carvalhoefilhosconstrucoes',
-                    'YouTube' => 'https://www.youtube.com/@carvalhoefilhos',
-                ],
-                'portfolio' => 'construcao',
-                'profile' => [
-                    'name' => 'João Carvalho',
-                    'business_name' => 'Carvalho & Filhos Construções',
-                    'sector' => 'Construção Civil e Obras Públicas',
-                    'location' => 'Braga',
-                    'description' => 'Empresa familiar de construção civil com mais de 20 anos de experiência. Construção de moradias, reabilitação de edifícios e pequenas obras públicas.',
-                    'website_url' => 'https://www.carvalhoefilhos.pt',
-                    'commercial_email' => 'orcamentos@carvalhoefilhos.pt',
-                    'commercial_phone' => '+351253000303',
-                    'address' => 'Rua Nova de Santa Cruz 85',
-                    'postal_code' => '4710-409',
-                    'city' => 'Braga',
-                    'congregation' => 'Igreja Batista de Braga Norte',
-                    'role_in_congregation' => 'Diácono',
-                ],
-            ],
-            [
-                'email' => 'demo.membro02@aspec.test',
-                'phone' => '+351916000004',
-                'hours' => 'weekdays',
-                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/contas-certas-contabilidade'],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Marta Sousa',
-                    'business_name' => 'Contas Certas Contabilidade',
-                    'sector' => 'Contabilidade e Finanças',
-                    'location' => 'Coimbra',
-                    'description' => 'Contabilidade organizada para empresas e empresários em nome individual. Processamento salarial, declarações fiscais e apoio na candidatura a incentivos.',
-                    'website_url' => 'https://www.contascertas-coimbra.pt',
-                    'commercial_email' => 'geral@contascertas-coimbra.pt',
-                    'commercial_phone' => '+351239000404',
-                    'address' => 'Avenida Fernão de Magalhães 410',
-                    'postal_code' => '3000-177',
-                    'city' => 'Coimbra',
-                    'congregation' => 'Comunidade Evangélica de Celas',
-                    'role_in_congregation' => 'Tesoureira',
-                ],
-            ],
-            [
-                'email' => 'demo.membro03@aspec.test',
-                'phone' => '+351919000005',
-                'hours' => 'weekdays_saturday',
-                'social' => [
-                    'Instagram' => 'https://www.instagram.com/saboresdoalgarve.faro',
-                    'Facebook' => 'https://www.facebook.com/saboresdoalgarve.faro',
-                ],
-                'portfolio' => 'restaurante',
-                'profile' => [
-                    'name' => 'Pedro Almeida',
-                    'business_name' => 'Sabores do Algarve Restaurante',
-                    'sector' => 'Restauração e Hotelaria',
-                    'location' => 'Faro',
-                    'description' => 'Cozinha tradicional algarvia com peixe fresco da lota de Faro. Servimos almoços de grupo, jantares de empresa e serviço de catering para eventos.',
-                    'website_url' => 'https://www.saboresdoalgarve-faro.pt',
-                    'commercial_email' => 'reservas@saboresdoalgarve-faro.pt',
-                    'commercial_phone' => '+351289000505',
-                    'address' => 'Rua Conselheiro Bivar 20',
-                    'postal_code' => '8000-255',
-                    'city' => 'Faro',
-                    'congregation' => 'Igreja Cristã da Sé de Faro',
-                    'role_in_congregation' => 'Membro',
-                ],
-            ],
-            [
-                'email' => 'demo.membro04@aspec.test',
-                'phone' => '+447911123456',
-                'hours' => 'weekdays',
-                'social' => [
-                    'LinkedIn' => 'https://www.linkedin.com/company/ribeiro-digital',
-                    'YouTube' => 'https://www.youtube.com/@ribeirodigital',
-                ],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Sofia Ribeiro',
-                    'business_name' => 'Ribeiro Digital Soluções Informáticas',
-                    'sector' => 'Tecnologias de Informação (TI)',
-                    'location' => 'Aveiro',
-                    'description' => 'Desenvolvimento de sites e aplicações à medida, manutenção de redes e apoio informático a escritórios. Contratos de assistência mensal com tempo de resposta garantido.',
-                    'website_url' => 'https://www.ribeirodigital.pt',
-                    'commercial_email' => 'suporte@ribeirodigital.pt',
-                    'commercial_phone' => '+351234000606',
-                    'address' => 'Rua de Viana do Castelo 15',
-                    'postal_code' => '3800-275',
-                    'city' => 'Aveiro',
-                    'congregation' => 'Igreja Evangélica da Glória',
-                    'role_in_congregation' => 'Responsável pela equipa de som',
-                ],
-            ],
-            [
-                'email' => 'demo.membro05@aspec.test',
-                'phone' => '+351924000007',
-                'hours' => 'weekdays',
-                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/martins-advogados-associados'],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Tiago Martins',
-                    'business_name' => 'Martins Advogados Associados',
-                    'sector' => 'Serviços Jurídicos e Advocacia',
-                    'location' => 'Leiria',
-                    'description' => 'Sociedade de advogados dedicada ao direito empresarial, laboral e imobiliário. Constituição de sociedades, contratos comerciais e cobranças.',
-                    'website_url' => 'https://www.martinsadvogados.pt',
-                    'commercial_email' => 'escritorio@martinsadvogados.pt',
-                    'commercial_phone' => '+351244000707',
-                    'address' => 'Largo Cândido dos Reis 7',
-                    'postal_code' => '2400-112',
-                    'city' => 'Leiria',
-                    'congregation' => 'Comunidade Cristã de Leiria',
-                    'role_in_congregation' => 'Conselheiro',
-                ],
-            ],
-            [
-                'email' => 'demo.membro06@aspec.test',
-                'phone' => '+351927000008',
-                'hours' => 'weekdays_saturday',
-                'social' => [
-                    'Facebook' => 'https://www.facebook.com/clinicabemcuidar',
-                    'Instagram' => 'https://www.instagram.com/clinicabemcuidar',
-                ],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Inês Costa',
-                    'business_name' => 'Clínica Bem Cuidar',
-                    'sector' => 'Saúde e Medicina',
-                    'location' => 'Setúbal',
-                    'description' => 'Clínica de medicina geral e familiar, fisioterapia e nutrição. Acordos com empresas para medicina do trabalho.',
-                    'website_url' => 'https://www.clinicabemcuidar.pt',
-                    'commercial_email' => 'marcacoes@clinicabemcuidar.pt',
-                    'commercial_phone' => '+351265000808',
-                    'address' => 'Avenida Luísa Todi 250',
-                    'postal_code' => '2900-452',
-                    'city' => 'Setúbal',
-                    'congregation' => 'Igreja Evangélica de Setúbal',
-                    'role_in_congregation' => 'Diaconisa',
-                ],
-            ],
-            [
-                'email' => 'demo.membro07@aspec.test',
-                'phone' => '+5511912345678',
-                'hours' => null,
-                'social' => ['LinkedIn' => 'https://www.linkedin.com/company/rota-segura-transportes'],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Miguel Rodrigues',
-                    'business_name' => 'Rota Segura Transportes',
-                    'sector' => 'Transportes e Logística',
-                    'location' => 'Santarém',
-                    'description' => 'Transporte rodoviário de mercadorias em todo o país e armazenagem. Frota própria com rastreamento e entregas no dia seguinte.',
-                    'website_url' => 'https://www.rotasegura.pt',
-                    'commercial_email' => 'logistica@rotasegura.pt',
-                    'commercial_phone' => '+351243000909',
-                    'address' => 'Zona Industrial de Santarém, Lote 12',
-                    'postal_code' => '2005-002',
-                    'city' => 'Santarém',
-                    'congregation' => 'Igreja Batista de Santarém',
-                    'role_in_congregation' => 'Membro',
-                ],
-            ],
-            [
-                'email' => 'demo.membro08@aspec.test',
-                'phone' => '+351934000010',
-                'hours' => 'weekdays_saturday',
-                'social' => [
-                    'Instagram' => 'https://www.instagram.com/casalusa.imobiliaria',
-                    'Facebook' => 'https://www.facebook.com/casalusa.imobiliaria',
-                ],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Catarina Lopes',
-                    'business_name' => 'Casa Lusa Imobiliária',
-                    'sector' => 'Imobiliário',
-                    'location' => 'Viseu',
-                    'description' => 'Compra, venda e arrendamento de imóveis na região de Viseu. Avaliação gratuita e acompanhamento até à escritura.',
-                    'website_url' => 'https://www.casalusa-imobiliaria.pt',
-                    'commercial_email' => 'imoveis@casalusa-imobiliaria.pt',
-                    'commercial_phone' => '+351232000110',
-                    'address' => 'Rua Formosa 60',
-                    'postal_code' => '3500-135',
-                    'city' => 'Viseu',
-                    'congregation' => 'Comunidade Evangélica de Viseu',
-                    'role_in_congregation' => 'Coordenadora da escola dominical',
-                ],
-            ],
-            [
-                'email' => 'demo.membro09@aspec.test',
-                'phone' => '+351937000011',
-                'hours' => 'weekdays',
-                'social' => [
-                    'LinkedIn' => 'https://www.linkedin.com/company/ideia-viva-comunicacao',
-                    'Instagram' => 'https://www.instagram.com/ideiaviva.comunicacao',
-                    'YouTube' => 'https://www.youtube.com/@ideiaviva',
-                ],
-                'portfolio' => 'comunicacao',
-                'profile' => [
-                    'name' => 'Daniel Pereira',
-                    'business_name' => 'Ideia Viva Comunicação',
-                    'sector' => 'Marketing, Comunicação e Publicidade',
-                    'location' => 'Lisboa',
-                    'description' => 'Agência de comunicação para negócios locais: identidade visual, gestão de redes sociais e campanhas digitais. Fotografia e vídeo para empresas.',
-                    'website_url' => 'https://www.ideiaviva.pt',
-                    'commercial_email' => 'ola@ideiaviva.pt',
-                    'commercial_phone' => '+351218000111',
-                    'address' => 'Rua Morais Soares 90',
-                    'postal_code' => '1900-345',
-                    'city' => 'Lisboa',
-                    'congregation' => 'Igreja Cristã de Arroios',
-                    'role_in_congregation' => 'Responsável pela comunicação',
-                ],
-            ],
-            [
-                'email' => 'demo.membro10@aspec.test',
-                'phone' => '+351961000012',
-                'hours' => 'weekdays',
-                'social' => [
-                    'LinkedIn' => 'https://www.linkedin.com/company/saber-mais-formacao',
-                    'Facebook' => 'https://www.facebook.com/sabermais.formacao',
-                ],
-                'portfolio' => null,
-                'profile' => [
-                    'name' => 'Rita Gonçalves',
-                    'business_name' => 'Saber Mais Centro de Formação',
-                    'sector' => 'Educação e Formação',
-                    'location' => 'Porto',
-                    'description' => 'Centro de formação profissional certificado. Cursos de gestão, línguas e informática, em sala e à distância, com planos de formação à medida para empresas.',
-                    'website_url' => 'https://www.sabermais-formacao.pt',
-                    'commercial_email' => 'inscricoes@sabermais-formacao.pt',
-                    'commercial_phone' => '+351225000112',
-                    'address' => 'Rua de Santa Catarina 500',
-                    'postal_code' => '4000-446',
-                    'city' => 'Porto',
-                    'congregation' => 'Igreja Evangélica do Bonfim',
-                    'role_in_congregation' => 'Professora da escola bíblica',
-                ],
-            ],
-            [
-                'email' => 'demo.membro11@aspec.test',
-                'phone' => '+351964000013',
-                'hours' => null,
-                'social' => [
-                    'Instagram' => 'https://www.instagram.com/quintavaleverde.evora',
-                    'Facebook' => 'https://www.facebook.com/quintavaleverde.evora',
-                ],
-                'portfolio' => 'quinta',
-                'profile' => [
-                    'name' => 'Bruno Fernandes',
-                    'business_name' => 'Quinta do Vale Verde',
-                    'sector' => 'Agricultura e Pescas',
-                    'location' => 'Évora',
-                    'description' => 'Produção de azeite, vinho e hortícolas em modo biológico. Venda direta na quinta, cabazes semanais e visitas para grupos.',
-                    'website_url' => 'https://www.quintavaleverde-evora.pt',
-                    'commercial_email' => 'encomendas@quintavaleverde-evora.pt',
-                    'commercial_phone' => '+351266000113',
-                    'address' => 'Estrada de Arraiolos, km 4',
-                    'postal_code' => '7000-171',
-                    'city' => 'Évora',
-                    'congregation' => 'Igreja Evangélica de Évora',
-                    'role_in_congregation' => 'Membro',
-                ],
-            ],
-        ];
-    }
-
-    /**
-     * Contas fora do diretório (para o backoffice): candidaturas pendentes, aprovada à espera de
-     * ativação, inativa por falta de pagamento e bloqueada. Perfis mais simples, sem imagens.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function applicants(): array
-    {
-        $applicant = fn (string $email, string $phone, string $status, ?InactiveReason $reason, array $profile) => [
-            'email' => $email,
-            'phone' => $phone,
-            'status' => $status,
-            'reason' => $reason,
-            'profile' => $profile,
-        ];
-
-        return [
-            $applicant('demo.pendente01@aspec.test', '+351912000101', 'Pending', null, [
-                'name' => 'Luís Teixeira',
-                'business_name' => 'Teixeira Eletricidade',
-                'sector' => 'Engenharia e Indústria',
-                'location' => 'Vila Real',
-                'description' => 'Instalações elétricas, certificação energética e manutenção industrial.',
-                'commercial_email' => 'geral@teixeira-eletricidade.pt',
-                'commercial_phone' => '+351259000101',
-                'address' => 'Avenida Carvalho Araújo 30',
-                'postal_code' => '5000-657',
-                'city' => 'Vila Real',
-                'congregation' => 'Igreja Evangélica de Vila Real',
-                'role_in_congregation' => 'Membro',
-            ]),
-            $applicant('demo.pendente02@aspec.test', '+351913000102', 'Pending', null, [
-                'name' => 'Joana Moreira',
-                'business_name' => 'Essência Natural Estética',
-                'sector' => 'Estética e Bem-Estar',
-                'location' => 'Viana do Castelo',
-                'description' => 'Tratamentos de estética, massagens e cuidados de pele.',
-                'commercial_email' => 'marcacoes@essencianatural.pt',
-                'commercial_phone' => '+351258000102',
-                'address' => 'Rua da Bandeira 120',
-                'postal_code' => '4900-560',
-                'city' => 'Viana do Castelo',
-                'congregation' => 'Comunidade Cristã de Viana',
-                'role_in_congregation' => 'Membro do coro',
-            ]),
-            $applicant('demo.pendente03@aspec.test', '+351916000103', 'Pending', null, [
-                'name' => 'André Pinto',
-                'business_name' => 'Caminhos do Douro Turismo',
-                'sector' => 'Turismo e Lazer',
-                'location' => 'Bragança',
-                'description' => 'Passeios guiados e alojamento local no Nordeste Transmontano.',
-                'commercial_email' => 'reservas@caminhosdodouro.pt',
-                'commercial_phone' => '+351273000103',
-                'address' => 'Rua Almirante Reis 45',
-                'postal_code' => '5300-033',
-                'city' => 'Bragança',
-                'congregation' => 'Igreja Batista de Bragança',
-                'role_in_congregation' => 'Membro',
-            ]),
-            $applicant('demo.aprovado@aspec.test', '+351919000104', 'Approved', null, [
-                'name' => 'Helena Marques',
-                'business_name' => 'Marques Comércio de Papelaria',
-                'sector' => 'Comércio Retalhista',
-                'location' => 'Castelo Branco',
-                'description' => 'Papelaria, material de escritório e consumíveis para empresas.',
-                'commercial_email' => 'encomendas@marquespapelaria.pt',
-                'commercial_phone' => '+351272000104',
-                'address' => 'Avenida 1.º de Maio 18',
-                'postal_code' => '6000-086',
-                'city' => 'Castelo Branco',
-                'congregation' => 'Igreja Evangélica de Castelo Branco',
-                'role_in_congregation' => 'Membro',
-            ]),
-            $applicant('demo.inativo.pagamento@aspec.test', '+351921000105', 'Inactive', InactiveReason::Unpaid, [
-                'name' => 'Paulo Correia',
-                'business_name' => 'Correia Mediação de Seguros',
-                'sector' => 'Contabilidade e Finanças',
-                'location' => 'Guarda',
-                'description' => 'Seguros para particulares e empresas.',
-                'commercial_email' => 'seguros@correiamediacao.pt',
-                'commercial_phone' => '+351271000105',
-                'address' => 'Rua do Comércio 22',
-                'postal_code' => '6300-680',
-                'city' => 'Guarda',
-                'congregation' => 'Comunidade Cristã da Guarda',
-                'role_in_congregation' => 'Membro',
-            ]),
-            $applicant('demo.bloqueado@aspec.test', '+351924000106', 'Inactive', InactiveReason::Blocked, [
-                'name' => 'Vítor Santos',
-                'business_name' => 'Santos Reparações Auto',
-                'sector' => 'Transportes e Logística',
-                'location' => 'Portalegre',
-                'description' => 'Oficina de mecânica geral e pneus.',
-                'commercial_email' => 'oficina@santosreparacoes.pt',
-                'commercial_phone' => '+351245000106',
-                'address' => 'Rua 19 de Junho 8',
-                'postal_code' => '7300-155',
-                'city' => 'Portalegre',
-                'congregation' => 'Igreja Evangélica de Portalegre',
-                'role_in_congregation' => 'Membro',
-            ]),
-        ];
-    }
-
-    /**
-     * Cenários de pagamento por conta (as contas que já ativaram), com um NIF de demonstração com
-     * dígito de controlo válido. "days" é a data-chave do cenário em dias a partir de agora:
-     * - paid: início do período pago atual (invoices = n.º de períodos pagos, um por fatura);
-     * - grace: fim do último período pago, quando a renovação falhou (1 fatura; carência a seguir);
-     * - trial / cancel_scheduled: fim do trial (com cancelamento agendado para essa data);
-     * - unpaid: fim do trial, quando a cobrança falhou (nunca pagou; terminou depois da carência);
-     * - blocked: ativação (bloqueado ainda em trial, 10 dias depois).
-     * Os trials terminam pelo menos uma semana depois de agora: sem webhooks, um trial que passe o
-     * fim ficava "trialing" com data no passado (voltar a correr o seeder antes de cada demonstração).
-     *
-     * @return array<string, array{type: string, days: int, invoices?: int, nif: string}>
-     */
-    private function payments(): array
-    {
-        return [
-            'demo.membro@aspec.test' => ['type' => 'paid', 'days' => -5, 'invoices' => 2, 'nif' => '509000010'],
-            'demo.admin@aspec.test' => ['type' => 'paid', 'days' => -20, 'invoices' => 1, 'nif' => '509000029'],
-            'demo.membro07@aspec.test' => ['type' => 'grace', 'days' => -2, 'invoices' => 1, 'nif' => '509000037'],
-            'demo.membro02@aspec.test' => ['type' => 'cancel_scheduled', 'days' => 10, 'nif' => '509000045'],
-            'demo.membro01@aspec.test' => ['type' => 'trial', 'days' => 7, 'nif' => '509000053'],
-            'demo.membro03@aspec.test' => ['type' => 'trial', 'days' => 9, 'nif' => '509000061'],
-            'demo.membro04@aspec.test' => ['type' => 'trial', 'days' => 12, 'nif' => '509000070'],
-            'demo.membro05@aspec.test' => ['type' => 'trial', 'days' => 14, 'nif' => '509000088'],
-            'demo.membro06@aspec.test' => ['type' => 'trial', 'days' => 17, 'nif' => '509000096'],
-            'demo.membro08@aspec.test' => ['type' => 'trial', 'days' => 20, 'nif' => '509000100'],
-            'demo.membro09@aspec.test' => ['type' => 'trial', 'days' => 23, 'nif' => '509000118'],
-            'demo.membro10@aspec.test' => ['type' => 'trial', 'days' => 26, 'nif' => '509000126'],
-            'demo.membro11@aspec.test' => ['type' => 'trial', 'days' => 28, 'nif' => '509000134'],
-            'demo.inativo.pagamento@aspec.test' => ['type' => 'unpaid', 'days' => -17, 'nif' => '509000142'],
-            'demo.bloqueado@aspec.test' => ['type' => 'blocked', 'days' => -15, 'nif' => '509000150'],
-        ];
-    }
-
-    /**
-     * Dezasseis eventos: onze presenciais futuros (o pequeno-almoço e o jantar repetem-se em várias
-     * cidades, um esgotado e outro quase), três online e dois já passados. Os online cobrem os três
-     * casos do link: inscrições abertas (link ainda escondido), prazo terminado com o demo.membro
-     * inscrito (vê o link) e prazo terminado sem ele (não vê).
-     * Os eventos online também têm distrito porque o backoffice o exige; usam a sede (Lisboa).
-     *
-     * Cartões de oração em dois eventos: a formação de Aveiro é hoje (já começou, por isso não aparece
-     * na agenda pública), com o prazo do cartão aberto, o demo.membro inscrito sem cartão e dois
-     * cartões já enviados; o pequeno-almoço de Leiria (passado)
-     * já foi distribuído e o demo.membro recebeu o cartão do demo.membro02.
-     *
-     * Os presenciais têm o place_id da Google da morada (obtido uma vez com o GoogleGeocoder; os
-     * termos da Google permitem guardá-lo), para o mapa Google da página do evento, e não têm
-     * coordenadas: a API nunca grava place_id e coordenadas juntos.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function events(): array
-    {
-        $breakfast = 'Pequeno-almoço de Negócios ASPEC';
-        $breakfastDescription = 'Um pequeno-almoço para conhecer outros empresários da região, apresentar o seu negócio em dois minutos e criar parcerias.';
-        $dinner = 'Jantar de Networking ASPEC';
-        $dinnerDescription = 'Jantar informal entre membros e convidados, com um breve testemunho empresarial e tempo livre para conversar.';
-        $dinnerNotes = 'Custo de participação: 25 € (pago no local).';
-        $demoMember = 'demo.membro@aspec.test';
-        [$todayStart, $todayEnd] = $this->todayEventTimes();
-
-        return [
-            [
-                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Lisboa',
-                'days_from_now' => 5, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 40,
-                'description' => $breakfastDescription,
-                'venue' => 'Hotel Tivoli Oriente',
-                'address' => 'Avenida D. João II 27, 1990-083 Lisboa',
-                'place_id' => 'ChIJJ8bvTYYxGQ0RoC1RSUhyz2k',
-                'registrants' => [$demoMember, ...$this->demoMembers(1, 6)],
-            ],
-            [
-                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Porto',
-                'days_from_now' => 12, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
-                'description' => $breakfastDescription,
-                'address' => 'Salão de eventos, Avenida dos Aliados 120, 4000-065 Porto',
-                'place_id' => 'Ei1Bdi4gZG9zIEFsaWFkb3MgMTIwLCA0MDAwLTA2NyBQb3J0bywgUG9ydHVnYWwiMBIuChQKEgkLQ3Be42QkDREzxCX1feNMXxB4KhQKEgmP_UBZ42QkDREQ0m1U5syNcw',
-                'registrants' => $this->demoMembers(7, 9),
-            ],
-            [
-                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Braga',
-                'days_from_now' => 19, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 12,
-                'description' => $breakfastDescription,
-                'address' => 'Salão de eventos, Avenida Central 40, 4710-228 Braga',
-                'place_id' => 'ChIJz2iE28H-JA0R2oEkaaewzME',
-                'registrants' => $this->demoMembers(1, 11),
-            ],
-            [
-                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Lisboa',
-                'days_from_now' => 9, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 80,
-                'description' => $dinnerDescription,
-                'address' => 'Restaurante (sala privada), Rua Castilho 149, 1070-051 Lisboa',
-                'place_id' => 'ChIJr7Xg63EzGQ0Rm8LgeMFJfpQ',
-                'notes' => $dinnerNotes,
-                'registrants' => [$demoMember, ...$this->demoMembers(2, 8)],
-            ],
-            [
-                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Coimbra',
-                'days_from_now' => 23, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 50,
-                'description' => $dinnerDescription,
-                'address' => 'Restaurante (sala privada), Rua da Sofia 120, 3000-389 Coimbra',
-                'place_id' => 'EixSdWEgZGEgU29maWEgMTIwLCAzMDAwLTM5MCBDb2ltYnJhLCBQb3J0dWdhbCIwEi4KFAoSCQffjZ8F-SINEbdWcj5j3bFVEHgqFAoSCQtDsAoF-SINEY0Z8kdZQA8q',
-                'notes' => $dinnerNotes,
-                'registrants' => $this->demoMembers(4, 5),
-            ],
-            [
-                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Faro',
-                'days_from_now' => 37, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
-                'description' => $dinnerDescription,
-                'address' => 'Salão de eventos, Praça D. Francisco Gomes 2, 8000-168 Faro',
-                'place_id' => 'ChIJ9y1z1sZSBQ0RS0zUXIu14FA',
-            ],
-            [
-                'name' => 'Almoço de Negócios ASPEC', 'category' => 'Almoço', 'location' => 'Viseu',
-                'days_from_now' => 33, 'start' => '12:30', 'end' => '14:30', 'max_attendees' => 40,
-                'description' => 'Almoço entre empresários da região, com uma breve apresentação de cada participante e tempo para conversar e criar parcerias.',
-                'address' => 'Restaurante (sala privada), Rua Formosa 50, 3500-135 Viseu',
-                'place_id' => 'ChIJ-VK4d1I2Iw0RBstTicF8-28',
-                'notes' => 'Custo de participação: 18 € (pago no local).',
-                'registrants' => $this->demoMembers(10, 11),
-            ],
-            [
-                'name' => 'Formação: Finanças para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Aveiro',
-                'days_from_now' => 0, 'start' => $todayStart, 'end' => $todayEnd, 'max_attendees' => 30,
-                'description' => 'Tesouraria, margens e preços: como ler os números do seu negócio e tomar melhores decisões. Formação prática com exercícios.',
-                'venue' => 'Centro de Congressos de Aveiro',
-                'address' => 'Cais da Fonte Nova, 3810-200 Aveiro',
-                'place_id' => 'Ei1DYWlzIGRhIEZvbnRlIE5vdmEsIDM4MTAtMjAwIEF2ZWlybywgUG9ydHVnYWwiLiosChQKEgm_8TFeCZgjDREuH0xpIAU3QxIUChIJxdSxZAmYIw0R6bcGCHI5Zj8',
-                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro09@aspec.test'],
-                'prayer_verse' => 'Levai as cargas uns dos outros e assim cumprireis a lei de Cristo. (Gálatas 6:2)',
-                'prayer_cards' => ['authors' => ['demo.membro01@aspec.test', 'demo.membro03@aspec.test']],
-            ],
-            [
-                'name' => 'Formação: Marketing Digital para Negócios Locais', 'category' => 'Formação', 'location' => 'Leiria',
-                'days_from_now' => 29, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 25,
-                'description' => 'Como usar as redes sociais e o Google para atrair clientes da sua zona, com um plano simples para aplicar no dia seguinte.',
-                'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
-                'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
-                'notes' => 'Traga o seu portátil. Custo de participação: 15 € (pago no local).',
-            ],
-            [
-                'name' => 'Formação: Liderança com Valores', 'category' => 'Formação', 'location' => 'Setúbal',
-                'days_from_now' => 44, 'start' => '14:00', 'end' => '18:00', 'max_attendees' => 35,
-                'description' => 'Liderar equipas com ética, confiança e propósito. Casos práticos de empresários portugueses e partilha entre participantes.',
-                'venue' => 'Fórum Municipal Luísa Todi',
-                'address' => 'Avenida Luísa Todi 65, 2900-461 Setúbal',
-                'place_id' => 'ChIJv0-wxQdDGQ0RypZhgbJrUks',
-                'registrants' => $this->demoMembers(6, 6),
-            ],
-            [
-                'name' => 'Workshop: Apresente o seu Negócio em Dois Minutos', 'category' => 'Workshop', 'location' => 'Porto',
-                'days_from_now' => 26, 'start' => '18:30', 'end' => '20:30', 'max_attendees' => 10,
-                'description' => 'Sessão prática para preparar e treinar a apresentação do seu negócio, com exercícios em grupo e comentários dos outros participantes. Grupo pequeno para todos treinarem.',
-                'address' => 'Sala de Conferências, Rua de Júlio Dinis 750, 4050-012 Porto',
-                'place_id' => 'EjFSdWEgZGUgSsO6bGlvIERpbmlzIDc1MCwgNDA1MC0wMTIgUG9ydG8sIFBvcnR1Z2FsIjESLwoUChIJJ9OqgQhlJA0Rd8tz-E9VUKEQ7gUqFAoSCT-ZVf4FZSQNEQM0UeGusGGV',
-                'registrants' => $this->demoMembers(1, 10),
-            ],
-            [
-                'name' => 'Webinar: Faturação Eletrónica sem Complicações', 'category' => 'Formação', 'location' => 'Lisboa',
-                'days_from_now' => 10, 'start' => '18:00', 'end' => '19:30', 'max_attendees' => 100,
-                'description' => 'Sessão online sobre as regras da faturação eletrónica, o QR code e o ATCUD nas faturas, com tempo para perguntas no fim.',
-                'online_url' => 'https://meet.example.test/aspec-faturacao-eletronica',
-                'registrants' => $this->demoMembers(9, 10),
-            ],
-            [
-                'name' => 'Workshop Online: Vender Mais nas Redes Sociais', 'category' => 'Workshop', 'location' => 'Lisboa',
-                'days_from_now' => 3, 'deadline_days_from_now' => -1, 'start' => '18:30', 'end' => '20:00', 'max_attendees' => 50,
-                'description' => 'Workshop online com exemplos reais de publicações que trazem clientes e um calendário simples para o próximo mês.',
-                'online_url' => 'https://meet.example.test/aspec-redes-sociais',
-                'notes' => 'O link da sessão aparece na página do evento depois do fecho das inscrições.',
-                'registrants' => [$demoMember, ...$this->demoMembers(1, 4)],
-            ],
-            [
-                'name' => 'Formação Online: RGPD para Pequenas Empresas', 'category' => 'Formação', 'location' => 'Lisboa',
-                'days_from_now' => 4, 'deadline_days_from_now' => -1, 'start' => '14:00', 'end' => '17:00', 'max_attendees' => 60,
-                'description' => 'O que uma pequena empresa tem de fazer para cumprir o RGPD: consentimentos, registos de tratamento e pedidos dos clientes.',
-                'online_url' => 'https://meet.example.test/aspec-rgpd',
-                'registrants' => $this->demoMembers(5, 8),
-            ],
-            [
-                'name' => $breakfast, 'category' => 'Pequeno-almoço', 'location' => 'Leiria',
-                'days_from_now' => -14, 'start' => '08:30', 'end' => '10:30', 'max_attendees' => 30,
-                'description' => $breakfastDescription,
-                'address' => 'Salão de eventos, Largo Cândido dos Reis 10, 2400-112 Leiria',
-                'place_id' => 'ChIJ0aliKvRzIg0R30hY7E0CvTE',
-                'registrants' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test', 'demo.membro11@aspec.test'],
-                'prayer_verse' => 'Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará. (Salmo 37:5)',
-                'prayer_cards' => [
-                    'authors' => [$demoMember, 'demo.membro02@aspec.test', 'demo.membro05@aspec.test', 'demo.membro07@aspec.test'],
-                    'distributed' => true,
-                ],
-            ],
-            [
-                'name' => $dinner, 'category' => 'Jantar', 'location' => 'Aveiro',
-                'days_from_now' => -30, 'start' => '20:00', 'end' => '23:00', 'max_attendees' => 40,
-                'description' => $dinnerDescription,
-                'address' => 'Restaurante (sala privada), Rua João Mendonça 25, 3800-200 Aveiro',
-                'place_id' => 'ChIJNbMUggOYIw0RZ_7oCGcXLLo',
-                'notes' => $dinnerNotes,
-                'registrants' => [$demoMember, 'demo.membro01@aspec.test', 'demo.membro03@aspec.test', 'demo.membro04@aspec.test', 'demo.membro06@aspec.test', 'demo.membro08@aspec.test', 'demo.membro10@aspec.test'],
-            ],
-        ];
-    }
-
-    /**
-     * Série semanal de formação em Leiria: seis sessões a partir de depois de amanhã, no auditório
-     * (e com o place_id) da formação de marketing. Inscrições por sessão (as sessões são
-     * independentes): o demo.membro está nas sessões 2 a 6 (o que "nesta e nas seguintes" dá a partir
-     * da 2; na 1 pode inscrever-se ao vivo), dois membros em todas, um só na 3 e outro nas duas primeiras.
-     *
-     * @return array<string, mixed>
-     */
-    private function series(): array
-    {
-        return [
-            'name' => 'Ciclo de Formação: Liderar Pequenas Equipas',
-            'category' => 'Formação',
-            'location' => 'Leiria',
-            'days_from_now' => 2,
-            'sessions' => 6,
-            'deadline_days_before' => 1,
-            'start' => '18:30',
-            'end' => '20:30',
-            'max_attendees' => 20,
-            'description' => 'Ciclo de seis sessões semanais para quem lidera equipas pequenas: delegar, dar feedback, conduzir reuniões curtas e resolver conflitos. Cada sessão é independente e tem inscrição própria.',
-            'address' => 'Auditório, Rua Barão de Viamonte 20, 2400-262 Leiria',
-            'place_id' => 'ChIJLfCNbWxzIg0RRw7VWELDhHQ',
-            'notes' => 'Pode inscrever-se só numa sessão ou nesta e nas seguintes.',
-            'registrants' => [
-                'demo.membro@aspec.test' => [2, 3, 4, 5, 6],
-                'demo.membro01@aspec.test' => [1, 2, 3, 4, 5, 6],
-                'demo.membro04@aspec.test' => [1, 2, 3, 4, 5, 6],
-                'demo.membro09@aspec.test' => [3],
-                'demo.membro10@aspec.test' => [1, 2],
-            ],
-        ];
-    }
-
-    /**
-     * Avaliações de demonstração [autor, avaliado, estrelas, estado, comentário], sem autoavaliações nem pares repetidos.
-     * Os autores são sempre membros (role Member), como exige o POST de avaliações.
-     * Médias visíveis: Contas Certas 4,8 e Ferreira 4,7 (aparecem em "4,5+"), Sabores do Algarve 4,3 (só "4+"),
-     * Carvalho 3,5 e Clínica Bem Cuidar 3,3 (só "3+"). A Hidden e a Flagged (ambas em demo.membro, para mostrar a justificação) não contam para a média.
-     *
-     * @return list<array{string, string, int, string, string}>
-     */
-    private function reviews(): array
-    {
-        $member = fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number);
-        $demoMember = 'demo.membro@aspec.test';
-
-        return [
-            [$member(2), $demoMember, 5, 'Visible', 'Projeto de remodelação do nosso escritório impecável, cumpriram prazos e orçamento.'],
-            [$member(5), $demoMember, 5, 'Visible', 'Muito profissionais, ouviram as nossas ideias e melhoraram-nas.'],
-            [$member(7), $demoMember, 4, 'Visible', 'Bom trabalho de interiores; a obra atrasou uma semana, mas avisaram com tempo.'],
-            [$member(11), $demoMember, 1, 'Flagged', 'Nunca mais! Bando de aldrabões, fujam desta empresa!'],
-            [$member(8), $demoMember, 1, 'Hidden', 'Péssimos, só querem dinheiro. Não percam tempo com esta gente.'],
-
-            [$demoMember, $member(2), 5, 'Visible', 'Contabilidade sempre em dia e respostas rápidas às dúvidas.'],
-            [$member(3), $member(2), 5, 'Visible', 'Ajudaram-nos a organizar as contas do restaurante desde o primeiro mês.'],
-            [$member(4), $member(2), 5, 'Visible', 'Recomendo: explicam tudo com clareza e sem termos técnicos.'],
-            [$member(8), $member(2), 4, 'Visible', 'Serviço fiável, por vezes demoram um pouco a responder por email.'],
-
-            [$demoMember, $member(3), 4, 'Visible', 'Excelente jantar de equipa, peixe muito fresco.'],
-            [$member(7), $member(3), 4, 'Visible', 'Boa comida e atendimento simpático; ao fim de semana convém reservar.'],
-            [$member(9), $member(3), 5, 'Visible', 'Cataplana memorável, voltaremos com clientes.'],
-
-            [$member(6), $member(1), 4, 'Visible', 'Obra bem executada e equipa organizada.'],
-            [$member(10), $member(1), 3, 'Visible', 'Trabalho correto, mas a comunicação durante a obra podia ser melhor.'],
-
-            [$member(1), $member(6), 3, 'Visible', 'Atendimento simpático, mas esperei bastante para a consulta.'],
-            [$member(4), $member(6), 4, 'Visible', 'Clínica limpa e profissionais atenciosos.'],
-            [$member(9), $member(6), 3, 'Visible', 'Razoável; a marcação por telefone é difícil.'],
-        ];
+        return config('app.event_timezone', 'Europe/Lisbon');
     }
 
     /**
@@ -1710,7 +1673,7 @@ class DemoSeeder extends Seeder
      */
     private function todayEventTimes(): array
     {
-        $now = now(config('app.event_timezone', 'Europe/Lisbon'));
+        $now = now($this->eventTimezone());
         $start = $now->copy()->subHour()->startOfHour();
 
         if (! $start->isSameDay($now)) {
@@ -1720,15 +1683,5 @@ class DemoSeeder extends Seeder
         $end = $start->copy()->addHours(2);
 
         return [$start->format('H:i'), $end->isSameDay($start) ? $end->format('H:i') : '23:59'];
-    }
-
-    /**
-     * Emails dos membros Active numerados da demonstração (ex.: 1 a 3 → demo.membro01 a demo.membro03).
-     *
-     * @return list<string>
-     */
-    private function demoMembers(int $from, int $to): array
-    {
-        return array_map(fn (int $number) => sprintf('demo.membro%02d@aspec.test', $number), range($from, $to));
     }
 }
