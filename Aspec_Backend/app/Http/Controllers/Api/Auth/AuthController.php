@@ -52,28 +52,40 @@ class AuthController extends Controller
      */
     private function accountStatusError(User $user): ?JsonResponse
     {
-        if ($user->accountStatus?->name !== 'Active') {
-            $message = match (true) {
-                $user->accountStatus?->name === 'Approved' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+        $status = $user->accountStatus?->name;
 
-                $user->accountStatus?->name === 'Inactive'
-                    && $user->inactive_reason === InactiveReason::Unpaid => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
-
-                $user->accountStatus?->name === 'Inactive'
-                    && $user->inactive_reason === InactiveReason::Cancelled => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
-
-                $user->accountStatus?->name === 'Pending' => 'A sua conta está pendente de aprovação pelo administrador.',
-
-                default => 'A sua conta não está ativa.',
-            };
-
-            return $this->errorResponse(
-                $message,
-                Response::HTTP_FORBIDDEN
-            );
+        if ($status === 'Active') {
+            return null;
         }
 
-        return null;
+        $accountState = match (true) {
+            $status === 'Approved' => 'approved',
+
+            $status === 'Inactive'
+                && $user->inactive_reason === InactiveReason::Unpaid => 'inactive_unpaid',
+
+            $status === 'Inactive'
+                && $user->inactive_reason === InactiveReason::Cancelled => 'inactive_cancelled',
+
+            $status === 'Pending' => 'pending',
+
+            default => 'inactive',
+        };
+
+        $message = match ($accountState) {
+            'approved' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+            'inactive_unpaid' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+            'inactive_cancelled' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+            'pending' => 'A sua conta está pendente de aprovação pelo administrador.',
+            default => 'A sua conta não está ativa.',
+        };
+
+        return $this->errorResponse(
+            $message,
+            Response::HTTP_FORBIDDEN,
+            null,
+            ['account_state' => $accountState],
+        );
     }
 
     /**
@@ -93,18 +105,23 @@ class AuthController extends Controller
         $memberRole = Role::where('name', 'Member')->firstOrFail();
         $pendingStatus = AccountStatus::where('name', 'Pending')->firstOrFail();
 
-        $result = DB::transaction(function () use ($request, $memberRole, $pendingStatus) {
+        DB::transaction(function () use ($request, $memberRole, $pendingStatus) {
+            $user = User::withTrashed()->firstOrCreate(
+                ['email' => $request->email],
+                [
+                    'password' => Hash::make($request->password),
+                    'phone' => $request->phone,
+                    'role_id' => $memberRole->id,
+                    'account_status_id' => $pendingStatus->id,
+                    'terms_accepted_at' => now(),
+                ]
+            );
 
-            $user = User::create([
-                'email' => $request->email,
-                'password' => Hash::make($request->password),
-                'phone' => $request->phone,
-                'role_id' => $memberRole->id,
-                'account_status_id' => $pendingStatus->id,
-                'terms_accepted_at' => now(),
-            ]);
+            if (! $user->wasRecentlyCreated) {
+                return;
+            }
 
-            $profile = MemberProfile::create([
+            MemberProfile::create([
                 'user_id' => $user->id,
                 'sector_id' => $request->sector_id,
                 'location_id' => $request->location_id,
@@ -120,20 +137,13 @@ class AuthController extends Controller
                 'commercial_email' => $request->commercial_email,
                 'commercial_phone' => $request->commercial_phone,
             ]);
-
-            return compact('user', 'profile');
         });
-        $user = $result['user'];
-
-        $user = $this->loadUserRelations(
-            $user->fresh()
-        );
 
         return $this->successResponse(
-            new UserResource($user),
-            'Candidatura submetida com sucesso. A conta aguarda aprovação do administrador.',
+            null,
+            'Pedido recebido. Se este endereço puder ser usado, a candidatura ficará pendente de aprovação.',
             Response::HTTP_CREATED
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -187,7 +197,7 @@ class AuthController extends Controller
             new UserResource($user),
             'Autenticação efetuada com sucesso.',
             Response::HTTP_OK
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**
@@ -285,7 +295,7 @@ class AuthController extends Controller
             new UserResource($user),
             'Utilizador autenticado obtido com sucesso.',
             Response::HTTP_OK
-        );
+        )->header('Cache-Control', 'private, no-store');
     }
 
     /**

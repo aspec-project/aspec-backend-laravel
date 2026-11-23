@@ -593,6 +593,57 @@ class MemberProfileUpdateTest extends TestCase
     }
 
     #[Test]
+    public function social_link_with_numeric_host_is_rejected_and_previous_link_is_kept(): void
+    {
+        $user = $this->memberWithProfile();
+        $platformId = $this->platformId('LinkedIn');
+
+        $user->memberProfile->socialPlatforms()->attach($platformId, [
+            'url' => 'https://linkedin.com/in/antigo',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'social_links' => [[
+                'platform_id' => $platformId,
+                'url' => 'https://12',
+            ]],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['social_links.0.url']);
+
+        $this->assertDatabaseHas('social_links', [
+            'profile_id' => $user->memberProfile->id,
+            'platform_id' => $platformId,
+            'url' => 'https://linkedin.com/in/antigo',
+        ]);
+
+        $this->assertDatabaseCount('social_links', 1);
+    }
+
+    #[Test]
+    public function website_url_with_numeric_host_is_rejected_and_kept(): void
+    {
+        $user = $this->memberWithProfile(profile: [
+            'website_url' => 'https://antigo.pt',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'website_url' => 'https://12',
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['website_url']);
+
+        $this->assertDatabaseHas('member_profiles', [
+            'id' => $user->memberProfile->id,
+            'website_url' => 'https://antigo.pt',
+        ]);
+    }
+
+    #[Test]
     public function email_change_without_current_password_is_rejected(): void
     {
         $user = $this->memberWithProfile();
@@ -1684,6 +1735,45 @@ class MemberProfileUpdateTest extends TestCase
             'profile_id' => $user->memberProfile->id,
             'url' => 'https://linkedin.com/in/antigo',
         ]);
+        $this->assertDatabaseCount('social_links', 1);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function socialLinksWithoutValidDomain(): array
+    {
+        return [
+            'valor numérico sem esquema' => ['12'],
+            'host numérico com esquema' => ['https://12'],
+        ];
+    }
+
+    #[Test]
+    #[DataProvider('socialLinksWithoutValidDomain')]
+    public function social_link_without_valid_domain_is_rejected_and_kept(string $url): void
+    {
+        $user = $this->memberWithProfile();
+        $platformId = $this->platformId('LinkedIn');
+
+        $user->memberProfile->socialPlatforms()->attach($platformId, [
+            'url' => 'https://linkedin.com/in/antigo',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson(self::URL, [
+            'social_links' => [['platform_id' => $platformId, 'url' => $url]],
+        ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['social_links.0.url']);
+
+        $this->assertDatabaseHas('social_links', [
+            'profile_id' => $user->memberProfile->id,
+            'platform_id' => $platformId,
+            'url' => 'https://linkedin.com/in/antigo',
+        ]);
+
         $this->assertDatabaseCount('social_links', 1);
     }
 

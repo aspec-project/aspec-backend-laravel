@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Models\EventInstance;
 use App\Models\User;
+use App\Notifications\Concerns\EscapesMarkdown;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -16,7 +17,7 @@ use Illuminate\Notifications\Notification;
  */
 class PrayerCardReceivedNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use EscapesMarkdown, Queueable;
 
     /**
      * Se o evento for apagado antes do envio, o email é descartado sem erro.
@@ -61,7 +62,7 @@ class PrayerCardReceivedNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Recebeu um cartão de oração')
             ->greeting('Olá!')
-            ->line("Recebeu um cartão de oração de outro participante no evento **{$this->event->name}** ({$this->event->event_date->format('d/m/Y')}).")
+            ->line("Recebeu um cartão de oração de outro participante no evento **{$this->markdownText($this->event->name)}** ({$this->event->event_date->format('d/m/Y')}).")
             ->line('Nos próximos '.config('prayer_cards.prayer_days').' dias, ore pelos pedidos de quem o escreveu. O cartão fica disponível na plataforma durante '.config('prayer_cards.retention_months').' meses a contar da data do evento.')
             ->action('Ver os meus cartões de oração', $url)
             ->salutation("Cumprimentos,\nASPEC");
