@@ -27,7 +27,7 @@ trait ApiResponse
      * @param  array<string, array<int, string>>|null  $errors
      * @return JsonResponse
      */
-    public function errorResponse(string $message, int $code, ?array $errors = null)
+    public function errorResponse(string $message, int $code, ?array $errors = null, ?array $additionalData = null)
     {
         $body = [
             'success' => false,
@@ -36,6 +36,10 @@ trait ApiResponse
 
         if ($errors !== null) {
             $body['errors'] = $errors;
+        }
+
+        if ($additionalData !== null) {
+            $body = array_merge($body, $additionalData);
         }
 
         return response()->json($body, $code);

@@ -498,7 +498,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta está pendente de aprovação pelo administrador.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'pending');
 
         $this->assertGuest('web');
 
@@ -521,7 +522,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta não está ativa.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive');
 
         $this->assertGuest('web');
 
@@ -655,7 +657,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta está pendente de aprovação pelo administrador.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'pending');
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
@@ -673,7 +676,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta não está ativa.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive');
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
@@ -810,7 +814,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'approved');
 
         $this->assertGuest('web');
     }
@@ -829,7 +834,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive_unpaid');
 
         $this->assertGuest('web');
     }
@@ -847,7 +853,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'approved');
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
@@ -867,7 +874,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive_unpaid');
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
@@ -888,7 +896,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive_cancelled');
 
         $this->assertGuest('web');
     }
@@ -906,7 +915,8 @@ class AuthControllerTest extends TestCase
             ->assertJson([
                 'success' => false,
                 'message' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
-            ]);
+            ])
+            ->assertJsonPath('account_state', 'inactive_cancelled');
 
         $this->assertDatabaseMissing('personal_access_tokens', [
             'tokenable_id' => $user->id,
