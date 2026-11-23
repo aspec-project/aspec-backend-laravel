@@ -52,28 +52,40 @@ class AuthController extends Controller
      */
     private function accountStatusError(User $user): ?JsonResponse
     {
-        if ($user->accountStatus?->name !== 'Active') {
-            $message = match (true) {
-                $user->accountStatus?->name === 'Approved' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+        $status = $user->accountStatus?->name;
 
-                $user->accountStatus?->name === 'Inactive'
-                    && $user->inactive_reason === InactiveReason::Unpaid => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
-
-                $user->accountStatus?->name === 'Inactive'
-                    && $user->inactive_reason === InactiveReason::Cancelled => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
-
-                $user->accountStatus?->name === 'Pending' => 'A sua conta está pendente de aprovação pelo administrador.',
-
-                default => 'A sua conta não está ativa.',
-            };
-
-            return $this->errorResponse(
-                $message,
-                Response::HTTP_FORBIDDEN
-            );
+        if ($status === 'Active') {
+            return null;
         }
 
-        return null;
+        $accountState = match (true) {
+            $status === 'Approved' => 'approved',
+
+            $status === 'Inactive'
+                && $user->inactive_reason === InactiveReason::Unpaid => 'inactive_unpaid',
+
+            $status === 'Inactive'
+                && $user->inactive_reason === InactiveReason::Cancelled => 'inactive_cancelled',
+
+            $status === 'Pending' => 'pending',
+
+            default => 'inactive',
+        };
+
+        $message = match ($accountState) {
+            'approved' => 'A sua conta foi aprovada. Ative-a através do link enviado por email.',
+            'inactive_unpaid' => 'A sua conta está inativa por falta de pagamento. Use o link de reativação enviado por email.',
+            'inactive_cancelled' => 'A sua subscrição terminou. Use o link de reativação enviado por email para reativar a conta.',
+            'pending' => 'A sua conta está pendente de aprovação pelo administrador.',
+            default => 'A sua conta não está ativa.',
+        };
+
+        return $this->errorResponse(
+            $message,
+            Response::HTTP_FORBIDDEN,
+            null,
+            ['account_state' => $accountState],
+        );
     }
 
     /**

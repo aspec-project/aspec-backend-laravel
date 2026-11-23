@@ -171,12 +171,6 @@ class AppServiceProvider extends ServiceProvider
             Limit::perDay(self::SUBSCRIPTION_CHANGES_PER_DAY)->by('day:'.$this->requesterKey($request)),
         ]);
 
-        RateLimiter::for('auth-login', function (Request $request) {
-            $email = strtolower(trim((string) $request->input('email')));
-
-            return Limit::perMinute(5)->by($email.'|'.$request->ip());
-        });
-
         $authActions = [
             'auth-login',
             'auth-token',
